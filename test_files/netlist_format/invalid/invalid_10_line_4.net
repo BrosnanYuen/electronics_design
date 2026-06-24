@@ -1,0 +1,6 @@
+V1 N001 0 12
+R1 out N001 1k
+R2 out 0 1k
+.unknown something
+.backanno
+.end

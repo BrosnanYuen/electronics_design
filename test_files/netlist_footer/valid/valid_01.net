@@ -1,0 +1,12 @@
+I1 0 N002 {A}
+Q1 N001 N002 0 0 2N3904
+V1 Vcc 0 5
+R1 Vcc N001 1
+.model NPN NPN
+.model PNP PNP
+.lib C:\users\brosnan\AppData\Local\LTspice\lib\cmp\standard.bjt
+.step PARAM A 1m 200m 1m
+.op
+* Plot Ic/Ib to find beta
+.backanno
+.end

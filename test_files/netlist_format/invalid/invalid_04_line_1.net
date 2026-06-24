@@ -1,0 +1,6 @@
+Y1 N001 N002 1k
+V1 N001 0 5
+R1 N002 0 1k
+.tran 1m
+.backanno
+.end

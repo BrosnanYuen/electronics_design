@@ -1,0 +1,7 @@
+V1 in 0 5
+R1 in mid 1k
+R2 mid out 1k
+C1 out 0 100n
+.tran 1m
+.backanno
+.end

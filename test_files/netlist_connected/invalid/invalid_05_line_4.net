@@ -1,0 +1,8 @@
+V1 Vcc 0 12
+R1 Vcc N001 10k
+R2 N002 0 1k
+Q1 N001 N003 N002 0 2N3904
+R3 Vcc N004 100k
+.tran 1m
+.backanno
+.end

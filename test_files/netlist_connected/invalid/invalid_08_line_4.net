@@ -1,0 +1,7 @@
+V1 drain 0 12
+V2 gate 0 5
+R1 drain 0 100
+M1 drain gate source 0 IRFZ44N
+.tran 1m
+.backanno
+.end

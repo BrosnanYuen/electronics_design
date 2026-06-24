@@ -1,0 +1,7 @@
+V1 drain 0 10
+V2 gate 0 -2
+J1 drain gate 0 2N3819
+R1 drain 0 1k
+.tran 1m
+.backanno
+.end

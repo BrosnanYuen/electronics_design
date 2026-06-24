@@ -1,0 +1,7 @@
+B1 out 0 V=V(in)
++ + 1
+V1 in 0 5
+R1 in out 1k
+.tran 1m
+.backanno
+.end

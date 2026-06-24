@@ -1,0 +1,6 @@
+V1 N001 0 5
+R1 N001 N002 1k
+.libC:\users\brosnan\AppData\Local\LTspice\lib\cmp\standard.bjt
+.tran 1m
+.backanno
+.end

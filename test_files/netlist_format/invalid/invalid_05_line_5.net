@@ -1,0 +1,7 @@
+V1 N001 0 12
+R1 out N001 1k
+R2 out 0 1k
+.tf V(out) V1
+.stepPARAM A 1m 200m 1m
+.backanno
+.end

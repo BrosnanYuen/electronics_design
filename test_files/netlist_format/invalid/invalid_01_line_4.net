@@ -1,0 +1,9 @@
+I1 0 N002 {A}
+Q1 N001 N002 0 0 2N3904
+V1 Vcc 0 5
+R1Vcc N001 1
+.model NPN NPN
+.model PNP PNP
+.op
+.backanno
+.end

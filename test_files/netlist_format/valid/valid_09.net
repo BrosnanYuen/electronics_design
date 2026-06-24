@@ -1,0 +1,7 @@
+S1 out 0 ctrl 0 SW
+V1 out 0 5
+V2 ctrl 0 1
+.model SW SW(Ron=1 Roff=1Meg Vt=0.5 Vh=0.1)
+.tran 1m
+.backanno
+.end

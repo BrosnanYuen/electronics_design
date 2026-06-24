@@ -1,0 +1,7 @@
+Q1 N003 N002 N001 0 2N2907
+R1 N003 0 1
+R3 N002 0 11.2k
+V1 N001 0 12
+.tran 1m
+.backanno
+.end

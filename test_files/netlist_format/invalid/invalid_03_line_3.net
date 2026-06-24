@@ -1,0 +1,7 @@
+I1 0 N002 {A}
+Q1 N001 N002 0 0 2N3904
+V1Vcc 0 5
+R1 Vcc N001 1
+.op
+.backanno
+.end

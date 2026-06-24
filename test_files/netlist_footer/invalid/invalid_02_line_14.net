@@ -1,0 +1,20 @@
+R1 N001 N003 240
+R2 N001 N002 10
+R3 N001 N004 240
+L1 N002 N005 1µ
+L2 N006 N002 1µ
+L3 N002 N002 10m
+C1 N006 N005 330n
+D1 N003 N006 D
+D2 N004 N005 D
+M1 N005 N003 0 0 IRFZ44N
+M2 N006 N004 0 0 IRFZ44N
+V1 N001 0 15
+.model D D
+.libC:\users\brosnan\AppData\Local\LTspice\lib\cmp\standard.dio
+.model NMOS NMOS
+.model PMOS PMOS
+.lib C:\users\brosnan\AppData\Local\LTspice\lib\cmp\standard.mos
+.tran 200u
+.backanno
+.end

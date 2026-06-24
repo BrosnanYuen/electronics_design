@@ -1,0 +1,7 @@
+V1 in 0 0
+R1 in out 1k
+D1 out 0 D
+.model D D
+.dc V1 -10 10 1
+.backanno
+.end

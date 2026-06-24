@@ -1,0 +1,8 @@
+V1 left 0 10
+R1 left mid 1k
+R2 mid 0 1k
+R3 left out 2k
+R4 out 0 2k
+.tran 1m
+.backanno
+.end

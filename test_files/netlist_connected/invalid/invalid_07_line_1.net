@@ -1,0 +1,5 @@
+XU1 in out 0 AMP
+R1 in 0 1k
+.tran 1m
+.backanno
+.end

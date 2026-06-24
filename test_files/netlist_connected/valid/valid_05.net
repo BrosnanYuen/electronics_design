@@ -1,0 +1,7 @@
+V1 Vdd 0 12
+R1 Vdd drain 1k
+R2 gate 0 1Meg
+J1 drain gate 0 2N3819
+.tran 1m
+.backanno
+.end
