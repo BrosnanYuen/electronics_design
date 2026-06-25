@@ -1,0 +1,7 @@
+V1 VIN 0 SINE(0 1 1k)
+R1 VIN N001 4.7k
+C1 N001 0 1u
+R2 N001 N002 2.2k
+.tran 10m
+.backanno
+.end

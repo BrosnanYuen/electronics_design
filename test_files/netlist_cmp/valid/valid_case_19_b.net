@@ -1,0 +1,11 @@
+R9 OUT 0 1k
+C4 EMIT OUT 10n
+Q5 SUP BASE EMIT 0 2N3906
+R8 0 EMIT 1.5k
+R7 BASE 0 10k
+R6 SUP BASE 27k
+V8 SUP 0 -12
+.tran 1m
+.model PNP PNP
+.backanno
+.end

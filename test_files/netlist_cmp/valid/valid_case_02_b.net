@@ -1,0 +1,6 @@
+C4 FILTER 0 100n
+R3 SOURCE FILTER 1k
+V2 SOURCE 0 PULSE(0 5 0 1n 1n 1u 2u)
+.tran 10u
+.backanno
+.end

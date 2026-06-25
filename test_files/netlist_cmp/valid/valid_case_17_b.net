@@ -1,0 +1,11 @@
+R9 OUT 0 4.7k
+C8 COL OUT 220n
+R8 VDD COL 2.7k
+Q8 COL BASE 0 0 2N3904
+R7 BASE 0 6.8k
+R6 VDD BASE 18k
+V7 VDD 0 11
+.tran 3m
+.model NPN NPN
+.backanno
+.end

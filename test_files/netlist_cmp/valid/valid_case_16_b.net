@@ -1,0 +1,8 @@
+R6 OUT 0 1k
+C3 MID OUT 10n
+R5 MID 0 1k
+R4 VIN MID 1k
+V4 VIN 0 5
+.tran 1m
+.backanno
+.end

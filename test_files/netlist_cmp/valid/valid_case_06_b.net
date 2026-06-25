@@ -1,0 +1,8 @@
+R9 OUT 0 1k
+C3 TAP OUT 22n
+R8 TAP 0 6k
+V3 SRC 0 15
+R7 SRC TAP 3k
+.tran 5m
+.backanno
+.end

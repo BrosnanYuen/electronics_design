@@ -1,0 +1,9 @@
+V1 VEE 0 -9
+R1 VEE NB 22k
+R2 NB 0 10k
+R3 0 NC 2k
+Q1 VEE NB NC 0 2N3906
+.model PNP PNP
+.op
+.backanno
+.end

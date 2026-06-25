@@ -1,0 +1,7 @@
+V1 A 0 10
+R1 A B 2k
+C1 B C 4n
+R2 B 0 3k
+.tran 1m
+.backanno
+.end

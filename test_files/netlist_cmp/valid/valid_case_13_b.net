@@ -1,0 +1,9 @@
+R4 PWR COL 1.8k
+R3 BASE 0 5k
+Q9 COL BASE 0 0 BC547B
+R2 PWR BASE 15k
+V7 PWR 0 6
+.model NPN NPN
+.op
+.backanno
+.end

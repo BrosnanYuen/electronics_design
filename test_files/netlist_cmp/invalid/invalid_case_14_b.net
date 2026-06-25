@@ -1,0 +1,9 @@
+V1 N1 0 8
+R1 N1 N2 4k
+C1 N2 N3 12n
+R2 N3 0 2k
+C2 N3 N4 22n
+R3 N4 0 1k
+.tran 3m
+.backanno
+.end

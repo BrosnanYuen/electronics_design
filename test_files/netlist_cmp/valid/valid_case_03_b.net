@@ -1,0 +1,6 @@
+R8 NODE2 0 2k
+V6 DRIVE 0 AC 1
+C9 DRIVE NODE2 10n
+.ac dec 10 1 1Meg
+.backanno
+.end

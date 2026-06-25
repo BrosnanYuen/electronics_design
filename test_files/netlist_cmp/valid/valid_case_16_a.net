@@ -1,0 +1,8 @@
+V1 SRC 0 5
+R1 SRC N1 1k
+R2 N1 0 1k
+C1 N1 N2 10n
+R3 N2 0 1k
+.tran 1m
+.backanno
+.end

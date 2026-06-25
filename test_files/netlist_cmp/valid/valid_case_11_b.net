@@ -1,0 +1,7 @@
+R5 Y 0 3k
+C4 X Y 4n
+R4 P X 2k
+V2 P 0 10
+.tran 1m
+.backanno
+.end

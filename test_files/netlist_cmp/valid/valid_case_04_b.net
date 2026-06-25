@@ -1,0 +1,9 @@
+Q4 COL BASE 0 0 2N3904
+R7 SUPPLY COL 1k
+R5 SUPPLY BASE 47k
+V8 SUPPLY 0 9
+R6 BASE 0 10k
+.model NPN NPN
+.op
+.backanno
+.end

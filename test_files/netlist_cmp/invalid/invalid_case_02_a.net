@@ -1,0 +1,6 @@
+V1 VIN 0 PULSE(0 5 0 1n 1n 1u 2u)
+R1 VIN VOUT 1k
+C1 VOUT 0 100n
+.tran 10u
+.backanno
+.end

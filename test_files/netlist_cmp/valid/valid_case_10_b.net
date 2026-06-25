@@ -1,0 +1,9 @@
+R8 0 COL 2k
+Q6 SRC BASE COL 0 2N3906
+R7 BASE 0 10k
+R6 SRC BASE 22k
+V6 SRC 0 -9
+.model PNP PNP
+.op
+.backanno
+.end

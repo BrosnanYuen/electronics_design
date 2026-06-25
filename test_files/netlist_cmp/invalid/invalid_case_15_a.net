@@ -1,0 +1,11 @@
+V1 S 0 14
+R1 S B 39k
+R2 B 0 12k
+R3 S C 1.5k
+Q1 C B 0 0 2N3904
+C1 C E 100n
+R4 E 0 2k
+.tran 4m
+.model NPN NPN
+.backanno
+.end

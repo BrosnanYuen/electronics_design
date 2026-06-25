@@ -1,0 +1,11 @@
+V1 P 0 11
+R1 P B1 18k
+R2 B1 0 6.8k
+Q1 C1 B1 0 0 2N3904
+R3 P C1 2.7k
+C1 C1 O 220n
+R4 O 0 10k
+.tran 3m
+.model NPN NPN
+.backanno
+.end

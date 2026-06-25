@@ -1,0 +1,6 @@
+R2 OUT 0 1k
+V5 N009 0 12
+R7 OUT N009 5k
+.tf V(OUT) V5
+.backanno
+.end

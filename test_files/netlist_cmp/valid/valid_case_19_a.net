@@ -1,0 +1,11 @@
+V1 SRC 0 -12
+R1 SRC B 27k
+R2 B 0 10k
+R3 0 E 1.5k
+Q1 SRC B E 0 2N3906
+C1 E O 10n
+R4 O 0 1k
+.tran 1m
+.model PNP PNP
+.backanno
+.end

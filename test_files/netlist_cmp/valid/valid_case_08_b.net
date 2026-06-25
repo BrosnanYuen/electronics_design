@@ -1,0 +1,7 @@
+R4 OUT 0 2.2k
+C3 MID OUT 1u
+R3 IN MID 4.7k
+V4 IN 0 SINE(0 1 1k)
+.tran 10m
+.backanno
+.end

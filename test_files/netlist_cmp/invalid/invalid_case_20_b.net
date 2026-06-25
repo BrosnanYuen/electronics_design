@@ -1,0 +1,9 @@
+V1 A 0 9
+R1 A B 2.2k
+R2 B C 3.3k
+Q1 C B 0 0 BC547B
+R3 A C 1k
+.model NPN NPN
+.op
+.backanno
+.end

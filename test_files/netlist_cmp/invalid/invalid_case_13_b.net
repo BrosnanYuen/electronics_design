@@ -1,0 +1,9 @@
+V1 VCC 0 6
+R1 VCC NB 15k
+R2 NB 0 5k
+R3 VCC NC 1.8k
+Q1 NC NB 0 0 2N3904
+.model NPN NPN
+.op
+.backanno
+.end

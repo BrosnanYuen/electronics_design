@@ -1,0 +1,8 @@
+V1 IN 0 7
+C1 IN MID 47n
+R1 MID 0 3.3k
+C2 MID OUT 47n
+R2 OUT 0 3.3k
+.tran 2m
+.backanno
+.end

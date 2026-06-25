@@ -1,0 +1,7 @@
+C8 OUT 0 47n
+R5 MID OUT 2k
+R4 SRC MID 1k
+V2 SRC 0 5
+.tran 2m
+.backanno
+.end
