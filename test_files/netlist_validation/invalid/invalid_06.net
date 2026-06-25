@@ -1,0 +1,6 @@
+V1 N001 0 12
+R1 OUT N001 5k
+R2 OUT 0 1k
+* no analysis here
+.backanno
+.end

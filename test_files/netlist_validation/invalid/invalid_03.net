@@ -1,0 +1,6 @@
++ orphan continuation
+V1 N001 0 12
+R1 OUT N001 5k
+.tf V(OUT) V1
+.backanno
+.end
