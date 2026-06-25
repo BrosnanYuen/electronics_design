@@ -216,6 +216,16 @@ Install the runtime dependency used by the plotting and comparison APIs:
 .venv/bin/python -m pip install "networkx>=3.6.1"
 ```
 
+## CLI Usage
+
+Render a validated LTspice netlist directly to a PNG file:
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net output.png
+```
+
+This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath)` API and exits with a non-zero status if validation or PNG generation fails.
+
 ## Example Usage
 
 ```python
@@ -255,6 +265,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
 - `test_files/netlist_validation/` contains 10 valid and 10 invalid whole-file validation fixtures
 - `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
+- `scripts/ltspice_net_to_networkxpng.py` renders one validated LTspice netlist to a PNG file
 - `scripts/run_all_tests.py` runs unit tests first and integration tests second
 
 ## Package Layout
