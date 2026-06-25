@@ -14,6 +14,12 @@ or run the sequential test script:
 PYTHONPATH=src .venv/bin/python scripts/run_all_tests.py
 ```
 
+Confirm the required runtime dependency is installed:
+
+```bash
+.venv/bin/python -m pip install "networkx>=3.6.1"
+```
+
 ## 2. Build The Distribution
 
 Install build tools if needed:
@@ -56,6 +62,7 @@ Upload to TestPyPI first if you want a dry run:
 
 - Update the version in `pyproject.toml`
 - Run the full test suite
+- Confirm the `networkx` dependency is declared and installed
 - Build the package
 - Run `twine check`
 - Upload the package

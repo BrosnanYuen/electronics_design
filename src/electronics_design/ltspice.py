@@ -3,12 +3,18 @@
 from __future__ import annotations  # Postpone annotation evaluation for forward references.
 
 from dataclasses import dataclass  # Use a small record type for parsed element lines.
+import math  # Compute simple node-layout geometry for PNG graph rendering.
 import os  # Access filesystem and permission utilities.
 import re  # Validate directive spelling and structure with regular expressions.
+import struct  # Encode PNG header fields in network-ordered binary form.
 from typing import Dict  # Type the node-count mapping.
 from typing import List  # Type collections of lines and nodes.
 from typing import Sequence  # Type immutable views over loaded line lists.
 from typing import Tuple  # Type tuple-based helper results.
+import zlib  # Compress PNG image payloads and compute chunk checksums.
+
+import networkx as nx  # Build comparison and plotting graphs with the required dependency.
+from networkx.algorithms import isomorphism  # Compare normalized netlist graphs structurally.
 
 ValidationResult = Tuple[bool, str]  # Represent the public validator return shape.
 ReadLinesResult = Tuple[bool, List[str], str]  # Represent file-read helper output.
@@ -159,6 +165,20 @@ _FOOTER_DIRECTIVES = {  # Define directives that are acceptable in the footer re
 
 _EXEMPT_NODE_PREFIXES = ("NC", "NC_", "NC-")  # Exempt explicit no-connect node names from connectivity checks.
 
+_PNG_BACKGROUND = (248, 250, 252)  # Use a light background for generated network graph images.
+_PNG_EDGE_COLOR = (148, 163, 184)  # Use a muted line color for component-to-net edges.
+_PNG_NET_FILL = (37, 99, 235)  # Use a blue fill color for net nodes in the generated graph.
+_PNG_NET_BORDER = (30, 64, 175)  # Use a darker blue border for net nodes in the generated graph.
+_PNG_COMPONENT_BORDER = (30, 41, 59)  # Use a dark neutral border for component nodes in the generated graph.
+_PNG_COMPONENT_COLORS = [  # Cycle through a compact palette so different component prefixes are easy to distinguish.
+    (251, 191, 36),  # Amber component fill color.
+    (52, 211, 153),  # Emerald component fill color.
+    (96, 165, 250),  # Sky component fill color.
+    (248, 113, 113),  # Red component fill color.
+    (196, 181, 253),  # Violet component fill color.
+    (244, 114, 182),  # Pink component fill color.
+]  # Finish the component fill palette.
+
 
 @dataclass(frozen=True)  # Freeze parsed element records so tests and callers can rely on immutability.
 class ParsedElement:  # Represent a parsed device line and its connectivity nodes.
@@ -198,6 +218,63 @@ def is_ltspice_netlist_structure_connected(filepath: str) -> ValidationResult:  
     return True, ""  # Return success when all required nodes are connected.
 
 
+def is_valid_ltspice_netlist_file(filepath: str) -> ValidationResult:  # Validate a netlist by delegating only to the three required public validators.
+    format_result = is_valid_ltspice_netlist_format(filepath)  # Execute the required format validator first.
+    if not format_result[0]:  # Stop when the format validator reports any failure.
+        return format_result  # Return the exact public failure tuple unchanged.
+    footer_result = is_valid_ltspice_netlist_footer(filepath)  # Execute the required footer validator second.
+    if not footer_result[0]:  # Stop when the footer validator reports any failure.
+        return footer_result  # Return the exact public failure tuple unchanged.
+    connectivity_result = is_ltspice_netlist_structure_connected(filepath)  # Execute the required connectivity validator last.
+    if not connectivity_result[0]:  # Stop when the connectivity validator reports any failure.
+        return connectivity_result  # Return the exact public failure tuple unchanged.
+    return True, ""  # Return success only when all three required validators succeed.
+
+
+def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_png_filepath: str) -> ValidationResult:  # Plot a validated LTspice netlist as a networkx-derived PNG image.
+    validation_result = is_valid_ltspice_netlist_file(netlist_filepath)  # Validate the input netlist through the required public wrapper first.
+    if not validation_result[0]:  # Stop immediately when the netlist is not fully valid.
+        return validation_result  # Return the exact validation failure tuple unchanged.
+    parse_result = _load_parsed_elements(netlist_filepath)  # Parse the validated file into graph-ready device elements.
+    if not parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
+        return False, "Unable to plot network graph!"  # Return a stable plotting failure message.
+    output_path_result = _coerce_path(networkx_png_filepath)  # Convert the caller-supplied PNG path into a usable filesystem string.
+    if not output_path_result[0]:  # Stop when the output path cannot be converted safely.
+        return False, "Unable to write PNG file!"  # Return a stable write-path failure message.
+    graph = _build_networkx_graph(parse_result[1], include_visual_labels=True)  # Build the plotting graph from the parsed device elements.
+    try:  # Attempt to render and write the graph image to disk.
+        _write_networkx_graph_png(graph, output_path_result[1])  # Draw the graph into a PNG file using the local renderer.
+    except OSError:  # Catch filesystem write failures such as missing permissions or invalid parent directories.
+        return False, "Unable to write PNG file!"  # Return a stable write failure message.
+    except ValueError:  # Catch rendering precondition failures such as impossible image dimensions.
+        return False, "Unable to plot network graph!"  # Return a stable plotting failure message.
+    return True, ""  # Return success when the PNG file is written successfully.
+
+
+def ltspice_netlist_structure_cmp(filepath1: str, filepath2: str) -> bool:  # Compare two validated LTspice netlists for structural equivalence while ignoring footer directives.
+    first_validation_result = is_valid_ltspice_netlist_file(filepath1)  # Validate the first input file before attempting any comparison.
+    if not first_validation_result[0]:  # Stop when the first file is not a valid LTspice netlist for this project.
+        return False  # Return False because comparison cannot proceed on an invalid first file.
+    second_validation_result = is_valid_ltspice_netlist_file(filepath2)  # Validate the second input file before attempting any comparison.
+    if not second_validation_result[0]:  # Stop when the second file is not a valid LTspice netlist for this project.
+        return False  # Return False because comparison cannot proceed on an invalid second file.
+    first_parse_result = _load_parsed_elements(filepath1)  # Parse the first validated file into device elements.
+    if not first_parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
+        return False  # Return False because the first graph cannot be built reliably.
+    second_parse_result = _load_parsed_elements(filepath2)  # Parse the second validated file into device elements.
+    if not second_parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
+        return False  # Return False because the second graph cannot be built reliably.
+    first_graph = _build_networkx_graph(first_parse_result[1], include_visual_labels=False)  # Build the normalized comparison graph for the first file.
+    second_graph = _build_networkx_graph(second_parse_result[1], include_visual_labels=False)  # Build the normalized comparison graph for the second file.
+    matcher = isomorphism.MultiGraphMatcher(  # Create a multigraph isomorphism matcher for the two normalized graphs.
+        first_graph,  # Provide the normalized graph built from the first netlist.
+        second_graph,  # Provide the normalized graph built from the second netlist.
+        node_match=_networkx_graph_node_match,  # Compare component signatures and special net classes exactly.
+        edge_match=isomorphism.categorical_multiedge_match("port", -1),  # Preserve device-port positions across the comparison.
+    )  # Finish the graph matcher construction.
+    return matcher.is_isomorphic()  # Return True only when the two normalized graphs are structurally equivalent.
+
+
 def _read_text_file_lines(filepath: str) -> ReadLinesResult:  # Load a file while mapping filesystem errors to the required API messages.
     coerced_path_result = _coerce_path(filepath)  # Convert the caller-supplied path into a filesystem string.
     if not coerced_path_result[0]:  # Stop when the path cannot be converted to a usable string.
@@ -228,6 +305,13 @@ def _coerce_path(filepath: str) -> Tuple[bool, str]:  # Convert a path-like inpu
     except TypeError:  # Catch invalid path-like objects.
         return False, ""  # Signal failure so the caller can map it to the public API error.
     return True, path_string  # Return the usable path string.
+
+
+def _load_parsed_elements(filepath: str) -> ElementParseResult:  # Load a file and parse its device elements through the existing internal helpers.
+    read_result = _read_text_file_lines(filepath)  # Re-read the file through the shared safe text loader.
+    if not read_result[0]:  # Stop when the file cannot be read safely.
+        return False, [], 0, "read_error"  # Return a generic parse failure marker for the caller.
+    return _parse_elements(read_result[1])  # Parse the loaded source lines into structured device elements.
 
 
 def _validate_format_lines(lines: Sequence[str]) -> Tuple[bool, int]:  # Validate each line for directive spelling and minimum token structure.
@@ -501,3 +585,208 @@ def _strip_semicolon_comment(raw_line: str) -> str:  # Remove any inline semicol
 
 def _format_line_message(prefix: str, line_number: int) -> str:  # Build the required public error message with a line number suffix.
     return f"{prefix} Line {line_number}"  # Return the final user-facing message.
+
+
+def _build_networkx_graph(elements: Sequence[ParsedElement], include_visual_labels: bool) -> nx.MultiGraph:  # Build a component-to-net multigraph from parsed device elements.
+    graph = nx.MultiGraph()  # Create the multigraph that will back plotting and structural comparison.
+    for element in elements:  # Walk every parsed device element in source order.
+        component_node_id = _component_node_id(element)  # Derive a unique graph node id for the current component.
+        component_attributes = {  # Assemble the normalized component attributes used by the graph.
+            "kind": "component",  # Mark this node as a component node.
+            "prefix": element.prefix,  # Preserve the device prefix for styling and comparison.
+            "signature": _component_signature(element),  # Store the instance-name-free structural signature for comparison.
+        }  # Finish the base component attribute dictionary.
+        if include_visual_labels:  # Attach user-facing labels only when the graph is meant for rendering.
+            component_attributes["label"] = element.tokens[0]  # Expose the original component instance name for the image renderer.
+        graph.add_node(component_node_id, **component_attributes)  # Add the component node to the multigraph.
+        for port_index, node_name in enumerate(element.nodes):  # Walk every connectivity node attached to the component in pin order.
+            net_node_id = _net_node_id(node_name)  # Derive a stable graph node id for the electrical net.
+            net_attributes = {  # Assemble the normalized net attributes used by the graph.
+                "kind": "net",  # Mark this node as a net node.
+                "net_class": _comparison_net_class(node_name),  # Preserve only the structural net class needed for comparison.
+            }  # Finish the base net attribute dictionary.
+            if include_visual_labels:  # Attach user-facing labels only when the graph is meant for rendering.
+                net_attributes["label"] = node_name  # Expose the original net name for the image renderer.
+            graph.add_node(net_node_id, **net_attributes)  # Add or update the net node in the multigraph.
+            graph.add_edge(component_node_id, net_node_id, port=port_index)  # Connect the component pin to the net node with its port index preserved.
+    return graph  # Return the completed multigraph.
+
+
+def _component_node_id(element: ParsedElement) -> str:  # Build a unique graph node id for one parsed component.
+    return f"component:{element.line_number}:{element.tokens[0]}"  # Combine line number and instance token into a stable unique id.
+
+
+def _net_node_id(node_name: str) -> str:  # Build a stable graph node id for one electrical net name.
+    return f"net:{node_name}"  # Prefix the raw node name so net ids do not collide with component ids.
+
+
+def _component_signature(element: ParsedElement) -> Tuple[str, Tuple[str, ...]]:  # Build an instance-name-free structural signature for comparison.
+    non_node_tokens = tuple(element.tokens[1 + len(element.nodes):])  # Drop the instance name and explicit connectivity nodes from the signature.
+    return element.prefix, non_node_tokens  # Return the normalized component signature tuple.
+
+
+def _comparison_net_class(node_name: str) -> str:  # Normalize net names into comparison classes so ordinary node renaming is ignored.
+    uppercase_name = node_name.upper()  # Normalize the net name for case-insensitive class checks.
+    if uppercase_name in {"0", "GND"}:  # Preserve global ground as a special net class across comparisons.
+        return "ground"  # Mark ground-like nodes with the dedicated ground class.
+    if uppercase_name.startswith("NC_") or uppercase_name.startswith("NC-"):  # Preserve only explicit project-style no-connect markers as a dedicated class.
+        return "no_connect"  # Mark only explicit no-connect labels with the dedicated no-connect class.
+    return "net"  # Treat every other electrical node as a generic renameable net.
+
+
+def _networkx_graph_node_match(first_attributes: Dict[str, object], second_attributes: Dict[str, object]) -> bool:  # Compare two graph nodes for structural equality.
+    if first_attributes.get("kind") != second_attributes.get("kind"):  # Reject nodes whose graph roles differ.
+        return False  # Return False because component nodes cannot match net nodes.
+    if first_attributes.get("kind") == "component":  # Compare component nodes using their normalized structural signatures.
+        return first_attributes.get("signature") == second_attributes.get("signature")  # Return True only when the component signatures match exactly.
+    return first_attributes.get("net_class") == second_attributes.get("net_class")  # Compare net nodes using only their normalized comparison class.
+
+
+def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str) -> None:  # Render a component-net graph into a standalone PNG file.
+    component_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "component")  # Collect component node ids in deterministic order.
+    net_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "net")  # Collect net node ids in deterministic order.
+    component_columns = max(1, math.ceil(max(len(component_nodes), 1) / 18))  # Choose enough component columns to avoid an overly tall image.
+    net_columns = max(1, math.ceil(max(len(net_nodes), 1) / 18))  # Choose enough net columns to avoid an overly tall image.
+    row_count = max(1, math.ceil(max(len(component_nodes), 1) / component_columns), math.ceil(max(len(net_nodes), 1) / net_columns))  # Compute the maximum rows needed by either partition.
+    width = max(960, 180 + (component_columns + net_columns) * 220)  # Scale the image width to leave room for both partitions and the edge bundle.
+    height = max(480, 140 + row_count * 38)  # Scale the image height to the larger partition while keeping a useful minimum size.
+    canvas = bytearray(width * height * 3)  # Allocate a flat RGB canvas for the PNG renderer.
+    _fill_canvas(canvas, width, height, _PNG_BACKGROUND)  # Paint the full canvas with the light background color.
+    component_positions = _assign_partition_positions(component_nodes, width, height, True)  # Place components in the left partition region.
+    net_positions = _assign_partition_positions(net_nodes, width, height, False)  # Place nets in the right partition region.
+    positions = {}  # Merge both partition position maps into one lookup dictionary.
+    positions.update(component_positions)  # Add the component positions to the shared lookup.
+    positions.update(net_positions)  # Add the net positions to the shared lookup.
+    for first_node, second_node, edge_key, edge_attributes in graph.edges(keys=True, data=True):  # Draw every component-to-net edge in deterministic multigraph order.
+        _draw_graph_edge(canvas, width, height, positions[first_node], positions[second_node], edge_attributes.get("port", 0), edge_key)  # Render the current edge with a small deterministic offset.
+    for component_node_id in component_nodes:  # Draw every component node after the edges so boxes remain visible.
+        center_x, center_y = component_positions[component_node_id]  # Read the component center coordinates from the layout map.
+        fill_color = _component_fill_color(graph.nodes[component_node_id].get("prefix", "?"))  # Choose a stable component fill color from the device prefix.
+        _draw_rectangle(canvas, width, height, center_x - 24, center_y - 11, center_x + 24, center_y + 11, fill_color, _PNG_COMPONENT_BORDER)  # Render the component as a filled bordered box.
+    for net_node_id in net_nodes:  # Draw every net node after the edges so circles remain visible.
+        center_x, center_y = net_positions[net_node_id]  # Read the net center coordinates from the layout map.
+        _draw_circle(canvas, width, height, center_x, center_y, 8, _PNG_NET_FILL, _PNG_NET_BORDER)  # Render the net as a filled bordered circle.
+    _write_png_rgb(output_path, width, height, canvas)  # Encode and write the final RGB canvas as a PNG file.
+
+
+def _assign_partition_positions(node_ids: Sequence[str], width: int, height: int, is_component_partition: bool) -> Dict[str, Tuple[int, int]]:  # Assign deterministic positions within one graph partition.
+    if not node_ids:  # Return early when the partition is empty.
+        return {}  # Return an empty position map for the empty partition.
+    column_count = max(1, math.ceil(len(node_ids) / 18))  # Compute enough columns to keep the partition at a manageable height.
+    row_count = max(1, math.ceil(len(node_ids) / column_count))  # Compute the row count implied by the chosen column count.
+    left_margin = 90 if is_component_partition else width // 2 + 60  # Place components on the left half and nets on the right half.
+    right_margin = width // 2 - 60 if is_component_partition else width - 90  # Reserve a gap in the middle for the edge bundle.
+    top_margin = 70  # Leave a comfortable top margin for the rendered image.
+    bottom_margin = height - 70  # Leave a comfortable bottom margin for the rendered image.
+    if bottom_margin <= top_margin:  # Guard against impossible image dimensions before computing positions.
+        raise ValueError("image_height_too_small")  # Signal that the computed image dimensions are invalid.
+    usable_width = max(1, right_margin - left_margin)  # Compute the usable horizontal width for the partition columns.
+    usable_height = bottom_margin - top_margin  # Compute the usable vertical height for the partition rows.
+    horizontal_step = 0 if column_count == 1 else usable_width / (column_count - 1)  # Spread columns evenly across the partition width.
+    vertical_step = 0 if row_count == 1 else usable_height / (row_count - 1)  # Spread rows evenly across the partition height.
+    positions: Dict[str, Tuple[int, int]] = {}  # Collect the computed center coordinates for each node id.
+    for index, node_id in enumerate(node_ids):  # Walk every partition node in deterministic order.
+        column_index = index // row_count  # Place nodes into columns first so each column receives roughly equal height.
+        row_index = index % row_count  # Place nodes into rows within the selected column.
+        center_x = int(round(left_margin + column_index * horizontal_step))  # Compute the node center x coordinate for the current column.
+        center_y = int(round(top_margin + row_index * vertical_step))  # Compute the node center y coordinate for the current row.
+        positions[node_id] = (center_x, center_y)  # Save the computed center coordinates in the position map.
+    return positions  # Return the completed position map for the partition.
+
+
+def _draw_graph_edge(canvas: bytearray, width: int, height: int, first_point: Tuple[int, int], second_point: Tuple[int, int], port_index: int, edge_key: int) -> None:  # Draw one graph edge with a deterministic vertical offset.
+    first_x, first_y = first_point  # Unpack the source point coordinates for the current edge.
+    second_x, second_y = second_point  # Unpack the destination point coordinates for the current edge.
+    offset = (port_index * 3) + (edge_key * 2)  # Compute a small deterministic offset so repeated edges do not fully overlap.
+    _draw_line(canvas, width, height, first_x + 24, first_y + offset, second_x - 8, second_y + offset, _PNG_EDGE_COLOR)  # Render the edge as a single straight line segment.
+
+
+def _component_fill_color(prefix: str) -> Tuple[int, int, int]:  # Choose a stable component fill color from a device prefix.
+    palette_index = ord(prefix[0]) % len(_PNG_COMPONENT_COLORS)  # Map the prefix character into the compact component color palette.
+    return _PNG_COMPONENT_COLORS[palette_index]  # Return the selected component fill color tuple.
+
+
+def _fill_canvas(canvas: bytearray, width: int, height: int, color: Tuple[int, int, int]) -> None:  # Paint the entire RGB canvas with one solid background color.
+    red_channel, green_channel, blue_channel = color  # Unpack the requested RGB background color.
+    for pixel_offset in range(0, width * height * 3, 3):  # Walk every pixel position across the flat RGB byte buffer.
+        canvas[pixel_offset] = red_channel  # Write the red channel byte for the current pixel.
+        canvas[pixel_offset + 1] = green_channel  # Write the green channel byte for the current pixel.
+        canvas[pixel_offset + 2] = blue_channel  # Write the blue channel byte for the current pixel.
+
+
+def _set_pixel(canvas: bytearray, width: int, height: int, x_position: int, y_position: int, color: Tuple[int, int, int]) -> None:  # Paint one pixel when the requested position lies inside the canvas.
+    if x_position < 0 or y_position < 0 or x_position >= width or y_position >= height:  # Ignore drawing requests that land outside the RGB canvas.
+        return  # Return immediately because the pixel lies outside the image bounds.
+    pixel_offset = (y_position * width + x_position) * 3  # Convert the pixel coordinates into a flat RGB byte offset.
+    canvas[pixel_offset] = color[0]  # Write the red channel byte for the selected pixel.
+    canvas[pixel_offset + 1] = color[1]  # Write the green channel byte for the selected pixel.
+    canvas[pixel_offset + 2] = color[2]  # Write the blue channel byte for the selected pixel.
+
+
+def _draw_line(canvas: bytearray, width: int, height: int, start_x: int, start_y: int, end_x: int, end_y: int, color: Tuple[int, int, int]) -> None:  # Draw a straight line segment using integer Bresenham stepping.
+    delta_x = abs(end_x - start_x)  # Compute the absolute horizontal travel distance for the line segment.
+    delta_y = -abs(end_y - start_y)  # Compute the negative absolute vertical travel distance for the line segment.
+    step_x = 1 if start_x < end_x else -1  # Choose the horizontal step direction that moves the cursor toward the endpoint.
+    step_y = 1 if start_y < end_y else -1  # Choose the vertical step direction that moves the cursor toward the endpoint.
+    error_term = delta_x + delta_y  # Initialize the Bresenham accumulated error term.
+    current_x = start_x  # Start the drawing cursor at the source x coordinate.
+    current_y = start_y  # Start the drawing cursor at the source y coordinate.
+    while True:  # Iterate until the cursor reaches the target endpoint.
+        _set_pixel(canvas, width, height, current_x, current_y, color)  # Paint the current line pixel on the RGB canvas.
+        if current_x == end_x and current_y == end_y:  # Stop once the line endpoint has been painted.
+            break  # Exit the Bresenham loop at the destination pixel.
+        doubled_error = error_term * 2  # Double the error term to decide which axes to advance next.
+        if doubled_error >= delta_y:  # Advance horizontally when the horizontal error threshold is met.
+            error_term += delta_y  # Update the accumulated error after the horizontal movement.
+            current_x += step_x  # Move the drawing cursor one step horizontally toward the endpoint.
+        if doubled_error <= delta_x:  # Advance vertically when the vertical error threshold is met.
+            error_term += delta_x  # Update the accumulated error after the vertical movement.
+            current_y += step_y  # Move the drawing cursor one step vertically toward the endpoint.
+
+
+def _draw_rectangle(canvas: bytearray, width: int, height: int, left: int, top: int, right: int, bottom: int, fill_color: Tuple[int, int, int], border_color: Tuple[int, int, int]) -> None:  # Draw a filled bordered rectangle for a component node.
+    for y_position in range(top, bottom + 1):  # Walk every scanline covered by the rectangle.
+        for x_position in range(left, right + 1):  # Walk every pixel covered by the current scanline.
+            is_border_pixel = x_position in {left, right} or y_position in {top, bottom}  # Detect whether the current pixel lies on the rectangle border.
+            _set_pixel(canvas, width, height, x_position, y_position, border_color if is_border_pixel else fill_color)  # Paint either the border color or the fill color.
+
+
+def _draw_circle(canvas: bytearray, width: int, height: int, center_x: int, center_y: int, radius: int, fill_color: Tuple[int, int, int], border_color: Tuple[int, int, int]) -> None:  # Draw a filled bordered circle for a net node.
+    radius_squared = radius * radius  # Precompute the filled-circle radius threshold.
+    border_inner_squared = max(0, (radius - 2) * (radius - 2))  # Precompute the inner threshold used to distinguish border pixels from fill pixels.
+    for y_position in range(center_y - radius, center_y + radius + 1):  # Walk every scanline touched by the circle bounding box.
+        for x_position in range(center_x - radius, center_x + radius + 1):  # Walk every pixel touched by the current scanline.
+            delta_x = x_position - center_x  # Measure the horizontal distance from the current pixel to the circle center.
+            delta_y = y_position - center_y  # Measure the vertical distance from the current pixel to the circle center.
+            distance_squared = delta_x * delta_x + delta_y * delta_y  # Compute the squared radial distance from the center.
+            if distance_squared > radius_squared:  # Skip pixels that lie outside the circle radius.
+                continue  # Move to the next candidate pixel because it is outside the circle.
+            pixel_color = border_color if distance_squared >= border_inner_squared else fill_color  # Choose border color near the perimeter and fill color elsewhere.
+            _set_pixel(canvas, width, height, x_position, y_position, pixel_color)  # Paint the current circle pixel onto the canvas.
+
+
+def _write_png_rgb(output_path: str, width: int, height: int, canvas: bytearray) -> None:  # Encode a flat RGB canvas into a standards-compliant PNG file.
+    if width <= 0 or height <= 0:  # Guard against impossible image dimensions before encoding.
+        raise ValueError("invalid_image_dimensions")  # Signal that the caller computed invalid image dimensions.
+    parent_directory = os.path.dirname(output_path)  # Resolve the parent directory for the requested PNG output path.
+    if parent_directory != "":  # Create the output directory tree only when the caller provided one.
+        os.makedirs(parent_directory, exist_ok=True)  # Ensure the parent directory exists before writing the PNG file.
+    scanlines = bytearray()  # Collect the PNG scanline payload with one filter byte per row.
+    row_width = width * 3  # Compute the number of RGB bytes stored in each image row.
+    for row_index in range(height):  # Walk every encoded image row in top-to-bottom order.
+        scanlines.append(0)  # Prefix the row with PNG filter type zero for unfiltered scanlines.
+        row_start = row_index * row_width  # Compute the flat RGB offset where the current row begins.
+        row_end = row_start + row_width  # Compute the flat RGB offset where the current row ends.
+        scanlines.extend(canvas[row_start:row_end])  # Append the raw RGB bytes for the current row to the scanline payload.
+    compressed_payload = zlib.compress(bytes(scanlines), level=9)  # Compress the PNG scanlines with the standard zlib deflater.
+    png_header = struct.pack("!IIBBBBB", width, height, 8, 2, 0, 0, 0)  # Encode the IHDR payload for an 8-bit truecolor non-interlaced PNG.
+    with open(output_path, "wb") as file_handle:  # Open the output file in binary write mode for PNG serialization.
+        file_handle.write(b"\x89PNG\r\n\x1a\n")  # Write the fixed PNG file signature.
+        file_handle.write(_png_chunk(b"IHDR", png_header))  # Write the IHDR chunk containing the image dimensions and pixel format.
+        file_handle.write(_png_chunk(b"IDAT", compressed_payload))  # Write the compressed image data chunk.
+        file_handle.write(_png_chunk(b"IEND", b""))  # Write the terminal IEND chunk to finish the PNG stream.
+
+
+def _png_chunk(chunk_type: bytes, chunk_payload: bytes) -> bytes:  # Serialize one PNG chunk with its length prefix and CRC checksum.
+    checksum = zlib.crc32(chunk_type + chunk_payload) & 0xFFFFFFFF  # Compute the unsigned CRC-32 over the chunk type and payload bytes.
+    return struct.pack("!I", len(chunk_payload)) + chunk_type + chunk_payload + struct.pack("!I", checksum)  # Return the complete serialized chunk bytes.
