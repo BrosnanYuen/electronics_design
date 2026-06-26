@@ -292,7 +292,7 @@ def is_valid_ltspice_netlist_file(filepath: str) -> ValidationResult:  # Validat
     return True, ""  # Return success only when all three required validators succeed.
 
 
-def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_png_filepath: str) -> ValidationResult:  # Plot a validated LTspice netlist as a networkx-derived PNG image.
+def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_png_filepath: str, width: int = 1920, height: int = 1080) -> ValidationResult:  # Plot a validated LTspice netlist as a networkx-derived PNG image.
     validation_result = is_valid_ltspice_netlist_file(netlist_filepath)  # Validate the input netlist through the required public wrapper first.
     if not validation_result[0]:  # Stop immediately when the netlist is not fully valid.
         return validation_result  # Return the exact validation failure tuple unchanged.
@@ -302,9 +302,13 @@ def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_png_filepath: 
     output_path_result = _coerce_path(networkx_png_filepath)  # Convert the caller-supplied PNG path into a usable filesystem string.
     if not output_path_result[0]:  # Stop when the output path cannot be converted safely.
         return False, "Unable to write PNG file!"  # Return a stable write-path failure message.
+    if not isinstance(width, int) or not isinstance(height, int):  # Reject non-integer image dimensions before attempting layout or PNG encoding.
+        return False, "Unable to plot network graph!"  # Return a stable plotting failure message for invalid dimension inputs.
+    if width <= 0 or height <= 0:  # Reject zero or negative image dimensions before attempting layout or PNG encoding.
+        return False, "Unable to plot network graph!"  # Return a stable plotting failure message for invalid dimension inputs.
     graph = _build_networkx_component_plot_graph(parse_result[1])  # Build the component-only plotting graph from the parsed device elements.
     try:  # Attempt to render and write the graph image to disk.
-        _write_networkx_graph_png(graph, output_path_result[1])  # Draw the graph into a PNG file using the local renderer.
+        _write_networkx_graph_png(graph, output_path_result[1], width, height)  # Draw the graph into a PNG file using the local renderer.
     except OSError:  # Catch filesystem write failures such as missing permissions or invalid parent directories.
         return False, "Unable to write PNG file!"  # Return a stable write failure message.
     except ValueError:  # Catch rendering precondition failures such as impossible image dimensions.
@@ -754,12 +758,9 @@ def _networkx_graph_node_match(first_attributes: Dict[str, object], second_attri
     return first_attributes.get("net_class") == second_attributes.get("net_class")  # Compare net nodes using only their normalized comparison class.
 
 
-def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str) -> None:  # Render a component-only graph into a standalone higher-resolution PNG file.
+def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str, width: int, height: int) -> None:  # Render a component-only graph into a standalone PNG file using the caller-requested dimensions.
     component_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "component")  # Collect component node ids in deterministic order.
     ground_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "ground")  # Collect plotting-only ground symbol node ids.
-    plot_node_count = max(len(component_nodes) + len(ground_nodes), 1)  # Guard against zero-node dimension calculations.
-    width = max(1920, 520 + plot_node_count * 120)  # Increase the minimum width so larger plots read clearly when viewed directly.
-    height = max(1080, 420 + plot_node_count * 90)  # Increase the minimum height so labels and crossings are less crowded.
     canvas = bytearray(width * height * 3)  # Allocate a flat RGB canvas for the PNG renderer.
     _fill_canvas(canvas, width, height, _PNG_BACKGROUND)  # Paint the full canvas with the light background color.
     positions = _assign_component_plot_positions(graph, component_nodes + ground_nodes, width, height)  # Place components and the visual ground symbol using a deterministic NetworkX spring layout.

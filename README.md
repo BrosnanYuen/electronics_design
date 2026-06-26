@@ -13,7 +13,7 @@ It currently exposes ten public functions:
 - `is_valid_ltspice_netlist_footer(filepath)`
 - `is_ltspice_netlist_structure_connected(filepath)`
 - `is_valid_ltspice_netlist_file(filepath)`
-- `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath)`
+- `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath, width=1920, height=1080)`
 - `ltspice_netlist_structure_cmp(filepath1, filepath2)`
 
 Each function returns a tuple:
@@ -158,13 +158,15 @@ Possible returns:
 - `False, "<propagated validator message>"`
 - `True, ""`
 
-### `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath)`
+### `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath, width=1920, height=1080)`
 
 Checks that:
 
 - The source LTspice netlist passes `is_valid_ltspice_netlist_file(filepath)`
 - The function builds a `networkx` component-to-net graph
 - The graph is rendered to a PNG file at `networkx_png_filepath`
+- `width` optionally sets the PNG width in pixels and defaults to `1920`
+- `height` optionally sets the PNG height in pixels and defaults to `1080`
 
 Possible returns:
 
@@ -224,7 +226,7 @@ Render a validated LTspice netlist directly to a PNG file:
 PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net output.png
 ```
 
-This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath)` API and exits with a non-zero status if validation or PNG generation fails.
+This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath, width=1920, height=1080)` API and exits with a non-zero status if validation or PNG generation fails.
 
 ## Example Usage
 
@@ -249,6 +251,7 @@ footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
 file_ok, file_message = is_valid_ltspice_netlist_file("example.net")
 plot_ok, plot_message = ltspice_netlist_plot_networkx("example.net", "example.png")
+plot_custom_ok, plot_custom_message = ltspice_netlist_plot_networkx("example.net", "example.png", 1280, 720)
 same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 ```
 
