@@ -1,14 +1,15 @@
 # electronics_design
 
-`electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, and for comparing and plotting validated netlists.
+`electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes eleven public functions:
+It currently exposes twelve public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
 - `is_valid_ltspice_asc_footer(filepath)`
 - `is_valid_ltspice_asc_file(filepath)`
 - `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
+- `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -17,7 +18,7 @@ It currently exposes eleven public functions:
 - `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)`
 - `ltspice_netlist_structure_cmp(filepath1, filepath2)`
 
-Each function returns a tuple:
+Most validation and plotting functions return a tuple:
 
 ```python
 (True, "")
@@ -27,6 +28,20 @@ or:
 
 ```python
 (False, "<error message>")
+```
+
+`ltspice_netlist_structure_cmp(filepath1, filepath2)` returns `True` or `False`.
+
+`ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` returns a conversion tuple:
+
+```python
+(True, "OK", 0)
+```
+
+or:
+
+```python
+(False, "<error code>", <line number>)
 ```
 
 ## What The Library Checks
@@ -113,6 +128,40 @@ Possible returns:
 - `False, "Unable to plot schematic drawing!"`
 - `False, "Unable to write image file!"`
 - `True, ""`
+
+### `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
+
+Checks that:
+
+- The source LTspice schematic is acceptable for conversion and is first validated with `is_valid_ltspice_asc_file(filepath)`
+- The converter resolves LTspice symbols and component metadata from the paths supplied in `convert_settings`
+- The generated netlist is written to `net_filepath_out`
+- The generated netlist is validated with `is_valid_ltspice_netlist_file(filepath)`
+- ASC comments are ignored during conversion and no comments are emitted into the generated netlist
+- `convert_settings` is a mapping so additional conversion options can be added later without changing the API shape
+
+Example `convert_settings`:
+
+```python
+convert_settings = {
+    "ltspice_lib_cmp_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\cmp",
+    "ltspice_lib_sym_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\sym",
+}
+```
+
+Possible returns:
+
+- `False, "INVALID_CONVERT_SETTINGS", 0`
+- `False, "INVALID_OUTPUT_PATH", 0`
+- `False, "INVALID_ASC_FILE", <line>`
+- `False, "ASC_READ_ERROR", 0`
+- `False, "ASC_PARSE_ERROR", <line>`
+- `False, "UNKNOWN_SYMBOL", <line>`
+- `False, "UNCONNECTED_SYMBOL_PIN", <line>`
+- `False, "MISSING_COMPONENT_PAYLOAD", <line>`
+- `False, "WRITE_ERROR", 0`
+- `False, "INVALID_GENERATED_NETLIST", <line>`
+- `True, "OK", 0`
 
 ### `is_valid_ltspice_netlist_format(filepath)`
 
@@ -201,7 +250,7 @@ Possible returns:
 
 Checks that:
 
-- Both input files pass `is_valid_ltspice_netlist_file(filepath)`
+- Both input files can be parsed as LTspice netlists
 - The electrical structure matches even if device order differs
 - Component instance names may differ
 - Ordinary net names may differ
@@ -210,8 +259,8 @@ Checks that:
 
 Possible returns:
 
-- `False` when either file is invalid or when the structures differ
-- `True` when the two validated netlists are structurally equivalent
+- `False` when either file cannot be parsed or when the structures differ
+- `True` when the two netlists are structurally equivalent
 
 ## Install For Local Development
 
@@ -265,6 +314,7 @@ from electronics_design import is_valid_ltspice_asc_spacing
 from electronics_design import is_valid_ltspice_asc_footer
 from electronics_design import is_valid_ltspice_asc_file
 from electronics_design import ltspice_asc_plot_schemdraw
+from electronics_design import ltspice_asc_to_netlist
 from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
@@ -277,6 +327,15 @@ asc_spacing_ok, asc_spacing_message = is_valid_ltspice_asc_spacing("example.asc"
 asc_footer_ok, asc_footer_message = is_valid_ltspice_asc_footer("example.asc")
 asc_file_ok, asc_file_message = is_valid_ltspice_asc_file("example.asc")
 schemdraw_ok, schemdraw_message = ltspice_asc_plot_schemdraw("example.asc", "example.svg")
+convert_settings = {
+    "ltspice_lib_cmp_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\cmp",
+    "ltspice_lib_sym_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\sym",
+}
+convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
+    "example.asc",
+    "example.net",
+    convert_settings,
+)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
@@ -291,6 +350,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 
 - `tests/unit/` contains focused unit tests
 - `tests/integration/` contains integration tests against repository netlists and schematic samples
+- `tests/unit/test_asc_to_netlist.py` converts every fixture in `valid_convert/asc/` and compares the generated netlist against the matching ground-truth file in `valid_convert/netlist/`
 - `test_files/asc_header/` contains valid and invalid ASC header fixtures
 - `test_files/asc_spacing/` contains valid and invalid ASC spacing fixtures
 - `test_files/asc_footer/` contains valid and invalid ASC footer fixtures
@@ -301,6 +361,8 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
 - `test_files/netlist_validation/` contains 10 valid and 10 invalid whole-file validation fixtures
 - `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
+- `valid_convert/asc/` contains valid LTspice ASC conversion fixtures
+- `valid_convert/netlist/` contains the expected LTspice netlists for the conversion fixtures
 - `scripts/ltspice_asc_plot_schemdraw.py` renders one validated LTspice ASC schematic to a `.png`, `.svg`, or `.jpg` image file
 - `scripts/ltspice_net_to_networkxpng.py` renders one validated LTspice netlist to a `.png`, `.svg`, or `.jpg` image file
 - `scripts/run_all_tests.py` runs unit tests first and integration tests second
@@ -311,8 +373,10 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 src/electronics_design/
     __init__.py
     ltspice.py
+    ltspice_asc_to_netlist.py
 tests/
 test_files/
+valid_convert/
 scripts/
 pyproject.toml
 README.md
