@@ -1,4 +1,4 @@
-"""Render one LTspice netlist file to a PNG graph via the public package API."""  # Describe the script purpose.
+"""Render one LTspice netlist file to an image graph via the public package API."""  # Describe the script purpose.
 
 from __future__ import annotations  # Keep annotations lazy and consistent with the package code.
 
@@ -17,10 +17,10 @@ from electronics_design import ltspice_netlist_plot_networkx  # Import only the 
 
 def _build_argument_parser() -> argparse.ArgumentParser:  # Create the command-line parser for the netlist-to-PNG wrapper.
     parser = argparse.ArgumentParser(  # Construct the parser with a concise description of the script behavior.
-        description="Convert an LTspice netlist file into a networkx-based PNG graph.",  # Explain the script purpose to CLI users.
+        description="Convert an LTspice netlist file into a networkx-based image graph.",  # Explain the script purpose to CLI users.
     )  # Finish the parser construction.
     parser.add_argument("netlist_filepath", help="Path to the LTspice .net file to render.")  # Accept the input netlist path.
-    parser.add_argument("networkx_png_filepath", help="Path where the output PNG file should be written.")  # Accept the output PNG path.
+    parser.add_argument("networkx_imagepath_out", help="Path where the output image file should be written (.png, .svg, .jpg).")  # Accept the output image path.
     parser.add_argument("--width", type=int, default=1920, help="Optional PNG width in pixels. Defaults to 1920.")  # Accept the optional output width.
     parser.add_argument("--height", type=int, default=1080, help="Optional PNG height in pixels. Defaults to 1080.")  # Accept the optional output height.
     return parser  # Return the configured parser to the caller.
@@ -29,7 +29,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:  # Create the command-l
 def main() -> int:  # Parse CLI arguments, invoke the public plotting API, and map the result to a process exit code.
     parser = _build_argument_parser()  # Build the CLI parser before reading user arguments.
     arguments = parser.parse_args()  # Parse the command-line arguments supplied by the caller.
-    plot_result = ltspice_netlist_plot_networkx(arguments.netlist_filepath, arguments.networkx_png_filepath, arguments.width, arguments.height)  # Delegate all work to the public plotting API.
+    plot_result = ltspice_netlist_plot_networkx(arguments.netlist_filepath, arguments.networkx_imagepath_out, arguments.width, arguments.height)  # Delegate all work to the public plotting API.
     if not plot_result[0]:  # Stop when the public plotting API reports a validation or output error.
         print(plot_result[1], file=sys.stderr)  # Print the stable public error message to standard error.
         return 1  # Return a non-zero status so shell callers can detect failure.

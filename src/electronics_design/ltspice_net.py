@@ -3,6 +3,7 @@
 from __future__ import annotations  # Postpone annotation evaluation for forward references.
 
 from dataclasses import dataclass  # Use a small record type for parsed element lines.
+from html import escape  # Escape text safely when emitting SVG output.
 from itertools import combinations  # Build component-to-component projected edges for plotting.
 import math  # Compute simple node-layout geometry for PNG graph rendering.
 import os  # Access filesystem and permission utilities.
@@ -292,26 +293,26 @@ def is_valid_ltspice_netlist_file(filepath: str) -> ValidationResult:  # Validat
     return True, ""  # Return success only when all three required validators succeed.
 
 
-def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_png_filepath: str, width: int = 1920, height: int = 1080) -> ValidationResult:  # Plot a validated LTspice netlist as a networkx-derived PNG image.
+def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_imagepath_out: str, width: int = 1920, height: int = 1080) -> ValidationResult:  # Plot a validated LTspice netlist as an image file selected by the output extension.
     validation_result = is_valid_ltspice_netlist_file(netlist_filepath)  # Validate the input netlist through the required public wrapper first.
     if not validation_result[0]:  # Stop immediately when the netlist is not fully valid.
         return validation_result  # Return the exact validation failure tuple unchanged.
     parse_result = _load_parsed_elements(netlist_filepath)  # Parse the validated file into graph-ready device elements.
     if not parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
         return False, "Unable to plot network graph!"  # Return a stable plotting failure message.
-    output_path_result = _coerce_path(networkx_png_filepath)  # Convert the caller-supplied PNG path into a usable filesystem string.
+    output_path_result = _coerce_path(networkx_imagepath_out)  # Convert the caller-supplied image path into a usable filesystem string.
     if not output_path_result[0]:  # Stop when the output path cannot be converted safely.
-        return False, "Unable to write PNG file!"  # Return a stable write-path failure message.
+        return False, "Unable to write image file!"  # Return a stable write-path failure message.
     if not isinstance(width, int) or not isinstance(height, int):  # Reject non-integer image dimensions before attempting layout or PNG encoding.
         return False, "Unable to plot network graph!"  # Return a stable plotting failure message for invalid dimension inputs.
     if width <= 0 or height <= 0:  # Reject zero or negative image dimensions before attempting layout or PNG encoding.
         return False, "Unable to plot network graph!"  # Return a stable plotting failure message for invalid dimension inputs.
     graph = _build_networkx_component_plot_graph(parse_result[1])  # Build the component-only plotting graph from the parsed device elements.
     try:  # Attempt to render and write the graph image to disk.
-        _write_networkx_graph_png(graph, output_path_result[1], width, height)  # Draw the graph into a PNG file using the local renderer.
+        _write_networkx_graph_image(graph, output_path_result[1], width, height)  # Draw the graph into an image file using the renderer selected by the extension.
     except OSError:  # Catch filesystem write failures such as missing permissions or invalid parent directories.
-        return False, "Unable to write PNG file!"  # Return a stable write failure message.
-    except ValueError:  # Catch rendering precondition failures such as impossible image dimensions.
+        return False, "Unable to write image file!"  # Return a stable write failure message.
+    except (ImportError, ValueError):  # Catch rendering precondition failures such as impossible image dimensions or missing optional encoders.
         return False, "Unable to plot network graph!"  # Return a stable plotting failure message.
     return True, ""  # Return success when the PNG file is written successfully.
 
@@ -758,12 +759,28 @@ def _networkx_graph_node_match(first_attributes: Dict[str, object], second_attri
     return first_attributes.get("net_class") == second_attributes.get("net_class")  # Compare net nodes using only their normalized comparison class.
 
 
-def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str, width: int, height: int) -> None:  # Render a component-only graph into a standalone PNG file using the caller-requested dimensions.
+def _write_networkx_graph_image(graph: nx.MultiGraph, output_path: str, width: int, height: int) -> None:  # Render a component-only graph into a standalone image file selected by the output extension.
+    extension = os.path.splitext(output_path)[1].lower()  # Read the requested output extension so the renderer can be selected deterministically.
+    if extension not in {".png", ".svg", ".jpg", ".jpeg"}:  # Reject unsupported image extensions explicitly.
+        raise ValueError("unsupported_image_extension")  # Signal that the caller requested an unsupported export format.
     component_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "component")  # Collect component node ids in deterministic order.
     ground_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "ground")  # Collect plotting-only ground symbol node ids.
-    canvas = bytearray(width * height * 3)  # Allocate a flat RGB canvas for the PNG renderer.
+    positions = _assign_component_plot_positions(graph, component_nodes + ground_nodes, width, height)  # Place components and the visual ground symbol once so every format uses the same layout.
+    if extension == ".svg":  # Route SVG outputs to the dedicated vector writer.
+        _write_svg_graph(output_path, graph, positions, width, height)  # Serialize the graph as a standalone SVG document.
+        return  # Stop after the requested SVG file has been written.
+    canvas = bytearray(width * height * 3)  # Allocate a flat RGB canvas for raster output formats.
     _fill_canvas(canvas, width, height, _PNG_BACKGROUND)  # Paint the full canvas with the light background color.
-    positions = _assign_component_plot_positions(graph, component_nodes + ground_nodes, width, height)  # Place components and the visual ground symbol using a deterministic NetworkX spring layout.
+    _draw_raster_graph(graph, positions, component_nodes, ground_nodes, canvas, width, height)  # Render the full graph into the shared raster canvas.
+    if extension == ".png":  # Route PNG outputs to the existing PNG encoder.
+        _write_png_rgb(output_path, width, height, canvas)  # Encode and write the final RGB canvas as a PNG file.
+        return  # Stop after the requested PNG file has been written.
+    _write_jpeg_rgb(output_path, width, height, canvas)  # Encode and write the final RGB canvas as a JPEG file.
+
+
+def _draw_raster_graph(graph: nx.MultiGraph, positions: Dict[str, Tuple[int, int]], component_nodes: Sequence[str], ground_nodes: Sequence[str], canvas: bytearray, width: int, height: int) -> None:  # Render the shared graph layout onto a raster canvas for PNG and JPEG outputs.
+    component_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "component")  # Collect component node ids in deterministic order.
+    ground_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "ground")  # Collect plotting-only ground symbol node ids.
     for first_node, second_node, edge_key, edge_attributes in graph.edges(keys=True, data=True):  # Draw every component-to-component edge in deterministic multigraph order.
         _draw_graph_edge(
             canvas,
@@ -808,7 +825,81 @@ def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str, width: int
         center_x, center_y = positions[ground_node_id]  # Read the ground symbol center coordinates from the layout map.
         _draw_ground_symbol(canvas, width, height, center_x, center_y, _PNG_GROUND_COLOR)  # Render the dedicated ground symbol.
         _draw_centered_text(canvas, width, height, center_x, center_y + 24, str(graph.nodes[ground_node_id].get("label", "GND")), _PNG_TEXT_MUTED, 1, 8)  # Render a short GND label below the symbol.
-    _write_png_rgb(output_path, width, height, canvas)  # Encode and write the final RGB canvas as a PNG file.
+
+
+def _write_svg_graph(output_path: str, graph: nx.MultiGraph, positions: Dict[str, Tuple[int, int]], width: int, height: int) -> None:  # Serialize the component-only graph as a standalone SVG document.
+    parent_directory = os.path.dirname(output_path)  # Resolve the parent directory for the requested SVG output path.
+    if parent_directory != "":  # Create the output directory tree only when the caller provided one.
+        os.makedirs(parent_directory, exist_ok=True)  # Ensure the parent directory exists before writing the SVG file.
+    component_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "component")  # Collect component node ids in deterministic order.
+    ground_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "ground")  # Collect plotting-only ground symbol node ids.
+    background_color = _rgb_hex(_PNG_BACKGROUND)  # Convert the canvas background color into an SVG-friendly hex string.
+    edge_color = _rgb_hex(_PNG_EDGE_COLOR)  # Convert the edge color into an SVG-friendly hex string.
+    border_color = _rgb_hex(_PNG_COMPONENT_BORDER)  # Convert the component border color into an SVG-friendly hex string.
+    text_color = _rgb_hex(_PNG_TEXT_COLOR)  # Convert the primary text color into an SVG-friendly hex string.
+    muted_text_color = _rgb_hex(_PNG_TEXT_MUTED)  # Convert the secondary text color into an SVG-friendly hex string.
+    svg_lines = [  # Build the SVG document as a list of serialized XML lines.
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="{background_color}"/>',
+    ]  # Start the SVG document with the header and background fill.
+    for first_node, second_node, edge_key, edge_attributes in graph.edges(keys=True, data=True):  # Emit every edge before node shapes so boxes remain visually on top.
+        port_index = int(edge_attributes.get("port", 0)) if isinstance(edge_attributes.get("port", 0), int) else 0  # Preserve the same deterministic edge offset logic used by the raster renderer.
+        first_kind = str(graph.nodes[first_node].get("kind", ""))  # Read the first node kind for anchor selection.
+        second_kind = str(graph.nodes[second_node].get("kind", ""))  # Read the second node kind for anchor selection.
+        first_anchor = _plot_node_edge_anchor(positions[first_node], positions[second_node], first_kind, (port_index * 3) + (edge_key * 2))  # Compute the first SVG edge anchor point.
+        second_anchor = _plot_node_edge_anchor(positions[second_node], positions[first_node], second_kind, (port_index * 3) + (edge_key * 2))  # Compute the second SVG edge anchor point.
+        svg_lines.append(f'<line x1="{first_anchor[0]}" y1="{first_anchor[1]}" x2="{second_anchor[0]}" y2="{second_anchor[1]}" stroke="{edge_color}" stroke-width="2"/>')  # Emit the current graph edge as an SVG line element.
+    for component_node_id in component_nodes:  # Emit all component boxes and labels.
+        center_x, center_y = positions[component_node_id]  # Read the component center coordinates from the layout map.
+        fill_color = _rgb_hex(_component_fill_color(str(graph.nodes[component_node_id].get("prefix", "?"))))  # Convert the stable component fill color into an SVG-friendly hex string.
+        label = escape(_normalize_svg_text(str(graph.nodes[component_node_id].get("label", "")), 16))  # Normalize and escape the component instance label.
+        value_label = escape(_normalize_svg_text(str(graph.nodes[component_node_id].get("value_label", "")), 22))  # Normalize and escape the secondary component label.
+        svg_lines.append(f'<rect x="{center_x - _COMPONENT_BOX_HALF_WIDTH}" y="{center_y - _COMPONENT_BOX_HALF_HEIGHT}" width="{_COMPONENT_BOX_HALF_WIDTH * 2}" height="{_COMPONENT_BOX_HALF_HEIGHT * 2}" rx="6" ry="6" fill="{fill_color}" stroke="{border_color}" stroke-width="2"/>')  # Emit the component node box.
+        if label != "":  # Emit the component instance label only when it remains non-empty after normalization.
+            svg_lines.append(f'<text x="{center_x}" y="{center_y + 2}" text-anchor="middle" font-family="monospace" font-size="20" fill="{text_color}">{label}</text>')  # Emit the component instance label.
+        if value_label != "":  # Emit the secondary component value or model label only when present.
+            svg_lines.append(f'<text x="{center_x}" y="{center_y + 38}" text-anchor="middle" font-family="monospace" font-size="16" fill="{muted_text_color}">{value_label}</text>')  # Emit the component value/model label.
+    for ground_node_id in ground_nodes:  # Emit all ground symbols and their short labels.
+        center_x, center_y = positions[ground_node_id]  # Read the ground symbol center coordinates from the layout map.
+        label = escape(_normalize_svg_text(str(graph.nodes[ground_node_id].get("label", "GND")), 8))  # Normalize and escape the ground label.
+        svg_lines.extend(_ground_symbol_svg_lines(center_x, center_y, _rgb_hex(_PNG_GROUND_COLOR)))  # Emit the SVG primitives for the ground symbol.
+        if label != "":  # Emit the short ground label when it remains printable after normalization.
+            svg_lines.append(f'<text x="{center_x}" y="{center_y + 36}" text-anchor="middle" font-family="monospace" font-size="14" fill="{muted_text_color}">{label}</text>')  # Emit the ground label below the symbol.
+    svg_lines.append("</svg>")  # Finish the SVG document with the closing root element.
+    with open(output_path, "w", encoding="utf-8") as file_handle:  # Open the output file in text mode for SVG serialization.
+        file_handle.write("\n".join(svg_lines))  # Write the complete SVG document to disk.
+
+
+def _ground_symbol_svg_lines(center_x: int, center_y: int, color: str) -> List[str]:  # Build the SVG primitives used to render one ground symbol.
+    stem_top_y = center_y - _GROUND_SYMBOL_HEIGHT  # Place the top of the vertical stem above the ground bars.
+    stem_bottom_y = center_y - 4  # Stop the stem just above the top horizontal ground bar.
+    return [  # Return the SVG line elements that make up the standard three-bar ground symbol.
+        f'<line x1="{center_x}" y1="{stem_top_y}" x2="{center_x}" y2="{stem_bottom_y}" stroke="{color}" stroke-width="2"/>',
+        f'<line x1="{center_x - 18}" y1="{center_y}" x2="{center_x + 18}" y2="{center_y}" stroke="{color}" stroke-width="2"/>',
+        f'<line x1="{center_x - 12}" y1="{center_y + 6}" x2="{center_x + 12}" y2="{center_y + 6}" stroke="{color}" stroke-width="2"/>',
+        f'<line x1="{center_x - 6}" y1="{center_y + 12}" x2="{center_x + 6}" y2="{center_y + 12}" stroke="{color}" stroke-width="2"/>',
+    ]  # Finish the SVG ground symbol primitives.
+
+
+def _write_jpeg_rgb(output_path: str, width: int, height: int, canvas: bytearray) -> None:  # Encode a flat RGB canvas into a JPEG file through Pillow.
+    try:  # Import Pillow lazily so non-JPEG callers do not require the JPEG encoder path at import time.
+        from PIL import Image  # type: ignore
+    except ImportError as import_error:  # Surface a stable plotting failure when the JPEG encoder dependency is unavailable.
+        raise ImportError("pillow_not_installed") from import_error  # Re-raise a normalized import error for the public wrapper.
+    parent_directory = os.path.dirname(output_path)  # Resolve the parent directory for the requested JPEG output path.
+    if parent_directory != "":  # Create the output directory tree only when the caller provided one.
+        os.makedirs(parent_directory, exist_ok=True)  # Ensure the parent directory exists before writing the JPEG file.
+    image = Image.frombytes("RGB", (width, height), bytes(canvas))  # Convert the flat RGB canvas into a Pillow image object for JPEG encoding.
+    image.save(output_path, format="JPEG", quality=95)  # Write the encoded JPEG file using a high-quality default setting.
+
+
+def _rgb_hex(color: Tuple[int, int, int]) -> str:  # Convert an RGB tuple into an SVG-friendly hexadecimal color string.
+    return f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"  # Return the lowercase hexadecimal RGB string for the provided color.
+
+
+def _normalize_svg_text(text: str, max_characters: int) -> str:  # Normalize SVG text labels through the same truncation and character policy used by the raster renderer.
+    return _normalize_bitmap_text(text, max_characters)  # Reuse the established ASCII-only label normalization helper for SVG output.
 
 
 def _assign_component_plot_positions(graph: nx.MultiGraph, plot_node_ids: Sequence[str], width: int, height: int) -> Dict[str, Tuple[int, int]]:  # Assign deterministic spring-layout positions for the component-only plot graph.

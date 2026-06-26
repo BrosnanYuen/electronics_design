@@ -43,6 +43,34 @@ class TestNetlistPlotNetworkx(unittest.TestCase):  # Group networkx plotting tes
     def test_plot_fixture_accepts_custom_dimensions(self) -> None:  # Verify that the plotting API writes caller-specified image dimensions into the PNG output.
         self._assert_valid_png_output("valid_02.net", expected_width=1280, expected_height=720)  # Render one fixture using a non-default image size.
 
+    def test_plot_fixture_accepts_svg_output(self) -> None:  # Verify that the plotting API can render one valid fixture to SVG format.
+        fixture_path = _VALID_DIRECTORY / "valid_03.net"  # Reuse one valid whole-file fixture as the plotting input.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create an isolated temporary output directory for the SVG file.
+            output_path = Path(temporary_directory) / "graph.svg"  # Resolve the SVG output path inside the temporary directory.
+            result = ltspice_netlist_plot_networkx(str(fixture_path), str(output_path), 800, 600)  # Execute the public plotting helper using the SVG extension.
+            self.assertEqual(result, (True, ""), msg="The plotting API should render successfully to SVG.")  # Assert that SVG rendering succeeds without an error message.
+            svg_text = output_path.read_text(encoding="utf-8")  # Read the generated SVG document for structural validation.
+            self.assertIn("<svg", svg_text, msg="The generated SVG output should contain the root SVG element.")  # Assert that the file looks like an SVG document.
+            self.assertIn('width="800"', svg_text, msg="The generated SVG output should encode the requested width.")  # Assert that the SVG width matches the requested output width.
+            self.assertIn('height="600"', svg_text, msg="The generated SVG output should encode the requested height.")  # Assert that the SVG height matches the requested output height.
+
+    def test_plot_fixture_accepts_jpg_output(self) -> None:  # Verify that the plotting API can render one valid fixture to JPEG format.
+        fixture_path = _VALID_DIRECTORY / "valid_04.net"  # Reuse one valid whole-file fixture as the plotting input.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create an isolated temporary output directory for the JPEG file.
+            output_path = Path(temporary_directory) / "graph.jpg"  # Resolve the JPEG output path inside the temporary directory.
+            result = ltspice_netlist_plot_networkx(str(fixture_path), str(output_path), 640, 480)  # Execute the public plotting helper using the JPEG extension.
+            self.assertEqual(result, (True, ""), msg="The plotting API should render successfully to JPEG.")  # Assert that JPEG rendering succeeds without an error message.
+            jpg_bytes = output_path.read_bytes()  # Read the generated JPEG bytes for structural validation.
+            self.assertEqual(jpg_bytes[:2], b"\xff\xd8", msg="The generated JPEG output should begin with the JPEG SOI marker.")  # Assert that the file begins with the JPEG start marker.
+            self.assertEqual(jpg_bytes[-2:], b"\xff\xd9", msg="The generated JPEG output should end with the JPEG EOI marker.")  # Assert that the file ends with the JPEG end marker.
+
+    def test_plot_fixture_rejects_unsupported_extension(self) -> None:  # Verify that unsupported output extensions fail with the stable plotting error.
+        fixture_path = _VALID_DIRECTORY / "valid_05.net"  # Reuse one valid whole-file fixture as the plotting input.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create an isolated temporary output directory for the unsupported output file.
+            output_path = Path(temporary_directory) / "graph.bmp"  # Resolve an unsupported output path extension inside the temporary directory.
+            result = ltspice_netlist_plot_networkx(str(fixture_path), str(output_path))  # Execute the public plotting helper using an unsupported extension.
+            self.assertEqual(result, (False, "Unable to plot network graph!"), msg="Unsupported output extensions should fail with the stable plotting error.")  # Assert that unsupported extensions are rejected cleanly.
+
 
 def _make_plot_test(fixture_name: str):  # Build one dynamic plotting test method for one valid fixture file.
     def _test_method(self: TestNetlistPlotNetworkx) -> None:  # Execute the shared PNG assertions for the selected fixture.

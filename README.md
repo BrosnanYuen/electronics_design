@@ -13,7 +13,7 @@ It currently exposes ten public functions:
 - `is_valid_ltspice_netlist_footer(filepath)`
 - `is_ltspice_netlist_structure_connected(filepath)`
 - `is_valid_ltspice_netlist_file(filepath)`
-- `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath, width=1920, height=1080)`
+- `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)`
 - `ltspice_netlist_structure_cmp(filepath1, filepath2)`
 
 Each function returns a tuple:
@@ -158,13 +158,14 @@ Possible returns:
 - `False, "<propagated validator message>"`
 - `True, ""`
 
-### `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath, width=1920, height=1080)`
+### `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)`
 
 Checks that:
 
 - The source LTspice netlist passes `is_valid_ltspice_netlist_file(filepath)`
 - The function builds a `networkx` component-to-net graph
-- The graph is rendered to a PNG file at `networkx_png_filepath`
+- The graph is rendered to an image file at `networkx_imagepath_out`
+- Supported output extensions are `.png`, `.svg`, `.jpg`, and `.jpeg`
 - `width` optionally sets the PNG width in pixels and defaults to `1920`
 - `height` optionally sets the PNG height in pixels and defaults to `1080`
 
@@ -220,13 +221,13 @@ Install the runtime dependency used by the plotting and comparison APIs:
 
 ## CLI Usage
 
-Render a validated LTspice netlist directly to a PNG file:
+Render a validated LTspice netlist directly to an image file:
 
 ```bash
-PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net output.png
+PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net output.svg --width 1600 --height 900
 ```
 
-This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepath, networkx_png_filepath, width=1920, height=1080)` API and exits with a non-zero status if validation or PNG generation fails.
+This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)` API and exits with a non-zero status if validation or image generation fails.
 
 ## Example Usage
 
@@ -251,7 +252,8 @@ footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
 file_ok, file_message = is_valid_ltspice_netlist_file("example.net")
 plot_ok, plot_message = ltspice_netlist_plot_networkx("example.net", "example.png")
-plot_custom_ok, plot_custom_message = ltspice_netlist_plot_networkx("example.net", "example.png", 1280, 720)
+plot_svg_ok, plot_svg_message = ltspice_netlist_plot_networkx("example.net", "example.svg", 1280, 720)
+plot_jpg_ok, plot_jpg_message = ltspice_netlist_plot_networkx("example.net", "example.jpg", 1280, 720)
 same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 ```
 
@@ -268,7 +270,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
 - `test_files/netlist_validation/` contains 10 valid and 10 invalid whole-file validation fixtures
 - `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
-- `scripts/ltspice_net_to_networkxpng.py` renders one validated LTspice netlist to a PNG file
+- `scripts/ltspice_net_to_networkxpng.py` renders one validated LTspice netlist to a `.png`, `.svg`, or `.jpg` image file
 - `scripts/run_all_tests.py` runs unit tests first and integration tests second
 
 ## Package Layout

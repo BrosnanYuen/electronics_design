@@ -49,6 +49,20 @@ class TestExtendedLtspiceApis(unittest.TestCase):  # Group the extended LTspice 
                 self.assertGreater(width, 0, msg=f"{filename} should encode a positive PNG width.")  # Assert that the generated PNG width is positive.
                 self.assertGreater(height, 0, msg=f"{filename} should encode a positive PNG height.")  # Assert that the generated PNG height is positive.
 
+    def test_plot_selected_repository_samples_to_svg_and_jpg(self) -> None:  # Verify that selected repository samples can be rendered to the additional supported output formats.
+        fixture_path = _VALID_NETLIST_DIRECTORY / _PLOTTED_SAMPLE_FILES[0]  # Reuse one curated plotting sample for the alternative image-format coverage.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create an isolated temporary directory for generated alternative-format outputs.
+            svg_path = Path(temporary_directory) / "integration_graph.svg"  # Resolve the SVG output path inside the temporary directory.
+            jpg_path = Path(temporary_directory) / "integration_graph.jpg"  # Resolve the JPEG output path inside the temporary directory.
+            svg_result = ltspice_netlist_plot_networkx(str(fixture_path), str(svg_path), 900, 700)  # Execute the public plotting helper using the SVG extension.
+            jpg_result = ltspice_netlist_plot_networkx(str(fixture_path), str(jpg_path), 900, 700)  # Execute the public plotting helper using the JPEG extension.
+            self.assertEqual(svg_result, (True, ""), msg="The selected repository sample should render successfully to SVG.")  # Assert that SVG rendering succeeds for the selected sample.
+            self.assertEqual(jpg_result, (True, ""), msg="The selected repository sample should render successfully to JPEG.")  # Assert that JPEG rendering succeeds for the selected sample.
+            self.assertIn("<svg", svg_path.read_text(encoding="utf-8"), msg="The generated SVG integration output should contain the root SVG element.")  # Assert that the SVG output looks structurally valid.
+            jpg_bytes = jpg_path.read_bytes()  # Read the generated JPEG bytes for structural validation.
+            self.assertEqual(jpg_bytes[:2], b"\xff\xd8", msg="The generated JPEG integration output should begin with the JPEG SOI marker.")  # Assert that the file begins with the JPEG start marker.
+            self.assertEqual(jpg_bytes[-2:], b"\xff\xd9", msg="The generated JPEG integration output should end with the JPEG EOI marker.")  # Assert that the file ends with the JPEG end marker.
+
     def test_structure_cmp_accepts_self_comparison(self) -> None:  # Verify that selected repository samples compare equal to themselves structurally.
         for filename in _FULLY_VALID_SAMPLE_FILES:  # Walk every curated repository sample that should pass the full validation profile.
             fixture_path = _VALID_NETLIST_DIRECTORY / filename  # Resolve the full path to the selected repository sample file.

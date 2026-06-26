@@ -20,7 +20,8 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)"
 ]
 dependencies = [
-  "networkx>=3.6.1"
+  "networkx>=3.6.1",
+  "Pillow>=10.0.0"
 ]
 
 [project.urls]
