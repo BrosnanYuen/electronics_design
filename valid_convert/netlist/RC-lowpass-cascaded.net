@@ -1,0 +1,16 @@
+Summary:
+This netlist contains two RC low-pass sections in series. Each stage adds another pole, so the combined response drops faster at high frequency than a single RC stage.
+The circuit uses unit-value resistors and 100 uF capacitors to make the behavior easy to see.
+
+Line-by-line:
+`R1 N001 Output_low_pass_1 1` is the first series resistor.
+`C1 Output_low_pass_1 0 100µ` is the first shunt capacitor.
+`V1 N001 0 SINE(0 1) AC 1` is the input source.
+`R3 Output_low_pass_1 Output_low_pass_2 1` is the second series resistor.
+`C2 Output_low_pass_2 0 100µ` is the second shunt capacitor.
+`.ac dec 1000 1 1Meg` runs the sweep.
+The comments document that the two RC stages are cascaded.
+
+Netlist meaning:
+The first node filters the signal once, and the second stage filters the already-attenuated signal again.
+The final output node is `Output_low_pass_2`.
