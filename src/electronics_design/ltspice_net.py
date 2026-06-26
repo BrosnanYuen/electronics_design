@@ -316,6 +316,8 @@ def _load_parsed_elements(filepath: str) -> ElementParseResult:  # Load a file a
 
 def _validate_format_lines(lines: Sequence[str]) -> Tuple[bool, int]:  # Validate each line for directive spelling and minimum token structure.
     previous_logical_line_exists = False  # Track whether a continuation line has something valid to continue.
+    first_code_line_number = 0  # Track the first non-comment, nonblank source line for directive-only deck rejection.
+    found_device_line = False  # Require at least one device line for a structurally meaningful netlist.
     for line_number, raw_line in enumerate(lines, start=1):  # Walk every line with a one-based line number.
         line_kind_result = _classify_line(raw_line)  # Classify the line before validating its detailed structure.
         if not line_kind_result[0]:  # Stop when the line classification itself fails.
@@ -323,6 +325,8 @@ def _validate_format_lines(lines: Sequence[str]) -> Tuple[bool, int]:  # Validat
         line_kind = line_kind_result[1]  # Extract the validated line category.
         if line_kind in {"blank", "comment"}:  # Ignore blank lines and full-line comments.
             continue  # Move to the next input line.
+        if first_code_line_number == 0:  # Record the first structural line in case the file never defines a device.
+            first_code_line_number = line_number  # Save the earliest non-comment, nonblank line number.
         if line_kind == "continuation":  # Handle LTspice continuation lines explicitly.
             if not previous_logical_line_exists:  # Reject a continuation with no prior logical line.
                 return False, line_number  # Report the failing line number.
@@ -340,9 +344,12 @@ def _validate_format_lines(lines: Sequence[str]) -> Tuple[bool, int]:  # Validat
             device_check_result = _validate_device_tokens(tokens)  # Validate prefix and minimum token count.
             if not device_check_result[0]:  # Stop when the device line structure is invalid.
                 return False, line_number  # Report the failing line number.
+            found_device_line = True  # Record that the file contains at least one device statement.
             previous_logical_line_exists = True  # Mark the line as a valid logical line for later continuations.
             continue  # Move to the next input line.
         return False, line_number  # Reject any unexpected line type as invalid.
+    if first_code_line_number != 0 and not found_device_line:  # Reject directive-only decks because the project expects a circuit netlist.
+        return False, first_code_line_number  # Report the first structural line as the invalid starting point.
     return True, 0  # Return success when all lines validate.
 
 
