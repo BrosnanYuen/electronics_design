@@ -1,0 +1,811 @@
+"""Convert LTspice ASC schematics into LTspice netlists."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+import os
+import re
+from typing import Dict
+from typing import Iterable
+from typing import List
+from typing import Mapping
+from typing import Optional
+from typing import Sequence
+from typing import Set
+from typing import Tuple
+
+from . import ltspice_asc as _asc
+from . import ltspice_net as _net
+
+ConversionResult = Tuple[bool, str, int]
+Point = Tuple[int, int]
+
+_LINE_NUMBER_PATTERN = re.compile(r"Line (?P<line>\d+)")
+_DIRECTIVE_SPLIT_PATTERN = re.compile(r"(?:\\n|\r\n|\r|\n)+")
+_DEFAULT_ANALYSIS_DIRECTIVE = ".op"
+_OK_RESULT: ConversionResult = (True, "OK", 0)
+
+_STANDARD_LIBRARY_RULES = {
+    "D": [(".model D D", "standard.dio")],
+    "Q": [(".model NPN NPN", "standard.bjt"), (".model PNP PNP", None)],
+    "J": [(".model NJF NJF", "standard.jft"), (".model PJF PJF", None)],
+    "M": [(".model NMOS NMOS", "standard.mos"), (".model PMOS PMOS", None)],
+}
+
+
+@dataclass(frozen=True)
+class Wire:
+    start: Point
+    end: Point
+
+
+@dataclass(frozen=True)
+class Flag:
+    point: Point
+    name: str
+
+
+@dataclass(frozen=True)
+class PinDefinition:
+    pin_name: str
+    spice_order: int
+    point: Point
+
+
+@dataclass(frozen=True)
+class SymbolDefinition:
+    relative_path: str
+    prefix: str
+    default_value: str
+    default_value2: str
+    default_spice_model: str
+    default_spice_line: str
+    default_spice_line2: str
+    model_file: str
+    pins: Tuple[PinDefinition, ...]
+
+
+@dataclass
+class SymbolInstance:
+    symbol_name: str
+    origin: Point
+    orientation: str
+    line_number: int
+    attributes: Dict[str, str]
+
+
+@dataclass(frozen=True)
+class TextCommand:
+    line_number: int
+    text: str
+
+
+@dataclass(frozen=True)
+class ParsedAsc:
+    wires: Tuple[Wire, ...]
+    flags: Tuple[Flag, ...]
+    symbols: Tuple[SymbolInstance, ...]
+    text_commands: Tuple[TextCommand, ...]
+
+
+class _UnionFind:
+    def __init__(self, size: int) -> None:
+        self._parent = list(range(size))
+
+    def find(self, index: int) -> int:
+        parent = self._parent[index]
+        if parent != index:
+            self._parent[index] = self.find(parent)
+        return self._parent[index]
+
+    def union(self, first: int, second: int) -> None:
+        first_root = self.find(first)
+        second_root = self.find(second)
+        if first_root != second_root:
+            self._parent[second_root] = first_root
+
+
+def ltspice_asc_to_netlist(
+    asc_filepath: str,
+    net_filepath_out: str,
+    convert_settings: Mapping[str, object],
+) -> ConversionResult:
+    if not isinstance(convert_settings, Mapping):
+        return False, "INVALID_CONVERT_SETTINGS", 0
+    if not _coerce_path_success(net_filepath_out):
+        return False, "INVALID_OUTPUT_PATH", 0
+    asc_validation_result = _asc.is_valid_ltspice_asc_file(asc_filepath)
+    if not asc_validation_result[0]:
+        relaxed_validation_result = _validate_asc_for_conversion(asc_filepath)
+        if not relaxed_validation_result[0]:
+            return False, "INVALID_ASC_FILE", _line_number_from_message(asc_validation_result[1], relaxed_validation_result[1])
+    read_result = _asc._read_text_file_lines(asc_filepath)
+    if not read_result[0]:
+        return False, "ASC_READ_ERROR", 0
+    parse_result = _parse_asc_for_conversion(read_result[1])
+    if not parse_result[0]:
+        return False, "ASC_PARSE_ERROR", parse_result[2]
+    symbol_root = _resolve_symbol_root(convert_settings)
+    symbol_definitions = _build_symbol_lookup(symbol_root)
+    net_build_result = _build_netlist_lines(parse_result[1], symbol_definitions, convert_settings)
+    if not net_build_result[0]:
+        return False, net_build_result[1], net_build_result[2]
+    write_result = _write_netlist_file(net_filepath_out, net_build_result[3])
+    if not write_result[0]:
+        return False, write_result[1], 0
+    generated_validation_result = _net.is_valid_ltspice_netlist_file(net_filepath_out)
+    if not generated_validation_result[0]:
+        return False, "INVALID_GENERATED_NETLIST", _line_number_from_message(generated_validation_result[1], 0)
+    return _OK_RESULT
+
+
+def _validate_asc_for_conversion(filepath: str) -> Tuple[bool, int]:
+    header_result = _asc.is_valid_ltspice_asc_header(filepath)
+    if not header_result[0]:
+        return False, _line_number_from_message(header_result[1], 0)
+    spacing_result = _asc.is_valid_ltspice_asc_spacing(filepath)
+    if not spacing_result[0]:
+        return False, _line_number_from_message(spacing_result[1], 0)
+    return True, 0
+
+
+def _parse_asc_for_conversion(lines: Sequence[str]) -> Tuple[bool, ParsedAsc, int]:
+    wires: List[Wire] = []
+    flags: List[Flag] = []
+    symbols: List[SymbolInstance] = []
+    text_commands: List[TextCommand] = []
+    current_symbol: Optional[SymbolInstance] = None
+    for line_number, raw_line in enumerate(lines, start=1):
+        if raw_line.strip() == "":
+            continue
+        tokens = raw_line.split()
+        keyword = tokens[0].upper()
+        if keyword == "WIRE":
+            wires.append(Wire((int(tokens[1]), int(tokens[2])), (int(tokens[3]), int(tokens[4]))))
+            current_symbol = None
+            continue
+        if keyword == "FLAG":
+            flags.append(Flag((int(tokens[1]), int(tokens[2])), " ".join(tokens[3:])))
+            current_symbol = None
+            continue
+        if keyword == "SYMBOL":
+            current_symbol = SymbolInstance(
+                symbol_name=tokens[1],
+                origin=(int(tokens[2]), int(tokens[3])),
+                orientation=tokens[4],
+                line_number=line_number,
+                attributes={},
+            )
+            symbols.append(current_symbol)
+            continue
+        if keyword == "SYMATTR" and current_symbol is not None:
+            attr_tokens = raw_line.split(maxsplit=2)
+            if len(attr_tokens) >= 3:
+                current_symbol.attributes[attr_tokens[1]] = attr_tokens[2]
+            continue
+        if keyword == "WINDOW" and current_symbol is not None:
+            continue
+        if keyword == "TEXT":
+            directive_extract_result = _asc._extract_asc_text_directive(raw_line)
+            if directive_extract_result[0] and directive_extract_result[1] != "":
+                for command_text in _split_embedded_commands(directive_extract_result[1]):
+                    text_commands.append(TextCommand(line_number=line_number, text=command_text))
+            current_symbol = None
+            continue
+        current_symbol = None
+    return True, ParsedAsc(tuple(wires), tuple(flags), tuple(symbols), tuple(text_commands)), 0
+
+
+def _split_embedded_commands(command_text: str) -> Tuple[str, ...]:
+    commands = tuple(part.strip() for part in _DIRECTIVE_SPLIT_PATTERN.split(command_text) if part.strip() != "")
+    return commands
+
+
+def _resolve_symbol_root(convert_settings: Mapping[str, object]) -> str:
+    configured_root = str(convert_settings.get("ltspice_lib_sym_path", "")).strip()
+    if configured_root == "":
+        configured_root = os.path.expanduser("~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/lib/sym")
+    local_root = _resolve_local_ltspice_path(configured_root)
+    return local_root
+
+
+def _resolve_cmp_root(convert_settings: Mapping[str, object]) -> str:
+    configured_root = str(convert_settings.get("ltspice_lib_cmp_path", "")).strip()
+    if configured_root == "":
+        configured_root = r"C:\users\brosnan\AppData\Local\LTspice\lib\cmp"
+    return configured_root
+
+
+def _resolve_local_ltspice_path(path_value: str) -> str:
+    if path_value == "":
+        return path_value
+    if os.path.exists(path_value):
+        return path_value
+    windows_match = re.match(r"^(?P<drive>[A-Za-z]):[\\/](?P<rest>.*)$", path_value)
+    if windows_match is None:
+        return path_value
+    rest_path = windows_match.group("rest").replace("\\", "/")
+    drive_letter = windows_match.group("drive").lower()
+    candidate_paths = (
+        os.path.expanduser(f"~/.wine/drive_{drive_letter}/{rest_path}"),
+        os.path.join("/home", os.getenv("USER", ""), ".wine", f"drive_{drive_letter}", rest_path),
+    )
+    for candidate_path in candidate_paths:
+        if os.path.exists(candidate_path):
+            return candidate_path
+    return path_value
+
+
+def _build_symbol_lookup(symbol_root: str) -> Dict[str, SymbolDefinition]:
+    lookup: Dict[str, SymbolDefinition] = {}
+    if os.path.isdir(symbol_root):
+        for symbol_path in Path(symbol_root).rglob("*.asy"):
+            relative_path = symbol_path.relative_to(symbol_root).as_posix()
+            definition = _load_symbol_definition(str(symbol_path), relative_path)
+            if definition is not None:
+                lookup[relative_path.lower()] = definition
+    lookup["gain"] = _SYNTHETIC_GAIN_SYMBOL
+    return lookup
+
+
+_SYNTHETIC_GAIN_SYMBOL = SymbolDefinition(
+    relative_path="Gain",
+    prefix="E",
+    default_value="",
+    default_value2="",
+    default_spice_model="",
+    default_spice_line="",
+    default_spice_line2="",
+    model_file="",
+    pins=(
+        PinDefinition(pin_name="OUT+", spice_order=1, point=(-16, 0)),
+        PinDefinition(pin_name="OUT-", spice_order=2, point=(32, 0)),
+    ),
+)
+
+
+def _load_symbol_definition(filepath: str, relative_path: str) -> Optional[SymbolDefinition]:
+    try:
+        symbol_text = Path(filepath).read_text(encoding="latin-1")
+    except OSError:
+        return None
+    prefix = ""
+    default_value = ""
+    default_value2 = ""
+    default_spice_model = ""
+    default_spice_line = ""
+    default_spice_line2 = ""
+    model_file = ""
+    pins: List[PinDefinition] = []
+    pending_pin_point: Optional[Point] = None
+    pending_pin_name = ""
+    pending_pin_order = 0
+    for raw_line in symbol_text.splitlines():
+        if raw_line.startswith("SYMATTR Prefix "):
+            prefix = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("SYMATTR Value2 "):
+            default_value2 = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("SYMATTR Value "):
+            default_value = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("SYMATTR SpiceModel "):
+            default_spice_model = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("SYMATTR SpiceLine2 "):
+            default_spice_line2 = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("SYMATTR SpiceLine "):
+            default_spice_line = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("SYMATTR ModelFile "):
+            model_file = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("PIN "):
+            pin_tokens = raw_line.split()
+            pending_pin_point = (int(pin_tokens[1]), int(pin_tokens[2]))
+            pending_pin_name = ""
+            pending_pin_order = 0
+            continue
+        if raw_line.startswith("PINATTR PinName ") and pending_pin_point is not None:
+            pending_pin_name = raw_line.split(" ", 2)[2].strip()
+            continue
+        if raw_line.startswith("PINATTR SpiceOrder ") and pending_pin_point is not None:
+            try:
+                pending_pin_order = int(raw_line.split(" ", 2)[2].strip())
+            except ValueError:
+                pending_pin_point = None
+                pending_pin_name = ""
+                pending_pin_order = 0
+                continue
+            pins.append(PinDefinition(pending_pin_name, pending_pin_order, pending_pin_point))
+            pending_pin_point = None
+            pending_pin_name = ""
+            pending_pin_order = 0
+            continue
+    if prefix == "" or not pins:
+        return None
+    return SymbolDefinition(
+        relative_path=relative_path,
+        prefix=prefix,
+        default_value=default_value,
+        default_value2=default_value2,
+        default_spice_model=default_spice_model,
+        default_spice_line=default_spice_line,
+        default_spice_line2=default_spice_line2,
+        model_file=model_file,
+        pins=tuple(sorted(pins, key=lambda pin: pin.spice_order)),
+    )
+
+
+def _build_netlist_lines(
+    parsed_asc: ParsedAsc,
+    symbol_definitions: Mapping[str, SymbolDefinition],
+    convert_settings: Mapping[str, object],
+) -> Tuple[bool, str, int, Tuple[str, ...]]:
+    connectivity_result = _resolve_symbol_nets(parsed_asc, symbol_definitions)
+    if not connectivity_result[0]:
+        return False, connectivity_result[1], connectivity_result[2], ()
+    net_map = connectivity_result[3]
+    component_lines: List[str] = []
+    auxiliary_device_lines: List[str] = []
+    directive_lines: List[str] = []
+    include_lines: List[str] = []
+    model_lines: List[str] = []
+    analysis_found = False
+    used_standard_prefixes: Set[str] = set()
+    used_symbol_libraries: Dict[str, None] = {}
+    for symbol_instance in parsed_asc.symbols:
+        symbol_definition = _resolve_symbol_definition(symbol_instance.symbol_name, symbol_definitions)
+        if symbol_definition is None:
+            return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, ()
+        line_result = _build_component_line(symbol_instance, symbol_definition, net_map)
+        if not line_result[0]:
+            return False, line_result[1], symbol_instance.line_number, ()
+        component_lines.append(line_result[3])
+        normalized_prefix = line_result[4]
+        if normalized_prefix in _STANDARD_LIBRARY_RULES:
+            used_standard_prefixes.add(normalized_prefix)
+        library_reference = _infer_symbol_library_reference(symbol_instance, symbol_definition)
+        if library_reference is not None:
+            used_symbol_libraries[library_reference] = None
+    for text_command in parsed_asc.text_commands:
+        if text_command.text.startswith("."):
+            if text_command.text.lower() in {".backanno", ".end"}:
+                continue
+            directive_lines.append(text_command.text)
+            directive_parse_result = _asc._parse_directive_name(text_command.text)
+            if directive_parse_result[0] and directive_parse_result[1] in _asc._ANALYSIS_DIRECTIVES:
+                analysis_found = True
+            continue
+        auxiliary_device_lines.append(text_command.text)
+    if not analysis_found:
+        directive_lines.append(_DEFAULT_ANALYSIS_DIRECTIVE)
+    cmp_root = _resolve_cmp_root(convert_settings)
+    for prefix in sorted(used_standard_prefixes):
+        for model_line, library_name in _STANDARD_LIBRARY_RULES[prefix]:
+            model_lines.append(model_line)
+            if library_name is not None:
+                include_lines.append(_build_library_line(cmp_root, library_name))
+    for library_reference in used_symbol_libraries:
+        include_lines.append(f".lib {library_reference}")
+    final_lines = _dedupe_lines(
+        tuple(component_lines)
+        + tuple(auxiliary_device_lines)
+        + tuple(model_lines)
+        + tuple(directive_lines)
+        + tuple(include_lines)
+        + (".backanno", ".end")
+    )
+    return True, "OK", 0, final_lines
+
+
+def _resolve_symbol_nets(
+    parsed_asc: ParsedAsc,
+    symbol_definitions: Mapping[str, SymbolDefinition],
+) -> Tuple[bool, str, int, Dict[Tuple[int, int], str]]:
+    wire_union = _UnionFind(len(parsed_asc.wires))
+    for first_index, first_wire in enumerate(parsed_asc.wires):
+        for second_index in range(first_index + 1, len(parsed_asc.wires)):
+            if _wires_connected(first_wire, parsed_asc.wires[second_index]):
+                wire_union.union(first_index, second_index)
+    entity_names: Dict[Tuple[str, object], List[str]] = {}
+    entity_first_seen: Dict[Tuple[str, object], int] = {}
+    coordinate_entities: Dict[Point, Tuple[str, object]] = {}
+    next_standalone_net = 0
+    all_pin_coordinates: List[Point] = []
+    for symbol_instance in parsed_asc.symbols:
+        symbol_definition = _resolve_symbol_definition(symbol_instance.symbol_name, symbol_definitions)
+        if symbol_definition is None:
+            return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, {}
+        for pin_definition in symbol_definition.pins:
+            pin_coordinate = _transform_pin_point(pin_definition.point, symbol_instance.origin, symbol_instance.orientation)
+            entity_key = _entity_for_point(pin_coordinate, parsed_asc.wires, wire_union, coordinate_entities, next_standalone_net)
+            if entity_key[0] == "coord" and entity_key[1] == next_standalone_net:
+                next_standalone_net += 1
+            all_pin_coordinates.append(pin_coordinate)
+            entity_first_seen.setdefault(entity_key, len(entity_first_seen))
+    for flag in parsed_asc.flags:
+        entity_key = _entity_for_point(flag.point, parsed_asc.wires, wire_union, coordinate_entities, next_standalone_net)
+        if entity_key[0] == "coord" and entity_key[1] == next_standalone_net:
+            next_standalone_net += 1
+        entity_names.setdefault(entity_key, []).append(flag.name.strip())
+        entity_first_seen.setdefault(entity_key, len(entity_first_seen))
+    for coordinate in all_pin_coordinates:
+        entity_key = _entity_for_point(coordinate, parsed_asc.wires, wire_union, coordinate_entities, next_standalone_net)
+        if entity_key[0] == "coord" and entity_key[1] == next_standalone_net:
+            next_standalone_net += 1
+        entity_first_seen.setdefault(entity_key, len(entity_first_seen))
+    named_groups: Dict[str, List[Tuple[str, object]]] = {}
+    for entity_key, names in entity_names.items():
+        for raw_name in names:
+            normalized_name = raw_name.strip()
+            if normalized_name == "":
+                continue
+            named_groups.setdefault(normalized_name.upper(), []).append(entity_key)
+    merged_entities: Dict[Tuple[str, object], Tuple[str, object]] = {}
+    for entity_key in entity_first_seen:
+        merged_entities[entity_key] = entity_key
+    for group_entities in named_groups.values():
+        canonical_entity = min(group_entities, key=lambda entity_key: entity_first_seen.get(entity_key, 0))
+        for entity_key in group_entities:
+            merged_entities[entity_key] = canonical_entity
+    canonical_names: Dict[Tuple[str, object], str] = {}
+    auto_index = 1
+    for entity_key in sorted(entity_first_seen, key=lambda entry: entity_first_seen[entry]):
+        canonical_entity = merged_entities[entity_key]
+        if canonical_entity in canonical_names:
+            continue
+        explicit_names = []
+        for grouped_entity, names in entity_names.items():
+            if merged_entities[grouped_entity] == canonical_entity:
+                explicit_names.extend(name for name in names if name.strip() != "")
+        if explicit_names:
+            canonical_names[canonical_entity] = _choose_explicit_net_name(explicit_names)
+            continue
+        canonical_names[canonical_entity] = f"N{auto_index:03d}"
+        auto_index += 1
+    point_to_net: Dict[Point, str] = {}
+    for coordinate in coordinate_entities:
+        entity_key = coordinate_entities[coordinate]
+        point_to_net[coordinate] = canonical_names[merged_entities[entity_key]]
+    for wire_index, wire in enumerate(parsed_asc.wires):
+        canonical_entity = merged_entities[("wire", wire_union.find(wire_index))]
+        point_to_net[wire.start] = canonical_names[canonical_entity]
+        point_to_net[wire.end] = canonical_names[canonical_entity]
+    return True, "OK", 0, point_to_net
+
+
+def _entity_for_point(
+    point: Point,
+    wires: Sequence[Wire],
+    wire_union: _UnionFind,
+    coordinate_entities: Dict[Point, Tuple[str, object]],
+    next_standalone_net: int,
+) -> Tuple[str, object]:
+    attached_wire_roots = {
+        wire_union.find(wire_index)
+        for wire_index, wire in enumerate(wires)
+        if _point_on_wire(point, wire)
+    }
+    if attached_wire_roots:
+        return ("wire", min(attached_wire_roots))
+    if point not in coordinate_entities:
+        coordinate_entities[point] = ("coord", next_standalone_net)
+    return coordinate_entities[point]
+
+
+def _choose_explicit_net_name(names: Sequence[str]) -> str:
+    for candidate_name in names:
+        normalized_name = candidate_name.strip()
+        if normalized_name.upper() in {"0", "GND"}:
+            return "0"
+    return names[0].strip()
+
+
+def _build_component_line(
+    symbol_instance: SymbolInstance,
+    symbol_definition: SymbolDefinition,
+    point_to_net: Mapping[Point, str],
+) -> Tuple[bool, str, int, str, str]:
+    pin_nets: List[str] = []
+    for pin_definition in symbol_definition.pins:
+        pin_coordinate = _transform_pin_point(pin_definition.point, symbol_instance.origin, symbol_instance.orientation)
+        net_name = _resolve_point_net(pin_coordinate, point_to_net)
+        if net_name is None:
+            return False, "UNCONNECTED_SYMBOL_PIN", symbol_instance.line_number, "", ""
+        pin_nets.append(net_name)
+    normalized_prefix = _normalized_component_prefix(symbol_definition.prefix)
+    ordered_nets = _expand_component_nodes(symbol_instance.symbol_name, normalized_prefix, pin_nets)
+    component_instance_name = _component_instance_name(symbol_instance.attributes.get("InstName", ""), normalized_prefix)
+    payload_tokens = _component_payload_tokens(symbol_instance, symbol_definition)
+    if not payload_tokens:
+        return False, "MISSING_COMPONENT_PAYLOAD", symbol_instance.line_number, "", ""
+    component_line = " ".join((component_instance_name, *ordered_nets, *payload_tokens)).strip()
+    return True, "OK", 0, component_line, normalized_prefix
+
+
+def _normalized_component_prefix(prefix: str) -> str:
+    upper_prefix = prefix.upper()
+    if upper_prefix in {"QN", "QP"}:
+        return "Q"
+    if upper_prefix == "MN":
+        return "M"
+    if upper_prefix == "JN":
+        return "J"
+    return upper_prefix[:1]
+
+
+def _expand_component_nodes(symbol_name: str, normalized_prefix: str, pin_nets: Sequence[str]) -> Tuple[str, ...]:
+    lowered_symbol_name = symbol_name.lower()
+    if normalized_prefix == "Q":
+        return tuple(pin_nets) + ("0",)
+    if normalized_prefix == "M":
+        source_node = pin_nets[2] if len(pin_nets) >= 3 else "0"
+        return tuple(pin_nets) + (source_node,)
+    if lowered_symbol_name.endswith("gain") or lowered_symbol_name == "gain":
+        return tuple(pin_nets)
+    return tuple(pin_nets)
+
+
+def _component_instance_name(instance_name: str, normalized_prefix: str) -> str:
+    clean_name = instance_name.strip()
+    if clean_name == "":
+        return f"{normalized_prefix}§AUTO"
+    if clean_name[0].upper() == normalized_prefix:
+        return clean_name
+    return f"{normalized_prefix}§{clean_name}"
+
+
+def _component_payload_tokens(symbol_instance: SymbolInstance, symbol_definition: SymbolDefinition) -> Tuple[str, ...]:
+    normalized_prefix = _normalized_component_prefix(symbol_definition.prefix)
+    explicit_value = _clean_optional_text(symbol_instance.attributes.get("Value", ""))
+    explicit_value2 = _clean_optional_text(symbol_instance.attributes.get("Value2", ""))
+    explicit_spice_line = _clean_optional_text(symbol_instance.attributes.get("SpiceLine", ""))
+    explicit_spice_line2 = _clean_optional_text(symbol_instance.attributes.get("SpiceLine2", ""))
+    default_value = _clean_optional_text(symbol_definition.default_value)
+    default_value2 = _clean_optional_text(symbol_definition.default_value2)
+    default_spice_line = _clean_optional_text(symbol_definition.default_spice_line)
+    default_spice_line2 = _clean_optional_text(symbol_definition.default_spice_line2)
+    if normalized_prefix in {"R", "C", "L", "D", "V", "I", "J", "Q", "M", "S", "T", "B"}:
+        return _join_payload_tokens(
+            explicit_value if explicit_value != "" else _default_payload_value_for_prefix(normalized_prefix, default_value),
+            explicit_value2 if explicit_value2 != "" else _default_secondary_payload_value_for_prefix(normalized_prefix, default_value2),
+            explicit_spice_line if explicit_spice_line != "" else default_spice_line,
+            explicit_spice_line2 if explicit_spice_line2 != "" else default_spice_line2,
+        )
+    if normalized_prefix in {"E", "G"}:
+        gain_token = explicit_value if explicit_value != "" else "G={G}"
+        return _join_payload_tokens(gain_token, explicit_value2, explicit_spice_line, explicit_spice_line2)
+    if normalized_prefix == "X":
+        return _subcircuit_payload_tokens(symbol_instance, symbol_definition)
+    return _join_payload_tokens(explicit_value, explicit_value2, explicit_spice_line, explicit_spice_line2)
+
+
+def _subcircuit_payload_tokens(symbol_instance: SymbolInstance, symbol_definition: SymbolDefinition) -> Tuple[str, ...]:
+    explicit_value = _clean_optional_text(symbol_instance.attributes.get("Value", ""))
+    explicit_value2 = _clean_optional_text(symbol_instance.attributes.get("Value2", ""))
+    explicit_spice_model = _clean_optional_text(symbol_instance.attributes.get("SpiceModel", ""))
+    explicit_spice_line = _clean_optional_text(symbol_instance.attributes.get("SpiceLine", ""))
+    explicit_spice_line2 = _clean_optional_text(symbol_instance.attributes.get("SpiceLine2", ""))
+    default_value = _clean_optional_text(symbol_definition.default_value)
+    default_value2 = _clean_optional_text(symbol_definition.default_value2)
+    default_spice_model = _clean_optional_text(symbol_definition.default_spice_model)
+    default_spice_line = _clean_optional_text(symbol_definition.default_spice_line)
+    default_spice_line2 = _clean_optional_text(symbol_definition.default_spice_line2)
+    model_token = ""
+    extra_tokens: List[str] = []
+    if _is_parameter_block(default_value2) and default_spice_model != "":
+        model_token = explicit_spice_model or default_spice_model
+        extra_tokens.extend(_non_empty_tokens(explicit_value2 or default_value2, explicit_spice_line or default_spice_line, explicit_spice_line2 or default_spice_line2))
+        return (model_token, *extra_tokens)
+    model_token = explicit_value2 or default_value2 or explicit_value or default_value
+    if model_token == "" and explicit_spice_model != "" and not _looks_like_library_reference(explicit_spice_model):
+        model_token = explicit_spice_model
+    if model_token == "" and default_spice_model != "" and not _looks_like_library_reference(default_spice_model):
+        model_token = default_spice_model
+    if model_token == "":
+        model_token = explicit_value or default_value
+    extra_tokens.extend(_non_empty_tokens(explicit_spice_line or default_spice_line, explicit_spice_line2 or default_spice_line2))
+    if model_token == "":
+        return tuple(extra_tokens)
+    return (model_token, *extra_tokens)
+
+
+def _default_payload_value_for_prefix(normalized_prefix: str, default_value: str) -> str:
+    if normalized_prefix in {"V", "I", "B"}:
+        return ""
+    return default_value
+
+
+def _default_secondary_payload_value_for_prefix(normalized_prefix: str, default_value2: str) -> str:
+    if normalized_prefix in {"V", "I"}:
+        return default_value2
+    return default_value2
+
+
+def _is_parameter_block(value: str) -> bool:
+    return value != "" and ("=" in value or " " in value)
+
+
+def _join_payload_tokens(*values: str) -> Tuple[str, ...]:
+    return _non_empty_tokens(*values)
+
+
+def _non_empty_tokens(*values: str) -> Tuple[str, ...]:
+    tokens: List[str] = []
+    for value in values:
+        clean_value = _clean_optional_text(value)
+        if clean_value != "":
+            tokens.append(clean_value)
+    return tuple(tokens)
+
+
+def _clean_optional_text(value: str) -> str:
+    cleaned_value = value.strip()
+    if cleaned_value in {"", '""'}:
+        return ""
+    return cleaned_value
+
+
+def _resolve_point_net(point: Point, point_to_net: Mapping[Point, str]) -> Optional[str]:
+    if point in point_to_net:
+        return point_to_net[point]
+    return None
+
+
+def _resolve_symbol_definition(symbol_name: str, symbol_definitions: Mapping[str, SymbolDefinition]) -> Optional[SymbolDefinition]:
+    normalized_symbol = symbol_name.replace("\\", "/").lower()
+    direct_key = f"{normalized_symbol}.asy"
+    if direct_key in symbol_definitions:
+        return symbol_definitions[direct_key]
+    base_name = normalized_symbol.split("/")[-1]
+    if base_name in symbol_definitions:
+        return symbol_definitions[base_name]
+    for relative_path, definition in symbol_definitions.items():
+        if relative_path.endswith(f"/{base_name}.asy") or relative_path == f"{base_name}.asy":
+            return definition
+    return None
+
+
+def _transform_pin_point(local_point: Point, origin: Point, orientation: str) -> Point:
+    x_position, y_position = local_point
+    normalized_orientation = orientation.upper()
+    if normalized_orientation.startswith("M"):
+        x_position = -x_position
+    angle = _orientation_angle(normalized_orientation)
+    if angle == 90:
+        x_position, y_position = -y_position, x_position
+    elif angle == 180:
+        x_position, y_position = -x_position, -y_position
+    elif angle == 270:
+        x_position, y_position = y_position, -x_position
+    return origin[0] + x_position, origin[1] + y_position
+
+
+def _orientation_angle(orientation: str) -> int:
+    angle_match = re.search(r"(\d+)$", orientation)
+    if angle_match is None:
+        return 0
+    return int(angle_match.group(1)) % 360
+
+
+def _point_on_wire(point: Point, wire: Wire) -> bool:
+    point_x, point_y = point
+    start_x, start_y = wire.start
+    end_x, end_y = wire.end
+    if start_x == end_x:
+        if point_x != start_x:
+            return False
+        lower_y, upper_y = sorted((start_y, end_y))
+        return lower_y <= point_y <= upper_y
+    if start_y == end_y:
+        if point_y != start_y:
+            return False
+        lower_x, upper_x = sorted((start_x, end_x))
+        return lower_x <= point_x <= upper_x
+    lower_x, upper_x = sorted((start_x, end_x))
+    lower_y, upper_y = sorted((start_y, end_y))
+    return lower_x <= point_x <= upper_x and lower_y <= point_y <= upper_y
+
+
+def _wires_connected(first_wire: Wire, second_wire: Wire) -> bool:
+    if first_wire.start[0] == first_wire.end[0] and second_wire.start[0] == second_wire.end[0]:
+        if first_wire.start[0] != second_wire.start[0]:
+            return False
+        return _ranges_overlap((first_wire.start[1], first_wire.end[1]), (second_wire.start[1], second_wire.end[1]))
+    if first_wire.start[1] == first_wire.end[1] and second_wire.start[1] == second_wire.end[1]:
+        if first_wire.start[1] != second_wire.start[1]:
+            return False
+        return _ranges_overlap((first_wire.start[0], first_wire.end[0]), (second_wire.start[0], second_wire.end[0]))
+    vertical_wire = first_wire if first_wire.start[0] == first_wire.end[0] else second_wire
+    horizontal_wire = second_wire if vertical_wire is first_wire else first_wire
+    vertical_x = vertical_wire.start[0]
+    horizontal_y = horizontal_wire.start[1]
+    vertical_range = sorted((vertical_wire.start[1], vertical_wire.end[1]))
+    horizontal_range = sorted((horizontal_wire.start[0], horizontal_wire.end[0]))
+    if not (horizontal_range[0] <= vertical_x <= horizontal_range[1] and vertical_range[0] <= horizontal_y <= vertical_range[1]):
+        return False
+    intersection_point = (vertical_x, horizontal_y)
+    return intersection_point in {first_wire.start, first_wire.end, second_wire.start, second_wire.end}
+
+
+def _ranges_overlap(first_range: Tuple[int, int], second_range: Tuple[int, int]) -> bool:
+    first_lower, first_upper = sorted(first_range)
+    second_lower, second_upper = sorted(second_range)
+    return max(first_lower, second_lower) <= min(first_upper, second_upper)
+
+
+def _infer_symbol_library_reference(symbol_instance: SymbolInstance, symbol_definition: SymbolDefinition) -> Optional[str]:
+    explicit_model_file = _clean_optional_text(symbol_instance.attributes.get("ModelFile", ""))
+    if explicit_model_file != "":
+        return _library_basename(explicit_model_file)
+    explicit_spice_model = _clean_optional_text(symbol_instance.attributes.get("SpiceModel", ""))
+    if _looks_like_library_reference(explicit_spice_model):
+        return _library_basename(explicit_spice_model)
+    if symbol_definition.model_file != "":
+        return _library_basename(symbol_definition.model_file)
+    if _looks_like_library_reference(symbol_definition.default_spice_model):
+        return _library_basename(symbol_definition.default_spice_model)
+    if symbol_instance.symbol_name.replace("\\", "/").lower() == "opamps/opamp":
+        return "opamp.sub"
+    return None
+
+
+def _looks_like_library_reference(value: str) -> bool:
+    lowered_value = value.lower()
+    return lowered_value.endswith(".lib") or lowered_value.endswith(".sub")
+
+
+def _library_basename(value: str) -> str:
+    normalized_value = value.replace("\\", "/")
+    return normalized_value.split("/")[-1]
+
+
+def _build_library_line(root_path: str, filename: str) -> str:
+    if root_path.endswith("\\") or root_path.endswith("/"):
+        return f".lib {root_path}{filename}"
+    separator = "\\" if "\\" in root_path else "/"
+    return f".lib {root_path}{separator}{filename}"
+
+
+def _dedupe_lines(lines: Iterable[str]) -> Tuple[str, ...]:
+    seen_lines: Set[str] = set()
+    deduped_lines: List[str] = []
+    for line in lines:
+        stripped_line = line.strip()
+        if stripped_line == "":
+            continue
+        normalized_line = stripped_line.lower()
+        if normalized_line in seen_lines:
+            continue
+        seen_lines.add(normalized_line)
+        deduped_lines.append(stripped_line)
+    return tuple(deduped_lines)
+
+
+def _write_netlist_file(filepath: str, lines: Sequence[str]) -> Tuple[bool, str]:
+    output_path_result = _asc._coerce_path(filepath)
+    if not output_path_result[0]:
+        return False, "INVALID_OUTPUT_PATH"
+    output_path = Path(output_path_result[1])
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError:
+        return False, "WRITE_ERROR"
+    return True, "OK"
+
+
+def _line_number_from_message(message: str, default_line: int) -> int:
+    line_match = _LINE_NUMBER_PATTERN.search(message)
+    if line_match is None:
+        return default_line
+    return int(line_match.group("line"))
+
+
+def _coerce_path_success(filepath: str) -> bool:
+    path_result = _asc._coerce_path(filepath)
+    return bool(path_result[0])

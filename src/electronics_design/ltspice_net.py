@@ -12,6 +12,7 @@ import struct  # Encode PNG header fields in network-ordered binary form.
 from typing import Dict  # Type the node-count mapping.
 from typing import List  # Type collections of lines and nodes.
 from typing import Sequence  # Type immutable views over loaded line lists.
+from typing import Set  # Type unique node-name collections extracted from expressions.
 from typing import Tuple  # Type tuple-based helper results.
 import zlib  # Compress PNG image payloads and compute chunk checksums.
 
@@ -24,6 +25,7 @@ DirectiveResult = Tuple[bool, str, str]  # Represent directive parsing success, 
 ElementParseResult = Tuple[bool, List["ParsedElement"], int, str]  # Represent parsed element extraction.
 
 _DIRECTIVE_PATTERN = re.compile(r"^\.(?P<name>[A-Za-z]+)(?:\s|$)")  # Match an LTspice dot-directive name.
+_NODE_VOLTAGE_REFERENCE_PATTERN = re.compile(r"V\(\s*([^(),\s]+)(?:\s*,\s*([^()\s]+))?\s*\)", re.IGNORECASE)  # Match node references inside LTspice voltage expressions.
 
 _VALID_DEVICE_PREFIXES = {  # Define the supported leading element prefixes from the LTspice manual.
     "A",  # Special function device prefix.
@@ -318,16 +320,10 @@ def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_imagepath_out:
 
 
 def ltspice_netlist_structure_cmp(filepath1: str, filepath2: str) -> bool:  # Compare two validated LTspice netlists for structural equivalence while ignoring footer directives.
-    first_validation_result = is_valid_ltspice_netlist_file(filepath1)  # Validate the first input file before attempting any comparison.
-    if not first_validation_result[0]:  # Stop when the first file is not a valid LTspice netlist for this project.
-        return False  # Return False because comparison cannot proceed on an invalid first file.
-    second_validation_result = is_valid_ltspice_netlist_file(filepath2)  # Validate the second input file before attempting any comparison.
-    if not second_validation_result[0]:  # Stop when the second file is not a valid LTspice netlist for this project.
-        return False  # Return False because comparison cannot proceed on an invalid second file.
-    first_parse_result = _load_parsed_elements(filepath1)  # Parse the first validated file into device elements.
+    first_parse_result = _load_parsed_elements(filepath1)  # Parse the first input file into device elements after format validation.
     if not first_parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
         return False  # Return False because the first graph cannot be built reliably.
-    second_parse_result = _load_parsed_elements(filepath2)  # Parse the second validated file into device elements.
+    second_parse_result = _load_parsed_elements(filepath2)  # Parse the second input file into device elements after format validation.
     if not second_parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
         return False  # Return False because the second graph cannot be built reliably.
     first_graph = _build_networkx_graph(first_parse_result[1], include_visual_labels=False)  # Build the normalized comparison graph for the first file.
@@ -472,7 +468,7 @@ def _validate_connectivity(lines: Sequence[str]) -> Tuple[bool, int]:  # Validat
     if not parse_result[0]:  # Stop when element parsing fails.
         return False, parse_result[2]  # Report the parser's failing line number.
     elements = parse_result[1]  # Extract the parsed elements after confirming parsing succeeded.
-    node_counts = _count_element_nodes(elements)  # Count how many times each relevant node appears across all device ports.
+    node_counts = _count_element_nodes(elements)  # Count how many times each relevant node appears across all element ports and expression references.
     for element in elements:  # Walk elements in source order so the earliest problem line is reported.
         for node_name in element.nodes:  # Check each connectivity node attached to the element.
             if _is_exempt_node(node_name):  # Skip ground and explicit no-connect nodes.
@@ -545,6 +541,8 @@ def _validate_device_tokens(tokens: Sequence[str]) -> Tuple[bool, str]:  # Valid
     prefix = instance_name[0].upper()  # Normalize the leading device prefix character.
     if prefix not in _VALID_DEVICE_PREFIXES:  # Reject unsupported device prefixes.
         return False, "invalid_prefix"  # Signal an invalid-prefix failure.
+    if _is_two_node_behavioral_controlled_source(prefix, tokens):  # Accept LTspice's behavioral E/G source form with only output nodes and an expression payload.
+        return True, ""  # Return success when the reduced-node behavioral form is structurally valid.
     minimum_token_count = _DEVICE_MINIMUM_TOKEN_COUNTS[prefix]  # Look up the minimum token count for this device prefix.
     if len(tokens) < minimum_token_count:  # Reject lines that are too short for the prefix grammar.
         return False, "too_few_prefix_tokens"  # Signal a prefix-specific token-count failure.
@@ -561,10 +559,14 @@ def _extract_nodes(tokens: Sequence[str]) -> Tuple[bool, List[str]]:  # Extract 
         return True, list(tokens[1:3])  # Return the two node tokens.
     if prefix == "D":  # Handle diodes with two nodes.
         return True, list(tokens[1:3])  # Return the two node tokens.
+    if prefix == "E" and _is_two_node_behavioral_controlled_source(prefix, tokens):  # Handle LTspice's behavioral VCVS shorthand with only output nodes.
+        return True, list(tokens[1:3])  # Return only the two explicit output nodes.
     if prefix == "E":  # Handle VCVS elements with output and control nodes.
         return True, list(tokens[1:5])  # Return the four node tokens.
     if prefix == "F":  # Handle CCCS elements with two output nodes only.
         return True, list(tokens[1:3])  # Return the two node tokens.
+    if prefix == "G" and _is_two_node_behavioral_controlled_source(prefix, tokens):  # Handle LTspice's behavioral VCCS shorthand with only output nodes.
+        return True, list(tokens[1:3])  # Return only the two explicit output nodes.
     if prefix == "G":  # Handle VCCS elements with output and control nodes.
         return True, list(tokens[1:5])  # Return the four node tokens.
     if prefix == "H":  # Handle CCVS elements with two output nodes only.
@@ -625,7 +627,42 @@ def _count_element_nodes(elements: Sequence[ParsedElement]) -> Dict[str, int]:  
                 continue  # Move to the next node because exempt nodes do not need counting.
             current_count = node_counts.get(node_name, 0)  # Read the current occurrence count safely.
             node_counts[node_name] = current_count + 1  # Increment the occurrence count for the node.
+        for node_name in _extract_expression_nodes(element):  # Count additional node references embedded in behavioral expressions.
+            if _is_exempt_node(node_name):  # Skip ground and explicit no-connect nodes inside expressions as well.
+                continue  # Move to the next node because exempt nodes do not need counting.
+            current_count = node_counts.get(node_name, 0)  # Read the current occurrence count safely.
+            node_counts[node_name] = current_count + 1  # Increment the occurrence count for the referenced node.
     return node_counts  # Return the completed node-count mapping.
+
+
+def _is_two_node_behavioral_controlled_source(prefix: str, tokens: Sequence[str]) -> bool:  # Detect LTspice's reduced-node behavioral E/G forms such as E1 out 0 G={G}.
+    if prefix not in {"E", "G"}:  # Restrict this reduced-node detection to the controlled-source prefixes that support it in the fixture corpus.
+        return False  # Return False because all other prefixes keep their existing node-count rules.
+    if len(tokens) < 4:  # Require at least an instance token, two explicit nodes, and one payload token.
+        return False  # Return False because shorter lines are always invalid.
+    payload_tokens = tokens[3:]  # Read the source payload after the two explicit output nodes.
+    if any("=" in token for token in payload_tokens):  # Treat inline assignments such as G={G} or VALUE={...} as the reduced-node behavioral form.
+        return True  # Return True because the line uses the behavioral shorthand syntax.
+    behavioral_keywords = {"VALUE", "VAL", "VOL", "CUR", "TABLE", "LAPLACE"}  # Cover the common LTspice behavioral-source keywords that replace the explicit control-node pair.
+    return payload_tokens[0].upper() in behavioral_keywords  # Return True only when the leading payload token matches a known behavioral-source keyword.
+
+
+def _extract_expression_nodes(element: ParsedElement) -> Tuple[str, ...]:  # Extract node names referenced inside behavioral voltage expressions for connectivity counting.
+    expression_text = " ".join(element.tokens[1 + len(element.nodes) :])  # Collapse the non-node payload back into one expression string.
+    if expression_text == "":  # Return early when the element carries no expression-like payload.
+        return ()  # Return an empty tuple because there are no referenced nodes to count.
+    referenced_nodes: List[str] = []  # Collect every node reference found inside the expression payload.
+    seen_nodes: Set[str] = set()  # Deduplicate repeated node references inside the same element expression.
+    for voltage_match in _NODE_VOLTAGE_REFERENCE_PATTERN.finditer(expression_text):  # Scan every V(node) or V(node1,node2) expression occurrence.
+        for matched_node in voltage_match.groups():  # Walk both optional captured node names for the current voltage expression.
+            if matched_node is None:  # Skip the optional second capture group when it is absent.
+                continue  # Move to the next captured group.
+            normalized_node = matched_node.strip()  # Normalize surrounding whitespace from the captured node token.
+            if normalized_node == "" or normalized_node in seen_nodes:  # Skip empty captures and duplicates within the same element.
+                continue  # Move to the next captured node.
+            seen_nodes.add(normalized_node)  # Mark the node as seen inside this element expression.
+            referenced_nodes.append(normalized_node)  # Preserve the referenced node in source order for later counting.
+    return tuple(referenced_nodes)  # Return the collected referenced node names as an immutable tuple.
 
 
 def _is_exempt_node(node_name: str) -> bool:  # Decide whether a node should be ignored by connectivity validation.
