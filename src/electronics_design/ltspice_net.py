@@ -3,6 +3,7 @@
 from __future__ import annotations  # Postpone annotation evaluation for forward references.
 
 from dataclasses import dataclass  # Use a small record type for parsed element lines.
+from itertools import combinations  # Build component-to-component projected edges for plotting.
 import math  # Compute simple node-layout geometry for PNG graph rendering.
 import os  # Access filesystem and permission utilities.
 import re  # Validate directive spelling and structure with regular expressions.
@@ -166,10 +167,10 @@ _FOOTER_DIRECTIVES = {  # Define directives that are acceptable in the footer re
 _EXEMPT_NODE_PREFIXES = ("NC", "NC_", "NC-")  # Exempt explicit no-connect node names from connectivity checks.
 
 _PNG_BACKGROUND = (248, 250, 252)  # Use a light background for generated network graph images.
-_PNG_EDGE_COLOR = (148, 163, 184)  # Use a muted line color for component-to-net edges.
-_PNG_NET_FILL = (37, 99, 235)  # Use a blue fill color for net nodes in the generated graph.
-_PNG_NET_BORDER = (30, 64, 175)  # Use a darker blue border for net nodes in the generated graph.
+_PNG_EDGE_COLOR = (148, 163, 184)  # Use a muted line color for component-to-component edges.
 _PNG_COMPONENT_BORDER = (30, 41, 59)  # Use a dark neutral border for component nodes in the generated graph.
+_PNG_TEXT_COLOR = (15, 23, 42)  # Use a dark text color for labels rendered into the PNG image.
+_PNG_TEXT_MUTED = (71, 85, 105)  # Use a softer text color for secondary labels such as component values.
 _PNG_COMPONENT_COLORS = [  # Cycle through a compact palette so different component prefixes are easy to distinguish.
     (251, 191, 36),  # Amber component fill color.
     (52, 211, 153),  # Emerald component fill color.
@@ -178,6 +179,63 @@ _PNG_COMPONENT_COLORS = [  # Cycle through a compact palette so different compon
     (196, 181, 253),  # Violet component fill color.
     (244, 114, 182),  # Pink component fill color.
 ]  # Finish the component fill palette.
+_COMPONENT_BOX_HALF_WIDTH = 70  # Reserve enough width for component labels in the higher-resolution plot.
+_COMPONENT_BOX_HALF_HEIGHT = 22  # Reserve enough height for the component box shape in the higher-resolution plot.
+_BITMAP_FONT_GLYPHS = {  # Define a compact 5x7 bitmap font for the labels rendered into PNG outputs.
+    " ": ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
+    "?": ("01110", "10001", "00001", "00010", "00100", "00000", "00100"),
+    ".": ("00000", "00000", "00000", "00000", "00000", "01100", "01100"),
+    ",": ("00000", "00000", "00000", "00000", "01100", "01100", "01000"),
+    ":": ("00000", "01100", "01100", "00000", "01100", "01100", "00000"),
+    ";": ("00000", "01100", "01100", "00000", "01100", "01100", "01000"),
+    "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+    "_": ("00000", "00000", "00000", "00000", "00000", "00000", "11111"),
+    "/": ("00001", "00010", "00100", "01000", "10000", "00000", "00000"),
+    "\\": ("10000", "01000", "00100", "00010", "00001", "00000", "00000"),
+    "+": ("00000", "00100", "00100", "11111", "00100", "00100", "00000"),
+    "=": ("00000", "11111", "00000", "11111", "00000", "00000", "00000"),
+    "(": ("00010", "00100", "01000", "01000", "01000", "00100", "00010"),
+    ")": ("01000", "00100", "00010", "00010", "00010", "00100", "01000"),
+    "[": ("01110", "01000", "01000", "01000", "01000", "01000", "01110"),
+    "]": ("01110", "00010", "00010", "00010", "00010", "00010", "01110"),
+    "*": ("00000", "10101", "01110", "11111", "01110", "10101", "00000"),
+    "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+    "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+    "2": ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+    "3": ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+    "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+    "5": ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+    "6": ("01110", "10000", "10000", "11110", "10001", "10001", "01110"),
+    "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+    "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+    "9": ("01110", "10001", "10001", "01111", "00001", "00001", "01110"),
+    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
+    "C": ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
+    "D": ("11100", "10010", "10001", "10001", "10001", "10010", "11100"),
+    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+    "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
+    "G": ("01110", "10001", "10000", "10111", "10001", "10001", "01110"),
+    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "I": ("01110", "00100", "00100", "00100", "00100", "00100", "01110"),
+    "J": ("00001", "00001", "00001", "00001", "10001", "10001", "01110"),
+    "K": ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
+    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
+    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+    "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+    "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+    "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
+    "W": ("10001", "10001", "10001", "10101", "10101", "10101", "01010"),
+    "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
+    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
+}  # Finish the bitmap font glyph table.
 
 
 @dataclass(frozen=True)  # Freeze parsed element records so tests and callers can rely on immutability.
@@ -241,7 +299,7 @@ def ltspice_netlist_plot_networkx(netlist_filepath: str, networkx_png_filepath: 
     output_path_result = _coerce_path(networkx_png_filepath)  # Convert the caller-supplied PNG path into a usable filesystem string.
     if not output_path_result[0]:  # Stop when the output path cannot be converted safely.
         return False, "Unable to write PNG file!"  # Return a stable write-path failure message.
-    graph = _build_networkx_graph(parse_result[1], include_visual_labels=True)  # Build the plotting graph from the parsed device elements.
+    graph = _build_networkx_component_plot_graph(parse_result[1])  # Build the component-only plotting graph from the parsed device elements.
     try:  # Attempt to render and write the graph image to disk.
         _write_networkx_graph_png(graph, output_path_result[1])  # Draw the graph into a PNG file using the local renderer.
     except OSError:  # Catch filesystem write failures such as missing permissions or invalid parent directories.
@@ -605,6 +663,7 @@ def _build_networkx_graph(elements: Sequence[ParsedElement], include_visual_labe
         }  # Finish the base component attribute dictionary.
         if include_visual_labels:  # Attach user-facing labels only when the graph is meant for rendering.
             component_attributes["label"] = element.tokens[0]  # Expose the original component instance name for the image renderer.
+            component_attributes["value_label"] = _component_visual_value(element)  # Expose the primary component value/model text for the image renderer.
         graph.add_node(component_node_id, **component_attributes)  # Add the component node to the multigraph.
         for port_index, node_name in enumerate(element.nodes):  # Walk every connectivity node attached to the component in pin order.
             net_node_id = _net_node_id(node_name)  # Derive a stable graph node id for the electrical net.
@@ -632,6 +691,39 @@ def _component_signature(element: ParsedElement) -> Tuple[str, Tuple[str, ...]]:
     return element.prefix, non_node_tokens  # Return the normalized component signature tuple.
 
 
+def _component_visual_value(element: ParsedElement) -> str:  # Build a compact human-readable component value or model label for graph rendering.
+    value_tokens = element.tokens[1 + len(element.nodes):]  # Drop the instance token and the extracted connectivity nodes.
+    if not value_tokens:  # Return early when the component does not carry any remaining value-like tokens.
+        return ""  # Render no secondary label for components without a stable non-node token.
+    return " ".join(value_tokens)  # Preserve the remaining LTspice tokens as the displayed value/model label.
+
+
+def _build_networkx_component_plot_graph(elements: Sequence[ParsedElement]) -> nx.MultiGraph:  # Build a component-only projection graph for PNG plotting.
+    graph = nx.MultiGraph()  # Create the multigraph used only for component-level visualization.
+    node_to_component_ids: Dict[str, List[str]] = {}  # Track which plotted components touch each electrical net.
+    for element in elements:  # Walk every parsed device element in source order.
+        component_node_id = _component_node_id(element)  # Derive the stable node id for the current component.
+        graph.add_node(
+            component_node_id,
+            kind="component",
+            prefix=element.prefix,
+            label=element.tokens[0],
+            value_label=_component_visual_value(element),
+        )  # Add the component node with the labels required by the PNG renderer.
+        for node_name in element.nodes:  # Associate each electrical net with the components that touch it.
+            if _is_exempt_node(node_name):  # Skip no-connect and ground-like pseudo-nets from the component projection.
+                continue  # Move to the next node because exempt nodes would only add clutter to the visual projection.
+            component_ids = node_to_component_ids.setdefault(node_name, [])  # Load or create the component list for this electrical net.
+            if component_node_id not in component_ids:  # Avoid duplicate component membership when a device references the same net twice.
+                component_ids.append(component_node_id)  # Record that the current component touches this electrical net.
+    for node_name, component_ids in node_to_component_ids.items():  # Project every shared electrical net into component-to-component edges.
+        if len(component_ids) < 2:  # Skip nets that touch only one plotted component because they do not create a visible connection.
+            continue  # Move to the next electrical net.
+        for first_component_id, second_component_id in combinations(sorted(component_ids), 2):  # Connect each pair of components that share the same net.
+            graph.add_edge(first_component_id, second_component_id, net=node_name)  # Preserve the original net name as edge metadata for deterministic offsets.
+    return graph  # Return the completed component-only plotting graph.
+
+
 def _comparison_net_class(node_name: str) -> str:  # Normalize net names into comparison classes so ordinary node renaming is ignored.
     uppercase_name = node_name.upper()  # Normalize the net name for case-insensitive class checks.
     if uppercase_name in {"0", "GND"}:  # Preserve global ground as a special net class across comparisons.
@@ -649,68 +741,156 @@ def _networkx_graph_node_match(first_attributes: Dict[str, object], second_attri
     return first_attributes.get("net_class") == second_attributes.get("net_class")  # Compare net nodes using only their normalized comparison class.
 
 
-def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str) -> None:  # Render a component-net graph into a standalone PNG file.
+def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str) -> None:  # Render a component-only graph into a standalone higher-resolution PNG file.
     component_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "component")  # Collect component node ids in deterministic order.
-    net_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "net")  # Collect net node ids in deterministic order.
-    component_columns = max(1, math.ceil(max(len(component_nodes), 1) / 18))  # Choose enough component columns to avoid an overly tall image.
-    net_columns = max(1, math.ceil(max(len(net_nodes), 1) / 18))  # Choose enough net columns to avoid an overly tall image.
-    row_count = max(1, math.ceil(max(len(component_nodes), 1) / component_columns), math.ceil(max(len(net_nodes), 1) / net_columns))  # Compute the maximum rows needed by either partition.
-    width = max(960, 180 + (component_columns + net_columns) * 220)  # Scale the image width to leave room for both partitions and the edge bundle.
-    height = max(480, 140 + row_count * 38)  # Scale the image height to the larger partition while keeping a useful minimum size.
+    component_count = max(len(component_nodes), 1)  # Guard against zero-node dimension calculations.
+    width = max(1920, 520 + component_count * 120)  # Increase the minimum width so larger plots read clearly when viewed directly.
+    height = max(1080, 420 + component_count * 90)  # Increase the minimum height so labels and crossings are less crowded.
     canvas = bytearray(width * height * 3)  # Allocate a flat RGB canvas for the PNG renderer.
     _fill_canvas(canvas, width, height, _PNG_BACKGROUND)  # Paint the full canvas with the light background color.
-    component_positions = _assign_partition_positions(component_nodes, width, height, True)  # Place components in the left partition region.
-    net_positions = _assign_partition_positions(net_nodes, width, height, False)  # Place nets in the right partition region.
-    positions = {}  # Merge both partition position maps into one lookup dictionary.
-    positions.update(component_positions)  # Add the component positions to the shared lookup.
-    positions.update(net_positions)  # Add the net positions to the shared lookup.
-    for first_node, second_node, edge_key, edge_attributes in graph.edges(keys=True, data=True):  # Draw every component-to-net edge in deterministic multigraph order.
-        _draw_graph_edge(canvas, width, height, positions[first_node], positions[second_node], edge_attributes.get("port", 0), edge_key)  # Render the current edge with a small deterministic offset.
+    component_positions = _assign_component_plot_positions(graph, component_nodes, width, height)  # Place components using a deterministic NetworkX spring layout.
+    for first_node, second_node, edge_key, edge_attributes in graph.edges(keys=True, data=True):  # Draw every component-to-component edge in deterministic multigraph order.
+        _draw_graph_edge(
+            canvas,
+            width,
+            height,
+            component_positions[first_node],
+            component_positions[second_node],
+            edge_attributes.get("port", 0),
+            edge_key,
+        )  # Render the current edge with anchors that attach cleanly to the component boxes.
     for component_node_id in component_nodes:  # Draw every component node after the edges so boxes remain visible.
         center_x, center_y = component_positions[component_node_id]  # Read the component center coordinates from the layout map.
         fill_color = _component_fill_color(graph.nodes[component_node_id].get("prefix", "?"))  # Choose a stable component fill color from the device prefix.
-        _draw_rectangle(canvas, width, height, center_x - 24, center_y - 11, center_x + 24, center_y + 11, fill_color, _PNG_COMPONENT_BORDER)  # Render the component as a filled bordered box.
-    for net_node_id in net_nodes:  # Draw every net node after the edges so circles remain visible.
-        center_x, center_y = net_positions[net_node_id]  # Read the net center coordinates from the layout map.
-        _draw_circle(canvas, width, height, center_x, center_y, 8, _PNG_NET_FILL, _PNG_NET_BORDER)  # Render the net as a filled bordered circle.
+        _draw_rectangle(
+            canvas,
+            width,
+            height,
+            center_x - _COMPONENT_BOX_HALF_WIDTH,
+            center_y - _COMPONENT_BOX_HALF_HEIGHT,
+            center_x + _COMPONENT_BOX_HALF_WIDTH,
+            center_y + _COMPONENT_BOX_HALF_HEIGHT,
+            fill_color,
+            _PNG_COMPONENT_BORDER,
+        )  # Render the component as a filled bordered box.
+        _draw_centered_text(
+            canvas,
+            width,
+            height,
+            center_x,
+            center_y - 4,
+            str(graph.nodes[component_node_id].get("label", "")),
+            _PNG_TEXT_COLOR,
+            2,
+            16,
+        )  # Render the component instance name such as R1 inside the component box.
+        value_label = str(graph.nodes[component_node_id].get("value_label", ""))  # Read the secondary component label for the current node.
+        if value_label != "":  # Skip the secondary label when the component does not carry a stable displayed value.
+            _draw_centered_text(canvas, width, height, center_x, center_y + 28, value_label, _PNG_TEXT_MUTED, 2, 22)  # Render the value/model text such as 10k below the box.
     _write_png_rgb(output_path, width, height, canvas)  # Encode and write the final RGB canvas as a PNG file.
 
 
-def _assign_partition_positions(node_ids: Sequence[str], width: int, height: int, is_component_partition: bool) -> Dict[str, Tuple[int, int]]:  # Assign deterministic positions within one graph partition.
-    if not node_ids:  # Return early when the partition is empty.
-        return {}  # Return an empty position map for the empty partition.
-    column_count = max(1, math.ceil(len(node_ids) / 18))  # Compute enough columns to keep the partition at a manageable height.
-    row_count = max(1, math.ceil(len(node_ids) / column_count))  # Compute the row count implied by the chosen column count.
-    left_margin = 90 if is_component_partition else width // 2 + 60  # Place components on the left half and nets on the right half.
-    right_margin = width // 2 - 60 if is_component_partition else width - 90  # Reserve a gap in the middle for the edge bundle.
-    top_margin = 70  # Leave a comfortable top margin for the rendered image.
-    bottom_margin = height - 70  # Leave a comfortable bottom margin for the rendered image.
-    if bottom_margin <= top_margin:  # Guard against impossible image dimensions before computing positions.
-        raise ValueError("image_height_too_small")  # Signal that the computed image dimensions are invalid.
-    usable_width = max(1, right_margin - left_margin)  # Compute the usable horizontal width for the partition columns.
-    usable_height = bottom_margin - top_margin  # Compute the usable vertical height for the partition rows.
-    horizontal_step = 0 if column_count == 1 else usable_width / (column_count - 1)  # Spread columns evenly across the partition width.
-    vertical_step = 0 if row_count == 1 else usable_height / (row_count - 1)  # Spread rows evenly across the partition height.
-    positions: Dict[str, Tuple[int, int]] = {}  # Collect the computed center coordinates for each node id.
-    for index, node_id in enumerate(node_ids):  # Walk every partition node in deterministic order.
-        column_index = index // row_count  # Place nodes into columns first so each column receives roughly equal height.
-        row_index = index % row_count  # Place nodes into rows within the selected column.
-        center_x = int(round(left_margin + column_index * horizontal_step))  # Compute the node center x coordinate for the current column.
-        center_y = int(round(top_margin + row_index * vertical_step))  # Compute the node center y coordinate for the current row.
-        positions[node_id] = (center_x, center_y)  # Save the computed center coordinates in the position map.
-    return positions  # Return the completed position map for the partition.
+def _assign_component_plot_positions(graph: nx.MultiGraph, component_node_ids: Sequence[str], width: int, height: int) -> Dict[str, Tuple[int, int]]:  # Assign deterministic spring-layout positions for the component-only plot graph.
+    if not component_node_ids:  # Return early when the graph is empty.
+        return {}  # Return an empty position map for the empty graph.
+    left_margin = 180  # Leave a generous horizontal margin for the higher-resolution labels.
+    right_margin = width - 180  # Leave a generous horizontal margin for the higher-resolution labels.
+    top_margin = 160  # Leave extra room above the top row for the larger glyph scale.
+    bottom_margin = height - 160  # Leave extra room below the bottom row for value labels.
+    if bottom_margin <= top_margin or right_margin <= left_margin:  # Guard against impossible image dimensions before computing the layout.
+        raise ValueError("image_dimensions_too_small")  # Signal that the computed image dimensions are invalid.
+    if len(component_node_ids) == 1:  # Special-case one-node plots so they render centered without calling the spring layout.
+        only_node_id = component_node_ids[0]  # Read the single component node id.
+        return {only_node_id: ((left_margin + right_margin) // 2, (top_margin + bottom_margin) // 2)}  # Center the lone component inside the drawable area.
+    spring_positions = nx.spring_layout(graph, seed=7, k=1.35 / math.sqrt(len(component_node_ids)), iterations=300)  # Use a deterministic NetworkX layout for a clearer higher-resolution component graph.
+    x_values = [spring_positions[node_id][0] for node_id in component_node_ids]  # Collect the raw spring-layout x coordinates for normalization.
+    y_values = [spring_positions[node_id][1] for node_id in component_node_ids]  # Collect the raw spring-layout y coordinates for normalization.
+    minimum_x = min(x_values)  # Read the smallest x coordinate for normalization.
+    maximum_x = max(x_values)  # Read the largest x coordinate for normalization.
+    minimum_y = min(y_values)  # Read the smallest y coordinate for normalization.
+    maximum_y = max(y_values)  # Read the largest y coordinate for normalization.
+    x_span = maximum_x - minimum_x  # Compute the total x-range produced by the spring layout.
+    y_span = maximum_y - minimum_y  # Compute the total y-range produced by the spring layout.
+    positions: Dict[str, Tuple[int, int]] = {}  # Collect the scaled integer image coordinates for each component node.
+    for node_id in component_node_ids:  # Walk every component node in deterministic order.
+        raw_x, raw_y = spring_positions[node_id]  # Read the normalized spring-layout coordinate pair for the current component.
+        normalized_x = 0.5 if x_span == 0 else (raw_x - minimum_x) / x_span  # Normalize the x coordinate into the [0, 1] interval.
+        normalized_y = 0.5 if y_span == 0 else (raw_y - minimum_y) / y_span  # Normalize the y coordinate into the [0, 1] interval.
+        center_x = int(round(left_margin + normalized_x * (right_margin - left_margin)))  # Scale the normalized x coordinate into the drawable image area.
+        center_y = int(round(top_margin + normalized_y * (bottom_margin - top_margin)))  # Scale the normalized y coordinate into the drawable image area.
+        positions[node_id] = (center_x, center_y)  # Save the scaled image-space position for the current component node.
+    return positions  # Return the completed position map for the component plot graph.
 
 
-def _draw_graph_edge(canvas: bytearray, width: int, height: int, first_point: Tuple[int, int], second_point: Tuple[int, int], port_index: int, edge_key: int) -> None:  # Draw one graph edge with a deterministic vertical offset.
-    first_x, first_y = first_point  # Unpack the source point coordinates for the current edge.
-    second_x, second_y = second_point  # Unpack the destination point coordinates for the current edge.
+def _draw_graph_edge(canvas: bytearray, width: int, height: int, first_point: Tuple[int, int], second_point: Tuple[int, int], port_index: int, edge_key: int) -> None:  # Draw one graph edge with anchors that touch the component boxes cleanly.
     offset = (port_index * 3) + (edge_key * 2)  # Compute a small deterministic offset so repeated edges do not fully overlap.
-    _draw_line(canvas, width, height, first_x + 24, first_y + offset, second_x - 8, second_y + offset, _PNG_EDGE_COLOR)  # Render the edge as a single straight line segment.
+    first_anchor = _component_edge_anchor(first_point, second_point, offset)  # Place the first endpoint on the first component box perimeter.
+    second_anchor = _component_edge_anchor(second_point, first_point, offset)  # Place the second endpoint on the second component box perimeter.
+    _draw_line(canvas, width, height, first_anchor[0], first_anchor[1], second_anchor[0], second_anchor[1], _PNG_EDGE_COLOR)  # Render the edge as one anchored line segment.
+
+
+def _component_edge_anchor(origin: Tuple[int, int], target: Tuple[int, int], offset: int) -> Tuple[int, int]:  # Compute one edge anchor on the perimeter of a component box.
+    origin_x, origin_y = origin  # Unpack the node center coordinates.
+    target_x, target_y = target  # Unpack the other endpoint coordinates used to determine the edge direction.
+    vertical_offset = max(-(_COMPONENT_BOX_HALF_HEIGHT - 2), min(_COMPONENT_BOX_HALF_HEIGHT - 2, offset))  # Keep the offset inside the component height when anchoring to a box.
+    horizontal_anchor = origin_x + _COMPONENT_BOX_HALF_WIDTH if target_x >= origin_x else origin_x - _COMPONENT_BOX_HALF_WIDTH  # Choose the outward-facing box side.
+    return horizontal_anchor, origin_y + vertical_offset  # Return the component perimeter anchor.
 
 
 def _component_fill_color(prefix: str) -> Tuple[int, int, int]:  # Choose a stable component fill color from a device prefix.
     palette_index = ord(prefix[0]) % len(_PNG_COMPONENT_COLORS)  # Map the prefix character into the compact component color palette.
     return _PNG_COMPONENT_COLORS[palette_index]  # Return the selected component fill color tuple.
+
+
+def _normalize_bitmap_text(text: str, max_characters: int) -> str:  # Normalize arbitrary node labels into the limited bitmap-font character set.
+    normalized_characters: List[str] = []  # Collect normalized characters one by one.
+    for raw_character in text:  # Walk each source character in order.
+        if raw_character == "µ" or raw_character == "μ":  # Replace Greek mu variants with the ASCII letter used in LTspice values.
+            candidate_character = "U"  # Render the micro prefix as U so the bitmap font stays ASCII-only.
+        elif raw_character.isalpha():  # Normalize alphabetic characters to uppercase because the font is uppercase-only.
+            candidate_character = raw_character.upper()  # Convert alphabetic characters into the font alphabet.
+        else:  # Preserve supported punctuation and digits directly.
+            candidate_character = raw_character  # Keep the non-alphabetic character unchanged for the glyph lookup.
+        normalized_characters.append(candidate_character if candidate_character in _BITMAP_FONT_GLYPHS else "?")  # Replace unsupported glyphs with a visible fallback.
+    normalized_text = "".join(normalized_characters).strip()  # Recombine the glyphs and trim surrounding whitespace.
+    if normalized_text == "":  # Return early when nothing printable remains.
+        return ""  # Skip rendering blank labels.
+    if len(normalized_text) <= max_characters:  # Return early when the label already fits.
+        return normalized_text  # Keep the normalized text unchanged.
+    if max_characters <= 3:  # Guard against a degenerate truncation budget.
+        return normalized_text[:max_characters]  # Return the hard-truncated text when no room exists for an ellipsis marker.
+    return normalized_text[: max_characters - 3] + "..."  # Add an ASCII ellipsis marker to visibly show truncation.
+
+
+def _draw_centered_text(canvas: bytearray, width: int, height: int, center_x: int, top_y: int, text: str, color: Tuple[int, int, int], scale: int, max_characters: int) -> None:  # Draw one normalized text label centered around a given x coordinate.
+    normalized_text = _normalize_bitmap_text(text, max_characters)  # Normalize the text into printable bitmap glyphs.
+    if normalized_text == "":  # Skip drawing when the label collapses to nothing printable.
+        return  # Return immediately because there is nothing meaningful to render.
+    text_width = _bitmap_text_width(normalized_text, scale)  # Measure the label width before centering.
+    _draw_text(canvas, width, height, center_x - text_width // 2, top_y, normalized_text, color, scale, max_characters)  # Draw the centered label using the shared bitmap text helper.
+
+
+def _draw_text(canvas: bytearray, width: int, height: int, left_x: int, top_y: int, text: str, color: Tuple[int, int, int], scale: int, max_characters: int) -> None:  # Draw one normalized text label from a given left origin.
+    normalized_text = _normalize_bitmap_text(text, max_characters)  # Normalize the text into printable bitmap glyphs.
+    if normalized_text == "":  # Skip drawing when the label collapses to nothing printable.
+        return  # Return immediately because there is nothing meaningful to render.
+    cursor_x = left_x  # Start drawing at the requested left origin.
+    for character in normalized_text:  # Walk each printable character in sequence.
+        glyph_rows = _BITMAP_FONT_GLYPHS.get(character, _BITMAP_FONT_GLYPHS["?"])  # Look up the 5x7 bitmap glyph for the current character.
+        for row_index, glyph_row in enumerate(glyph_rows):  # Walk each row of the glyph bitmap.
+            for column_index, bit in enumerate(glyph_row):  # Walk each column bit in the current glyph row.
+                if bit != "1":  # Skip unset pixels so only the visible glyph strokes are painted.
+                    continue  # Move to the next glyph pixel when the current bit is empty.
+                for delta_y in range(scale):  # Expand the glyph vertically when scaled.
+                    for delta_x in range(scale):  # Expand the glyph horizontally when scaled.
+                        _set_pixel(canvas, width, height, cursor_x + column_index * scale + delta_x, top_y + row_index * scale + delta_y, color)  # Paint the scaled glyph pixel on the canvas.
+        cursor_x += (5 * scale) + scale  # Advance by the glyph width plus one scaled pixel of letter spacing.
+
+
+def _bitmap_text_width(text: str, scale: int) -> int:  # Measure the rendered width of a normalized bitmap-font string.
+    if text == "":  # Return early for empty labels.
+        return 0  # Measure empty text as zero width.
+    return len(text) * (5 * scale) + (len(text) - 1) * scale  # Account for the five-pixel glyph width plus one scaled pixel of spacing per interior gap.
 
 
 def _fill_canvas(canvas: bytearray, width: int, height: int, color: Tuple[int, int, int]) -> None:  # Paint the entire RGB canvas with one solid background color.
