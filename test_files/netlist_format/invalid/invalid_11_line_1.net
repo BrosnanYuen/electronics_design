@@ -1,0 +1,8 @@
+.model NPN NPN
+.model PNP PNP
+.lib C:\users\brosnan\AppData\Local\LTspice\lib\cmp\standard.bjt
+.step PARAM A 1m 200m 1m
+.op
+* Plot Ic/Ib to find beta
+.backanno
+.end
