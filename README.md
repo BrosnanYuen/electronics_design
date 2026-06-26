@@ -241,6 +241,14 @@ Install the runtime dependencies used by the plotting and comparison APIs:
 
 ## CLI Usage
 
+Render a validated LTspice schematic directly to an image file:
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_plot_schemdraw.py input.asc output.svg --width 1600 --height 900
+```
+
+This script only calls the public `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)` API and exits with a non-zero status if validation or image generation fails.
+
 Render a validated LTspice netlist directly to an image file:
 
 ```bash
@@ -293,6 +301,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
 - `test_files/netlist_validation/` contains 10 valid and 10 invalid whole-file validation fixtures
 - `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
+- `scripts/ltspice_asc_plot_schemdraw.py` renders one validated LTspice ASC schematic to a `.png`, `.svg`, or `.jpg` image file
 - `scripts/ltspice_net_to_networkxpng.py` renders one validated LTspice netlist to a `.png`, `.svg`, or `.jpg` image file
 - `scripts/run_all_tests.py` runs unit tests first and integration tests second
 

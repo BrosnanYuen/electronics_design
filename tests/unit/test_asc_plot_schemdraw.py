@@ -16,6 +16,18 @@ _VALID_DIRECTORY = _ROOT_DIRECTORY / "valid_asc"  # Reuse repository ASC samples
 
 
 class TestAscPlotSchemdraw(unittest.TestCase):  # Group schemdraw plotting test cases together.
+    def _assert_valid_png_output(self, fixture_name: str, expected_width: int = 1920, expected_height: int = 1080) -> None:  # Render one ASC fixture to PNG and verify that a readable raster image is produced.
+        fixture_path = _VALID_DIRECTORY / fixture_name  # Resolve the source LTspice ASC fixture to render.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create an isolated temporary output directory for the PNG file.
+            output_path = Path(temporary_directory) / f"{fixture_path.stem}.png"  # Resolve the PNG output path inside the temporary directory.
+            result = ltspice_asc_plot_schemdraw(str(fixture_path), str(output_path), expected_width, expected_height)  # Execute the public schemdraw plotting helper using the requested dimensions.
+            self.assertEqual(result, (True, ""), msg=f"{fixture_name} should render successfully.")  # Assert that plotting succeeds without an error message.
+            self.assertTrue(output_path.exists(), msg=f"{fixture_name} should create a PNG output file.")  # Assert that the output file is created on disk.
+            self.assertGreater(output_path.stat().st_size, 0, msg=f"{fixture_name} should produce a non-empty PNG file.")  # Assert that the output file contains image data.
+            with Image.open(output_path) as image:  # Open the rendered PNG so its encoded dimensions and file format can be verified.
+                self.assertEqual(image.format, "PNG", msg=f"{fixture_name} should be encoded as a PNG file.")  # Assert that the raster file format matches the requested extension.
+                self.assertEqual(image.size, (expected_width, expected_height), msg=f"{fixture_name} should match the requested PNG dimensions.")  # Assert that the PNG size matches the caller request.
+
     def test_plot_fixture_uses_default_dimensions(self) -> None:  # Verify that the schemdraw plotting API defaults to the documented 1920x1080 size.
         fixture_path = _VALID_DIRECTORY / "How-to-set-initial-conditions.asc"  # Reuse one compact valid ASC sample as the plotting input.
         with tempfile.TemporaryDirectory() as temporary_directory:  # Create an isolated temporary output directory for the PNG file.
@@ -61,3 +73,29 @@ class TestAscPlotSchemdraw(unittest.TestCase):  # Group schemdraw plotting test 
             output_path = Path(temporary_directory) / "schematic.bmp"  # Resolve an unsupported output path extension inside the temporary directory.
             result = ltspice_asc_plot_schemdraw(str(fixture_path), str(output_path))  # Execute the public schemdraw plotting helper using an unsupported extension.
             self.assertEqual(result, (False, "Unable to plot schematic drawing!"), msg="Unsupported output extensions should fail with the stable schemdraw plotting error.")  # Assert that unsupported extensions are rejected cleanly.
+
+
+def _make_png_plot_test(fixture_name: str):  # Build one dynamic PNG plotting test method for one valid ASC fixture file.
+    def _test_method(self: TestAscPlotSchemdraw) -> None:  # Execute the shared PNG assertions for the selected fixture.
+        self._assert_valid_png_output(fixture_name)  # Render and validate the PNG output for the selected ASC fixture file.
+
+    return _test_method  # Return the generated unittest method for later class attachment.
+
+
+_PNG_PLOT_FIXTURES = [  # Select ten additional valid ASC fixtures to broaden schemdraw rendering coverage.
+    "A-class-amplifier-bjt.asc",
+    "BJT-emitter-follower-configuration.asc",
+    "Common-emitter-BJT.asc",
+    "DCDC-full-bridge.asc",
+    "Differences-amplifier.asc",
+    "Full-bridge-rectifier.asc",
+    "PNP-transistor-biasing.asc",
+    "Push-pull-amplifier.asc",
+    "RC-lowpass.asc",
+    "Three-phase-rectifier.asc",
+]  # Finish the selected ASC fixture list used by the dynamic PNG rendering tests.
+
+
+for _fixture_name in _PNG_PLOT_FIXTURES:  # Generate one explicit PNG plotting unit test for each selected ASC fixture.
+    _test_name = f"test_plot_fixture_{Path(_fixture_name).stem.lower().replace('-', '_').replace(' ', '_')}"  # Build a stable unittest method name from the fixture filename.
+    setattr(TestAscPlotSchemdraw, _test_name, _make_png_plot_test(_fixture_name))  # Attach the generated unittest method to the schemdraw plotting test class.
