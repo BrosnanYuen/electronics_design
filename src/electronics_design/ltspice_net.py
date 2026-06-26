@@ -169,6 +169,7 @@ _EXEMPT_NODE_PREFIXES = ("NC", "NC_", "NC-")  # Exempt explicit no-connect node 
 _PNG_BACKGROUND = (248, 250, 252)  # Use a light background for generated network graph images.
 _PNG_EDGE_COLOR = (148, 163, 184)  # Use a muted line color for component-to-component edges.
 _PNG_COMPONENT_BORDER = (30, 41, 59)  # Use a dark neutral border for component nodes in the generated graph.
+_PNG_GROUND_COLOR = (51, 65, 85)  # Use a dark neutral color for the rendered ground symbol.
 _PNG_TEXT_COLOR = (15, 23, 42)  # Use a dark text color for labels rendered into the PNG image.
 _PNG_TEXT_MUTED = (71, 85, 105)  # Use a softer text color for secondary labels such as component values.
 _PNG_COMPONENT_COLORS = [  # Cycle through a compact palette so different component prefixes are easy to distinguish.
@@ -181,6 +182,8 @@ _PNG_COMPONENT_COLORS = [  # Cycle through a compact palette so different compon
 ]  # Finish the component fill palette.
 _COMPONENT_BOX_HALF_WIDTH = 70  # Reserve enough width for component labels in the higher-resolution plot.
 _COMPONENT_BOX_HALF_HEIGHT = 22  # Reserve enough height for the component box shape in the higher-resolution plot.
+_GROUND_SYMBOL_HALF_WIDTH = 18  # Reserve enough width for the visual ground symbol anchor calculations.
+_GROUND_SYMBOL_HEIGHT = 22  # Reserve enough height for the rendered ground symbol.
 _BITMAP_FONT_GLYPHS = {  # Define a compact 5x7 bitmap font for the labels rendered into PNG outputs.
     " ": ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
     "?": ("01110", "10001", "00001", "00010", "00100", "00000", "00100"),
@@ -701,6 +704,7 @@ def _component_visual_value(element: ParsedElement) -> str:  # Build a compact h
 def _build_networkx_component_plot_graph(elements: Sequence[ParsedElement]) -> nx.MultiGraph:  # Build a component-only projection graph for PNG plotting.
     graph = nx.MultiGraph()  # Create the multigraph used only for component-level visualization.
     node_to_component_ids: Dict[str, List[str]] = {}  # Track which plotted components touch each electrical net.
+    ground_component_ids: List[str] = []  # Track the components that connect directly to ground-like nets.
     for element in elements:  # Walk every parsed device element in source order.
         component_node_id = _component_node_id(element)  # Derive the stable node id for the current component.
         graph.add_node(
@@ -711,7 +715,11 @@ def _build_networkx_component_plot_graph(elements: Sequence[ParsedElement]) -> n
             value_label=_component_visual_value(element),
         )  # Add the component node with the labels required by the PNG renderer.
         for node_name in element.nodes:  # Associate each electrical net with the components that touch it.
-            if _is_exempt_node(node_name):  # Skip no-connect and ground-like pseudo-nets from the component projection.
+            if _is_ground_node(node_name):  # Preserve visible ground connectivity through a dedicated visual ground symbol.
+                if component_node_id not in ground_component_ids:  # Avoid duplicate ground membership when a device references ground more than once.
+                    ground_component_ids.append(component_node_id)  # Record that the current component connects directly to ground.
+                continue  # Move to the next node because ground is rendered through a dedicated symbol, not a net node.
+            if _is_exempt_node(node_name):  # Skip no-connect pseudo-nets from the component projection.
                 continue  # Move to the next node because exempt nodes would only add clutter to the visual projection.
             component_ids = node_to_component_ids.setdefault(node_name, [])  # Load or create the component list for this electrical net.
             if component_node_id not in component_ids:  # Avoid duplicate component membership when a device references the same net twice.
@@ -721,6 +729,11 @@ def _build_networkx_component_plot_graph(elements: Sequence[ParsedElement]) -> n
             continue  # Move to the next electrical net.
         for first_component_id, second_component_id in combinations(sorted(component_ids), 2):  # Connect each pair of components that share the same net.
             graph.add_edge(first_component_id, second_component_id, net=node_name)  # Preserve the original net name as edge metadata for deterministic offsets.
+    if ground_component_ids:  # Add one dedicated visual ground node when the netlist contains any ground-connected component.
+        ground_node_id = "ground:GND"  # Use one stable plotting-only node id for the shared ground symbol.
+        graph.add_node(ground_node_id, kind="ground", label="GND")  # Add the dedicated visual ground symbol node.
+        for component_node_id in sorted(ground_component_ids):  # Connect every ground-referenced component to the visual ground symbol.
+            graph.add_edge(component_node_id, ground_node_id, net="GND")  # Preserve the ground edge as a visible connection in the plot.
     return graph  # Return the completed component-only plotting graph.
 
 
@@ -743,24 +756,27 @@ def _networkx_graph_node_match(first_attributes: Dict[str, object], second_attri
 
 def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str) -> None:  # Render a component-only graph into a standalone higher-resolution PNG file.
     component_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "component")  # Collect component node ids in deterministic order.
-    component_count = max(len(component_nodes), 1)  # Guard against zero-node dimension calculations.
-    width = max(1920, 520 + component_count * 120)  # Increase the minimum width so larger plots read clearly when viewed directly.
-    height = max(1080, 420 + component_count * 90)  # Increase the minimum height so labels and crossings are less crowded.
+    ground_nodes = sorted(node_id for node_id, attributes in graph.nodes(data=True) if attributes.get("kind") == "ground")  # Collect plotting-only ground symbol node ids.
+    plot_node_count = max(len(component_nodes) + len(ground_nodes), 1)  # Guard against zero-node dimension calculations.
+    width = max(1920, 520 + plot_node_count * 120)  # Increase the minimum width so larger plots read clearly when viewed directly.
+    height = max(1080, 420 + plot_node_count * 90)  # Increase the minimum height so labels and crossings are less crowded.
     canvas = bytearray(width * height * 3)  # Allocate a flat RGB canvas for the PNG renderer.
     _fill_canvas(canvas, width, height, _PNG_BACKGROUND)  # Paint the full canvas with the light background color.
-    component_positions = _assign_component_plot_positions(graph, component_nodes, width, height)  # Place components using a deterministic NetworkX spring layout.
+    positions = _assign_component_plot_positions(graph, component_nodes + ground_nodes, width, height)  # Place components and the visual ground symbol using a deterministic NetworkX spring layout.
     for first_node, second_node, edge_key, edge_attributes in graph.edges(keys=True, data=True):  # Draw every component-to-component edge in deterministic multigraph order.
         _draw_graph_edge(
             canvas,
             width,
             height,
-            component_positions[first_node],
-            component_positions[second_node],
+            positions[first_node],
+            positions[second_node],
+            str(graph.nodes[first_node].get("kind", "")),
+            str(graph.nodes[second_node].get("kind", "")),
             edge_attributes.get("port", 0),
             edge_key,
-        )  # Render the current edge with anchors that attach cleanly to the component boxes.
+        )  # Render the current edge with anchors that attach cleanly to the component boxes and ground symbols.
     for component_node_id in component_nodes:  # Draw every component node after the edges so boxes remain visible.
-        center_x, center_y = component_positions[component_node_id]  # Read the component center coordinates from the layout map.
+        center_x, center_y = positions[component_node_id]  # Read the component center coordinates from the layout map.
         fill_color = _component_fill_color(graph.nodes[component_node_id].get("prefix", "?"))  # Choose a stable component fill color from the device prefix.
         _draw_rectangle(
             canvas,
@@ -787,11 +803,15 @@ def _write_networkx_graph_png(graph: nx.MultiGraph, output_path: str) -> None:  
         value_label = str(graph.nodes[component_node_id].get("value_label", ""))  # Read the secondary component label for the current node.
         if value_label != "":  # Skip the secondary label when the component does not carry a stable displayed value.
             _draw_centered_text(canvas, width, height, center_x, center_y + 28, value_label, _PNG_TEXT_MUTED, 2, 22)  # Render the value/model text such as 10k below the box.
+    for ground_node_id in ground_nodes:  # Draw the visual ground symbol after the edges so its strokes remain crisp.
+        center_x, center_y = positions[ground_node_id]  # Read the ground symbol center coordinates from the layout map.
+        _draw_ground_symbol(canvas, width, height, center_x, center_y, _PNG_GROUND_COLOR)  # Render the dedicated ground symbol.
+        _draw_centered_text(canvas, width, height, center_x, center_y + 24, str(graph.nodes[ground_node_id].get("label", "GND")), _PNG_TEXT_MUTED, 1, 8)  # Render a short GND label below the symbol.
     _write_png_rgb(output_path, width, height, canvas)  # Encode and write the final RGB canvas as a PNG file.
 
 
-def _assign_component_plot_positions(graph: nx.MultiGraph, component_node_ids: Sequence[str], width: int, height: int) -> Dict[str, Tuple[int, int]]:  # Assign deterministic spring-layout positions for the component-only plot graph.
-    if not component_node_ids:  # Return early when the graph is empty.
+def _assign_component_plot_positions(graph: nx.MultiGraph, plot_node_ids: Sequence[str], width: int, height: int) -> Dict[str, Tuple[int, int]]:  # Assign deterministic spring-layout positions for the component-only plot graph.
+    if not plot_node_ids:  # Return early when the graph is empty.
         return {}  # Return an empty position map for the empty graph.
     left_margin = 180  # Leave a generous horizontal margin for the higher-resolution labels.
     right_margin = width - 180  # Leave a generous horizontal margin for the higher-resolution labels.
@@ -799,12 +819,12 @@ def _assign_component_plot_positions(graph: nx.MultiGraph, component_node_ids: S
     bottom_margin = height - 160  # Leave extra room below the bottom row for value labels.
     if bottom_margin <= top_margin or right_margin <= left_margin:  # Guard against impossible image dimensions before computing the layout.
         raise ValueError("image_dimensions_too_small")  # Signal that the computed image dimensions are invalid.
-    if len(component_node_ids) == 1:  # Special-case one-node plots so they render centered without calling the spring layout.
-        only_node_id = component_node_ids[0]  # Read the single component node id.
-        return {only_node_id: ((left_margin + right_margin) // 2, (top_margin + bottom_margin) // 2)}  # Center the lone component inside the drawable area.
-    spring_positions = nx.spring_layout(graph, seed=7, k=1.35 / math.sqrt(len(component_node_ids)), iterations=300)  # Use a deterministic NetworkX layout for a clearer higher-resolution component graph.
-    x_values = [spring_positions[node_id][0] for node_id in component_node_ids]  # Collect the raw spring-layout x coordinates for normalization.
-    y_values = [spring_positions[node_id][1] for node_id in component_node_ids]  # Collect the raw spring-layout y coordinates for normalization.
+    if len(plot_node_ids) == 1:  # Special-case one-node plots so they render centered without calling the spring layout.
+        only_node_id = plot_node_ids[0]  # Read the single plotted node id.
+        return {only_node_id: ((left_margin + right_margin) // 2, (top_margin + bottom_margin) // 2)}  # Center the lone plotted node inside the drawable area.
+    spring_positions = nx.spring_layout(graph, seed=7, k=1.35 / math.sqrt(len(plot_node_ids)), iterations=300)  # Use a deterministic NetworkX layout for a clearer higher-resolution component graph.
+    x_values = [spring_positions[node_id][0] for node_id in plot_node_ids]  # Collect the raw spring-layout x coordinates for normalization.
+    y_values = [spring_positions[node_id][1] for node_id in plot_node_ids]  # Collect the raw spring-layout y coordinates for normalization.
     minimum_x = min(x_values)  # Read the smallest x coordinate for normalization.
     maximum_x = max(x_values)  # Read the largest x coordinate for normalization.
     minimum_y = min(y_values)  # Read the smallest y coordinate for normalization.
@@ -812,26 +832,29 @@ def _assign_component_plot_positions(graph: nx.MultiGraph, component_node_ids: S
     x_span = maximum_x - minimum_x  # Compute the total x-range produced by the spring layout.
     y_span = maximum_y - minimum_y  # Compute the total y-range produced by the spring layout.
     positions: Dict[str, Tuple[int, int]] = {}  # Collect the scaled integer image coordinates for each component node.
-    for node_id in component_node_ids:  # Walk every component node in deterministic order.
-        raw_x, raw_y = spring_positions[node_id]  # Read the normalized spring-layout coordinate pair for the current component.
+    for node_id in plot_node_ids:  # Walk every plotted node in deterministic order.
+        raw_x, raw_y = spring_positions[node_id]  # Read the normalized spring-layout coordinate pair for the current plotted node.
         normalized_x = 0.5 if x_span == 0 else (raw_x - minimum_x) / x_span  # Normalize the x coordinate into the [0, 1] interval.
         normalized_y = 0.5 if y_span == 0 else (raw_y - minimum_y) / y_span  # Normalize the y coordinate into the [0, 1] interval.
         center_x = int(round(left_margin + normalized_x * (right_margin - left_margin)))  # Scale the normalized x coordinate into the drawable image area.
         center_y = int(round(top_margin + normalized_y * (bottom_margin - top_margin)))  # Scale the normalized y coordinate into the drawable image area.
-        positions[node_id] = (center_x, center_y)  # Save the scaled image-space position for the current component node.
+        positions[node_id] = (center_x, center_y)  # Save the scaled image-space position for the current plotted node.
     return positions  # Return the completed position map for the component plot graph.
 
 
-def _draw_graph_edge(canvas: bytearray, width: int, height: int, first_point: Tuple[int, int], second_point: Tuple[int, int], port_index: int, edge_key: int) -> None:  # Draw one graph edge with anchors that touch the component boxes cleanly.
+def _draw_graph_edge(canvas: bytearray, width: int, height: int, first_point: Tuple[int, int], second_point: Tuple[int, int], first_kind: str, second_kind: str, port_index: int, edge_key: int) -> None:  # Draw one graph edge with anchors that touch the visual node shapes cleanly.
     offset = (port_index * 3) + (edge_key * 2)  # Compute a small deterministic offset so repeated edges do not fully overlap.
-    first_anchor = _component_edge_anchor(first_point, second_point, offset)  # Place the first endpoint on the first component box perimeter.
-    second_anchor = _component_edge_anchor(second_point, first_point, offset)  # Place the second endpoint on the second component box perimeter.
+    first_anchor = _plot_node_edge_anchor(first_point, second_point, first_kind, offset)  # Place the first endpoint on the first node perimeter.
+    second_anchor = _plot_node_edge_anchor(second_point, first_point, second_kind, offset)  # Place the second endpoint on the second node perimeter.
     _draw_line(canvas, width, height, first_anchor[0], first_anchor[1], second_anchor[0], second_anchor[1], _PNG_EDGE_COLOR)  # Render the edge as one anchored line segment.
 
 
-def _component_edge_anchor(origin: Tuple[int, int], target: Tuple[int, int], offset: int) -> Tuple[int, int]:  # Compute one edge anchor on the perimeter of a component box.
+def _plot_node_edge_anchor(origin: Tuple[int, int], target: Tuple[int, int], node_kind: str, offset: int) -> Tuple[int, int]:  # Compute one edge anchor on the perimeter of a plotted node shape.
     origin_x, origin_y = origin  # Unpack the node center coordinates.
     target_x, target_y = target  # Unpack the other endpoint coordinates used to determine the edge direction.
+    if node_kind == "ground":  # Attach ground edges to the top of the rendered ground symbol.
+        horizontal_offset = max(-(_GROUND_SYMBOL_HALF_WIDTH - 2), min(_GROUND_SYMBOL_HALF_WIDTH - 2, offset))  # Keep the offset inside the ground symbol width.
+        return origin_x + horizontal_offset, origin_y - _GROUND_SYMBOL_HEIGHT  # Return the ground-symbol anchor at the top of the vertical stem.
     vertical_offset = max(-(_COMPONENT_BOX_HALF_HEIGHT - 2), min(_COMPONENT_BOX_HALF_HEIGHT - 2, offset))  # Keep the offset inside the component height when anchoring to a box.
     horizontal_anchor = origin_x + _COMPONENT_BOX_HALF_WIDTH if target_x >= origin_x else origin_x - _COMPONENT_BOX_HALF_WIDTH  # Choose the outward-facing box side.
     return horizontal_anchor, origin_y + vertical_offset  # Return the component perimeter anchor.
@@ -840,6 +863,10 @@ def _component_edge_anchor(origin: Tuple[int, int], target: Tuple[int, int], off
 def _component_fill_color(prefix: str) -> Tuple[int, int, int]:  # Choose a stable component fill color from a device prefix.
     palette_index = ord(prefix[0]) % len(_PNG_COMPONENT_COLORS)  # Map the prefix character into the compact component color palette.
     return _PNG_COMPONENT_COLORS[palette_index]  # Return the selected component fill color tuple.
+
+
+def _is_ground_node(node_name: str) -> bool:  # Decide whether a node name refers to the global ground connection.
+    return node_name.upper() in {"0", "GND"}  # Treat LTspice numeric and named ground identically for plotting.
 
 
 def _normalize_bitmap_text(text: str, max_characters: int) -> str:  # Normalize arbitrary node labels into the limited bitmap-font character set.
@@ -936,6 +963,15 @@ def _draw_rectangle(canvas: bytearray, width: int, height: int, left: int, top: 
         for x_position in range(left, right + 1):  # Walk every pixel covered by the current scanline.
             is_border_pixel = x_position in {left, right} or y_position in {top, bottom}  # Detect whether the current pixel lies on the rectangle border.
             _set_pixel(canvas, width, height, x_position, y_position, border_color if is_border_pixel else fill_color)  # Paint either the border color or the fill color.
+
+
+def _draw_ground_symbol(canvas: bytearray, width: int, height: int, center_x: int, center_y: int, color: Tuple[int, int, int]) -> None:  # Draw a standard three-bar ground symbol centered around a vertical stem.
+    stem_top_y = center_y - _GROUND_SYMBOL_HEIGHT  # Place the top of the vertical stem above the ground bars.
+    stem_bottom_y = center_y - 4  # Stop the stem just above the top horizontal ground bar.
+    _draw_line(canvas, width, height, center_x, stem_top_y, center_x, stem_bottom_y, color)  # Draw the vertical ground stem first.
+    _draw_line(canvas, width, height, center_x - 18, center_y, center_x + 18, center_y, color)  # Draw the widest ground bar.
+    _draw_line(canvas, width, height, center_x - 12, center_y + 6, center_x + 12, center_y + 6, color)  # Draw the middle ground bar.
+    _draw_line(canvas, width, height, center_x - 6, center_y + 12, center_x + 6, center_y + 12, color)  # Draw the shortest ground bar.
 
 
 def _draw_circle(canvas: bytearray, width: int, height: int, center_x: int, center_y: int, radius: int, fill_color: Tuple[int, int, int], border_color: Tuple[int, int, int]) -> None:  # Draw a filled bordered circle for a net node.
