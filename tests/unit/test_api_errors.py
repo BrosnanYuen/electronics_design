@@ -13,6 +13,7 @@ from electronics_design import is_ltspice_netlist_structure_connected  # Import 
 from electronics_design import is_valid_ltspice_netlist_file  # Import the public whole-file validator.
 from electronics_design import is_valid_ltspice_netlist_footer  # Import the public footer validator.
 from electronics_design import is_valid_ltspice_netlist_format  # Import the public format validator.
+from electronics_design import ltspice_asc_plot_schemdraw  # Import the public schemdraw plotting helper.
 from electronics_design import ltspice_netlist_plot_networkx  # Import the public networkx plotting helper.
 from electronics_design import ltspice_netlist_structure_cmp  # Import the public structural comparison helper.
 
@@ -33,6 +34,8 @@ class TestApiErrors(unittest.TestCase):  # Group filesystem error-path tests tog
             self.assertEqual(result, (False, "File not found!"))  # Assert that the validator returns the required missing-file response.
         plot_result = ltspice_netlist_plot_networkx("does_not_exist.net", "graph.png")  # Execute the plotting helper against a missing source path.
         self.assertEqual(plot_result, (False, "File not found!"))  # Assert that the plotting helper returns the same missing-file response.
+        schemdraw_result = ltspice_asc_plot_schemdraw("does_not_exist.asc", "graph.png")  # Execute the schemdraw plotting helper against a missing source path.
+        self.assertEqual(schemdraw_result, (False, "File not found!"))  # Assert that the schemdraw plotting helper returns the same missing-file response.
         compare_result = ltspice_netlist_structure_cmp("does_not_exist.net", "does_not_exist_too.net")  # Execute the comparison helper against missing source paths.
         self.assertFalse(compare_result)  # Assert that the comparison helper returns False when validation cannot proceed.
 
@@ -53,5 +56,7 @@ class TestApiErrors(unittest.TestCase):  # Group filesystem error-path tests tog
             self.assertEqual(result, (False, "No permission to read file!"))  # Assert that the validator returns the required permission response.
         plot_result = ltspice_netlist_plot_networkx("permission_denied.net", "graph.png")  # Execute the plotting helper against the mocked unreadable path.
         self.assertEqual(plot_result, (False, "No permission to read file!"))  # Assert that the plotting helper returns the same permission response.
+        schemdraw_result = ltspice_asc_plot_schemdraw("permission_denied.asc", "graph.png")  # Execute the schemdraw plotting helper against the mocked unreadable path.
+        self.assertEqual(schemdraw_result, (False, "No permission to read file!"))  # Assert that the schemdraw plotting helper returns the same permission response.
         compare_result = ltspice_netlist_structure_cmp("permission_denied.net", "permission_denied_2.net")  # Execute the comparison helper against mocked unreadable paths.
         self.assertFalse(compare_result)  # Assert that the comparison helper returns False when validation cannot proceed.

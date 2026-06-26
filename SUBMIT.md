@@ -17,7 +17,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_all_tests.py
 Confirm the required runtime dependency is installed:
 
 ```bash
-.venv/bin/python -m pip install "networkx>=3.6.1"
+.venv/bin/python -m pip install "networkx>=3.6.1" "schemdraw>=0.23" "matplotlib>=3.11.0"
 ```
 
 ## 2. Build The Distribution
@@ -62,7 +62,7 @@ Upload to TestPyPI first if you want a dry run:
 
 - Update the version in `pyproject.toml`
 - Run the full test suite
-- Confirm the `networkx` dependency is declared and installed
+- Confirm the `networkx`, `schemdraw`, and `matplotlib` dependencies are declared and installed
 - Build the package
 - Run `twine check`
 - Upload the package

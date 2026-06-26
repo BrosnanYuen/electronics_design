@@ -2,12 +2,13 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, and for comparing and plotting validated netlists.
 
-It currently exposes ten public functions:
+It currently exposes eleven public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
 - `is_valid_ltspice_asc_footer(filepath)`
 - `is_valid_ltspice_asc_file(filepath)`
+- `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -92,6 +93,25 @@ Possible returns:
 - `False, "File not found!"`
 - `False, "No permission to read file!"`
 - `False, "<propagated validator message>"`
+- `True, ""`
+
+### `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
+
+Checks that:
+
+- The source LTspice schematic passes `is_valid_ltspice_asc_file(filepath)`
+- The function builds a `schemdraw` rendering from the schematic symbols, flags, and wire geometry
+- The image is written to `schemdraw_imagepath_out`
+- Supported output extensions are `.png`, `.svg`, `.jpg`, and `.jpeg`
+- `width` optionally sets the output width in pixels and defaults to `1920`
+- `height` optionally sets the output height in pixels and defaults to `1080`
+
+Possible returns:
+
+- `False, "File not found!"`
+- `False, "No permission to read file!"`
+- `False, "Unable to plot schematic drawing!"`
+- `False, "Unable to write image file!"`
 - `True, ""`
 
 ### `is_valid_ltspice_netlist_format(filepath)`
@@ -213,10 +233,10 @@ Run the sequential test runner:
 PYTHONPATH=src .venv/bin/python scripts/run_all_tests.py
 ```
 
-Install the runtime dependency used by the plotting and comparison APIs:
+Install the runtime dependencies used by the plotting and comparison APIs:
 
 ```bash
-.venv/bin/python -m pip install "networkx>=3.6.1"
+.venv/bin/python -m pip install "networkx>=3.6.1" "schemdraw>=0.23" "matplotlib>=3.11.0"
 ```
 
 ## CLI Usage
@@ -236,6 +256,7 @@ from electronics_design import is_valid_ltspice_asc_header
 from electronics_design import is_valid_ltspice_asc_spacing
 from electronics_design import is_valid_ltspice_asc_footer
 from electronics_design import is_valid_ltspice_asc_file
+from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
@@ -247,6 +268,7 @@ asc_header_ok, asc_header_message = is_valid_ltspice_asc_header("example.asc")
 asc_spacing_ok, asc_spacing_message = is_valid_ltspice_asc_spacing("example.asc")
 asc_footer_ok, asc_footer_message = is_valid_ltspice_asc_footer("example.asc")
 asc_file_ok, asc_file_message = is_valid_ltspice_asc_file("example.asc")
+schemdraw_ok, schemdraw_message = ltspice_asc_plot_schemdraw("example.asc", "example.svg")
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
@@ -265,6 +287,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/asc_spacing/` contains valid and invalid ASC spacing fixtures
 - `test_files/asc_footer/` contains valid and invalid ASC footer fixtures
 - `test_files/asc_validation/` contains valid and invalid whole-file ASC validation fixtures
+- `tests/unit/test_asc_plot_schemdraw.py` covers schemdraw-based ASC plotting outputs
 - `test_files/netlist_format/` contains 10 valid and 10 invalid format fixtures
 - `test_files/netlist_footer/` contains 10 valid and 10 invalid footer fixtures
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
