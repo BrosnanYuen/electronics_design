@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 import os
 import re
+import tempfile
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -19,12 +21,14 @@ from . import ltspice_asc as _asc
 from . import ltspice_net as _net
 
 ConversionResult = Tuple[bool, str, int]
+StructureCompareResult = Tuple[bool, str, int]
 Point = Tuple[int, int]
 
 _LINE_NUMBER_PATTERN = re.compile(r"Line (?P<line>\d+)")
 _DIRECTIVE_SPLIT_PATTERN = re.compile(r"(?:\\n|\r\n|\r|\n)+")
 _DEFAULT_ANALYSIS_DIRECTIVE = ".op"
 _OK_RESULT: ConversionResult = (True, "OK", 0)
+_DEFAULT_ASC_COMPARE_CONVERT_SETTINGS: Mapping[str, object] = {}
 
 _STANDARD_LIBRARY_RULES = {
     "D": ((".model D D",), "standard.dio"),
@@ -140,6 +144,27 @@ def ltspice_asc_to_netlist(
     return _OK_RESULT
 
 
+def ltspice_asc_structure_cmp(filepath1: str, filepath2: str) -> StructureCompareResult:
+    first_validation_result = _asc.is_valid_ltspice_asc_file(filepath1)
+    if not first_validation_result[0]:
+        return False, _message_without_line_number(first_validation_result[1]), _line_number_from_message(first_validation_result[1], 0)
+    second_validation_result = _asc.is_valid_ltspice_asc_file(filepath2)
+    if not second_validation_result[0]:
+        return False, _message_without_line_number(second_validation_result[1]), _line_number_from_message(second_validation_result[1], 0)
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        first_netlist_path = Path(temporary_directory) / "first.net"
+        second_netlist_path = Path(temporary_directory) / "second.net"
+        first_convert_result = ltspice_asc_to_netlist(filepath1, str(first_netlist_path), _DEFAULT_ASC_COMPARE_CONVERT_SETTINGS)
+        if not first_convert_result[0]:
+            return False, first_convert_result[1], first_convert_result[2]
+        second_convert_result = ltspice_asc_to_netlist(filepath2, str(second_netlist_path), _DEFAULT_ASC_COMPARE_CONVERT_SETTINGS)
+        if not second_convert_result[0]:
+            return False, second_convert_result[1], second_convert_result[2]
+        if _net.ltspice_netlist_structure_cmp(str(first_netlist_path), str(second_netlist_path)):
+            return True, "", 0
+    return _diagnose_asc_structure_difference(filepath1, filepath2)
+
+
 def _validate_asc_for_conversion(filepath: str) -> Tuple[bool, int]:
     header_result = _asc.is_valid_ltspice_asc_header(filepath)
     if not header_result[0]:
@@ -148,6 +173,63 @@ def _validate_asc_for_conversion(filepath: str) -> Tuple[bool, int]:
     if not spacing_result[0]:
         return False, _line_number_from_message(spacing_result[1], 0)
     return True, 0
+
+
+def _diagnose_asc_structure_difference(filepath1: str, filepath2: str) -> StructureCompareResult:
+    first_signature_result = _build_asc_component_signature_records(filepath1)
+    if not first_signature_result[0]:
+        return False, first_signature_result[1], first_signature_result[2]
+    second_signature_result = _build_asc_component_signature_records(filepath2)
+    if not second_signature_result[0]:
+        return False, second_signature_result[1], second_signature_result[2]
+    first_records = first_signature_result[3]
+    second_records = second_signature_result[3]
+    first_counts = Counter(signature for signature, _line_number in first_records)
+    second_counts = Counter(signature for signature, _line_number in second_records)
+    for signature, line_number in second_records:
+        if second_counts[signature] > first_counts[signature]:
+            return False, "ASC structures are different!", line_number
+    for signature, line_number in first_records:
+        if first_counts[signature] > second_counts[signature]:
+            return False, "ASC structures are different!", line_number
+    return False, "ASC structures are different!", 0
+
+
+def _build_asc_component_signature_records(
+    filepath: str,
+) -> Tuple[bool, str, int, Tuple[Tuple[Tuple[str, Tuple[str, ...]], int], ...]]:
+    read_result = _asc._read_text_file_lines(filepath)
+    if not read_result[0]:
+        return False, read_result[2], 0, ()
+    parse_result = _parse_asc_for_conversion(read_result[1])
+    if not parse_result[0]:
+        return False, "ASC_PARSE_ERROR", parse_result[2], ()
+    symbol_root = _resolve_symbol_root(_DEFAULT_ASC_COMPARE_CONVERT_SETTINGS)
+    symbol_definitions = _build_symbol_lookup(symbol_root)
+    connectivity_result = _resolve_symbol_nets(parse_result[1], symbol_definitions)
+    if not connectivity_result[0]:
+        return False, connectivity_result[1], connectivity_result[2], ()
+    point_to_net = connectivity_result[3]
+    signature_records: List[Tuple[Tuple[str, Tuple[str, ...]], int]] = []
+    for symbol_instance in parse_result[1].symbols:
+        symbol_definition = _resolve_symbol_definition(symbol_instance.symbol_name, symbol_definitions)
+        if symbol_definition is None:
+            return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, ()
+        component_line_result = _build_component_line(symbol_instance, symbol_definition, point_to_net)
+        if not component_line_result[0]:
+            return False, component_line_result[1], symbol_instance.line_number, ()
+        tokens = component_line_result[3].split()
+        node_result = _net._extract_nodes(tokens)
+        if not node_result[0]:
+            return False, "ASC_COMPARE_DIAGNOSTIC_ERROR", symbol_instance.line_number, ()
+        parsed_element = _net.ParsedElement(
+            line_number=symbol_instance.line_number,
+            prefix=tokens[0][0].upper(),
+            tokens=tokens,
+            nodes=node_result[1],
+        )
+        signature_records.append((_net._component_signature(parsed_element), symbol_instance.line_number))
+    return True, "", 0, tuple(signature_records)
 
 
 def _parse_asc_for_conversion(lines: Sequence[str]) -> Tuple[bool, ParsedAsc, int]:
@@ -858,6 +940,10 @@ def _line_number_from_message(message: str, default_line: int) -> int:
     if line_match is None:
         return default_line
     return int(line_match.group("line"))
+
+
+def _message_without_line_number(message: str) -> str:
+    return _LINE_NUMBER_PATTERN.sub("", message).strip()
 
 
 def _coerce_path_success(filepath: str) -> bool:

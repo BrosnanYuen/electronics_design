@@ -15,6 +15,7 @@ is_valid_ltspice_asc_footer = _asc.is_valid_ltspice_asc_footer  # Re-export the 
 is_valid_ltspice_asc_file = _asc.is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
 ltspice_asc_plot_schemdraw = _asc_plot_schemdraw.ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
 ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
+ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
 
 is_valid_ltspice_netlist_format = _net.is_valid_ltspice_netlist_format  # Re-export the netlist format validator.
 is_valid_ltspice_netlist_footer = _net.is_valid_ltspice_netlist_footer  # Re-export the netlist footer validator.
@@ -38,6 +39,7 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "is_valid_ltspice_asc_file",  # Export the ASC whole-file validator.
     "ltspice_asc_plot_schemdraw",  # Export the schemdraw schematic plotting helper.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper.
+    "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper.
     "is_valid_ltspice_netlist_format",  # Export the netlist format validator.
     "is_valid_ltspice_netlist_footer",  # Export the netlist footer validator.
     "is_ltspice_netlist_structure_connected",  # Export the connectivity validator.

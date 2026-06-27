@@ -2,7 +2,7 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes thirteen public functions:
+It currently exposes fourteen public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -10,6 +10,7 @@ It currently exposes thirteen public functions:
 - `is_valid_ltspice_asc_file(filepath)`
 - `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 - `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
+- `ltspice_asc_structure_cmp(filepath1, filepath2)`
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -43,6 +44,18 @@ or:
 
 ```python
 (False, "<error code>", <line number>)
+```
+
+`ltspice_asc_structure_cmp(filepath1, filepath2)` returns a structure-comparison tuple:
+
+```python
+(True, "", 0)
+```
+
+or:
+
+```python
+(False, "<error message>", <line number>)
 ```
 
 ## What The Library Checks
@@ -163,6 +176,24 @@ Possible returns:
 - `False, "WRITE_ERROR", 0`
 - `False, "INVALID_GENERATED_NETLIST", <line>`
 - `True, "OK", 0`
+
+### `ltspice_asc_structure_cmp(filepath1, filepath2)`
+
+Checks that:
+
+- Both input ASC files pass `is_valid_ltspice_asc_file(filepath)`
+- Both ASC files can be converted to temporary LTspice netlists through `ltspice_asc_to_netlist(...)`
+- ASC comments are ignored because comparison is performed on the converted netlist structure
+- The converted netlists compare equal through `ltspice_netlist_structure_cmp(filepath1, filepath2)`
+
+Possible returns:
+
+- `False, "File not found!", 0`
+- `False, "No permission to read file!", 0`
+- `False, "<validator message>", <line>`
+- `False, "<conversion error code>", <line>`
+- `False, "ASC structures are different!", <line>`
+- `True, "", 0`
 
 ### `is_valid_ltspice_netlist_format(filepath)`
 
@@ -329,6 +360,7 @@ from electronics_design import is_valid_ltspice_asc_footer
 from electronics_design import is_valid_ltspice_asc_file
 from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import ltspice_asc_to_netlist
+from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
@@ -350,6 +382,10 @@ convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
     "example.asc",
     "example.net",
     convert_settings,
+)
+same_asc_structure, asc_compare_message, asc_compare_line = ltspice_asc_structure_cmp(
+    "example_a.asc",
+    "example_b.asc",
 )
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
