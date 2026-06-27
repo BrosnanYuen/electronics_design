@@ -5,6 +5,7 @@ from __future__ import annotations  # Keep annotations lazy and consistent with 
 import os  # Re-export the shared os module so existing test patches still apply.
 
 from . import ltspice_asc as _asc  # Import the ASC-specific implementation module.
+from . import ltspice_asc_plot_schemdraw as _asc_plot_schemdraw  # Import the dedicated ASC plotting module.
 from . import ltspice_asc_to_netlist as _asc_to_netlist  # Import the ASC-to-netlist conversion module.
 from . import ltspice_net as _net  # Import the netlist-specific implementation module.
 
@@ -12,7 +13,7 @@ is_valid_ltspice_asc_header = _asc.is_valid_ltspice_asc_header  # Re-export the 
 is_valid_ltspice_asc_spacing = _asc.is_valid_ltspice_asc_spacing  # Re-export the ASC spacing validator.
 is_valid_ltspice_asc_footer = _asc.is_valid_ltspice_asc_footer  # Re-export the ASC footer validator.
 is_valid_ltspice_asc_file = _asc.is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
-ltspice_asc_plot_schemdraw = _asc.ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
+ltspice_asc_plot_schemdraw = _asc_plot_schemdraw.ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
 ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 
 is_valid_ltspice_netlist_format = _net.is_valid_ltspice_netlist_format  # Re-export the netlist format validator.
