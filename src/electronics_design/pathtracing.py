@@ -202,6 +202,8 @@ class _PathTracingGUI:
 
         ttk.Separator(ctrl, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=4, fill=tk.Y)
 
+        ttk.Button(ctrl, text="AUTO ROUTE", command=self._auto_route).pack(side=tk.LEFT, padx=2)
+
         ttk.Button(ctrl, text="INTERSECTIONS", command=self._check_intersections).pack(side=tk.LEFT, padx=2)
 
         self.mode_label = ttk.Label(ctrl, text="Mode: WIRE", foreground="gray")
@@ -426,6 +428,38 @@ class _PathTracingGUI:
         self.obstacle_items.clear()
         self.flag_items.clear()
         self.current_mode.set("WIRE")
+
+    def _auto_route(self) -> None:
+        if len(self.flags) != 2:
+            messagebox.showinfo("AUTO ROUTE", "Exactly two FLAG points are required for auto routing.")
+            return
+        if not self.obstacles:
+            messagebox.showinfo("AUTO ROUTE", "At least one obstacle is required for auto routing.")
+            return
+        from .autoroute import auto_route_wires
+
+        spacing = self.grid_spacing.get()
+        (gx1, gy1), (gx2, gy2) = self.flags
+        start_x = gx1 * spacing
+        start_y = gy1 * spacing
+        end_x = gx2 * spacing
+        end_y = gy2 * spacing
+        obstacles_array = np.array(
+            [[ox1 * spacing, oy1 * spacing, ox2 * spacing, oy2 * spacing] for ox1, oy1, ox2, oy2 in self.obstacles],
+            dtype=int,
+        )
+        try:
+            new_wires = auto_route_wires(start_x, start_y, end_x, end_y, obstacles_array, spacing, spacing)
+        except ValueError as error:
+            messagebox.showinfo("AUTO ROUTE", f"No valid route found: {error}")
+            return
+        self._cancel_drawing()
+        for px1, py1, px2, py2 in new_wires:
+            ngx1, ngy1 = px1 // spacing, py1 // spacing
+            ngx2, ngy2 = px2 // spacing, py2 // spacing
+            self.wires.append((ngx1, ngy1, ngx2, ngy2))
+            item = self.canvas.create_line(px1, py1, px2, py2, fill="black", width=2, tags=("line",))
+            self.wire_items.append(item)
 
     def _check_intersections(self) -> None:
         if not self.wires:
