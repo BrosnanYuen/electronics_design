@@ -2,7 +2,7 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes fifteen public functions:
+It currently exposes sixteen public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -12,6 +12,7 @@ It currently exposes fifteen public functions:
 - `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
 - `ltspice_asc_structure_cmp(filepath1, filepath2)`
 - `are_wires_connected(wires)`
+- `are_wires_horizontal_or_vertical(wires)`
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -210,6 +211,18 @@ Returns:
 - `True` when all wires belong to a single connected component
 - `False` when at least one wire is disconnected from the rest
 
+### `are_wires_horizontal_or_vertical(wires)`
+
+Checks that:
+
+- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
+- Each wire is checked for axis alignment: horizontal means `Y1 == Y2`, vertical means `X1 == X2`
+
+Returns:
+
+- `True` when every wire in the array is either horizontal or vertical
+- `False` when at least one wire moves diagonally (both `X1 != X2` and `Y1 != Y2`)
+
 ### `is_valid_ltspice_netlist_format(filepath)`
 
 Checks that:
@@ -378,6 +391,7 @@ from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_asc_structure_cmp
 from electronics_design.pathtracing import are_wires_connected
+from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
@@ -406,6 +420,7 @@ same_asc_structure, asc_compare_message, asc_compare_line = ltspice_asc_structur
 )
 wires_array = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
 wires_connected = are_wires_connected(wires_array)
+all_axis_aligned = are_wires_horizontal_or_vertical(wires_array)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
@@ -429,6 +444,8 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `tests/unit/test_asc_plot_schemdraw.py` covers schemdraw-based ASC plotting outputs
 - `tests/unit/test_wires_connected.py` covers the wire connectivity API
 - `test_files/wires_connected/` contains 15 valid and 15 invalid wire connectivity fixtures
+- `tests/unit/test_wires_horizontal_vertical.py` covers the wire axis-alignment API
+- `test_files/wires_horizontal_vertical/` contains 10 valid and 10 invalid axis-alignment fixtures
 - `test_files/netlist_format/` contains 10 valid and 10 invalid format fixtures
 - `test_files/netlist_footer/` contains 10 valid and 10 invalid footer fixtures
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
