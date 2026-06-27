@@ -2,7 +2,7 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes fourteen public functions:
+It currently exposes fifteen public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -11,6 +11,7 @@ It currently exposes fourteen public functions:
 - `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 - `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
 - `ltspice_asc_structure_cmp(filepath1, filepath2)`
+- `are_wires_connected(wires)`
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -32,7 +33,7 @@ or:
 (False, "<error message>")
 ```
 
-`ltspice_netlist_footer_cmp(filepath1, filepath2)` and `ltspice_netlist_structure_cmp(filepath1, filepath2)` return `True` or `False`.
+`ltspice_netlist_footer_cmp(filepath1, filepath2)`, `ltspice_netlist_structure_cmp(filepath1, filepath2)`, and `are_wires_connected(wires)` return `True` or `False`.
 
 `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` returns a conversion tuple:
 
@@ -195,6 +196,20 @@ Possible returns:
 - `False, "ASC structures are different!", <line>`
 - `True, "", 0`
 
+### `are_wires_connected(wires)`
+
+Checks that:
+
+- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
+- Each wire is an axis-aligned line segment
+- Two wires are connected if they share an endpoint, or if they are collinear and their ranges overlap
+- Orthogonal wires that cross at a non-endpoint are not counted as connected
+
+Returns:
+
+- `True` when all wires belong to a single connected component
+- `False` when at least one wire is disconnected from the rest
+
 ### `is_valid_ltspice_netlist_format(filepath)`
 
 Checks that:
@@ -354,6 +369,7 @@ This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepat
 ## Example Usage
 
 ```python
+import numpy as np
 from electronics_design import is_valid_ltspice_asc_header
 from electronics_design import is_valid_ltspice_asc_spacing
 from electronics_design import is_valid_ltspice_asc_footer
@@ -361,6 +377,7 @@ from electronics_design import is_valid_ltspice_asc_file
 from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_asc_structure_cmp
+from electronics_design.pathtracing import are_wires_connected
 from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
@@ -387,6 +404,8 @@ same_asc_structure, asc_compare_message, asc_compare_line = ltspice_asc_structur
     "example_a.asc",
     "example_b.asc",
 )
+wires_array = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
+wires_connected = are_wires_connected(wires_array)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
@@ -408,6 +427,8 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/asc_footer/` contains valid and invalid ASC footer fixtures
 - `test_files/asc_validation/` contains valid and invalid whole-file ASC validation fixtures
 - `tests/unit/test_asc_plot_schemdraw.py` covers schemdraw-based ASC plotting outputs
+- `tests/unit/test_wires_connected.py` covers the wire connectivity API
+- `test_files/wires_connected/` contains 15 valid and 15 invalid wire connectivity fixtures
 - `test_files/netlist_format/` contains 10 valid and 10 invalid format fixtures
 - `test_files/netlist_footer/` contains 10 valid and 10 invalid footer fixtures
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
@@ -425,7 +446,12 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 src/electronics_design/
     __init__.py
     ltspice.py
+    ltspice_asc.py
+    ltspice_asc_plot_schemdraw.py
     ltspice_asc_to_netlist.py
+    ltspice_net.py
+    ltspice_netlist_plot_networkx.py
+    pathtracing.py
 tests/
 test_files/
 valid_convert/
