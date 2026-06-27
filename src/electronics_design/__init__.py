@@ -1,5 +1,6 @@
 """Public package exports for the electronics_design library."""  # Describe the package entry point.
 
+from .autoroute import auto_route_wires  # Re-export the orthogonal autorouting helper.
 from .ltspice import is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
 from .ltspice import is_valid_ltspice_asc_footer  # Re-export the ASC footer validator.
 from .ltspice import is_valid_ltspice_asc_header  # Re-export the ASC header validator.
@@ -17,6 +18,7 @@ from .ltspice import ltspice_netlist_structure_cmp  # Re-export the structural c
 from .ltspice import gui_debug  # Re-export the path tracing GUI helper.
 
 __all__ = [  # Define the supported public API surface.
+    "auto_route_wires",  # Export the orthogonal autorouting helper name.
     "is_valid_ltspice_asc_header",  # Export the ASC header validator name.
     "is_valid_ltspice_asc_spacing",  # Export the ASC spacing validator name.
     "is_valid_ltspice_asc_footer",  # Export the ASC footer validator name.
