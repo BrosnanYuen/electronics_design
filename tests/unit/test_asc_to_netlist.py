@@ -8,6 +8,7 @@ import unittest  # Use the standard library test framework.
 
 from electronics_design import is_valid_ltspice_netlist_file  # Import the public generated-netlist validator.
 from electronics_design import ltspice_asc_to_netlist  # Import the public ASC-to-netlist conversion helper.
+from electronics_design import ltspice_netlist_footer_cmp  # Import the footer comparison helper used for footer ground-truth checks.
 from electronics_design import ltspice_netlist_structure_cmp  # Import the structural comparison helper used for ground-truth checks.
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]  # Resolve the project root from the current test file.
@@ -33,5 +34,7 @@ class TestAscToNetlist(unittest.TestCase):  # Group ASC-to-netlist conversion te
                     self.assertEqual(result, (True, "OK", 0), msg=f"{asc_fixture_path.name} should convert successfully.")  # Assert that conversion succeeds with the stable success tuple.
                     validation_result = is_valid_ltspice_netlist_file(str(generated_netlist_path))  # Validate the generated netlist through the public whole-file validator.
                     self.assertEqual(validation_result, (True, ""), msg=f"{asc_fixture_path.name} should generate a validator-approved netlist.")  # Assert that the generated netlist passes the public validator.
+                    footer_comparison_result = ltspice_netlist_footer_cmp(str(generated_netlist_path), str(expected_netlist_path))  # Compare the generated netlist footer against the repository ground truth.
+                    self.assertTrue(footer_comparison_result, msg=f"{asc_fixture_path.name} should match the paired ground-truth netlist footer.")  # Assert that the generated netlist footer matches the expected footer.
                     comparison_result = ltspice_netlist_structure_cmp(str(generated_netlist_path), str(expected_netlist_path))  # Compare the generated netlist against the repository ground truth structurally.
                     self.assertTrue(comparison_result, msg=f"{asc_fixture_path.name} should match the paired ground-truth netlist structurally.")  # Assert that the generated netlist matches the expected structure.

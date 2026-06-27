@@ -2,7 +2,7 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes twelve public functions:
+It currently exposes thirteen public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -15,6 +15,7 @@ It currently exposes twelve public functions:
 - `is_valid_ltspice_netlist_footer(filepath)`
 - `is_ltspice_netlist_structure_connected(filepath)`
 - `is_valid_ltspice_netlist_file(filepath)`
+- `ltspice_netlist_footer_cmp(filepath1, filepath2)`
 - `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)`
 - `ltspice_netlist_structure_cmp(filepath1, filepath2)`
 
@@ -30,7 +31,7 @@ or:
 (False, "<error message>")
 ```
 
-`ltspice_netlist_structure_cmp(filepath1, filepath2)` returns `True` or `False`.
+`ltspice_netlist_footer_cmp(filepath1, filepath2)` and `ltspice_netlist_structure_cmp(filepath1, filepath2)` return `True` or `False`.
 
 `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` returns a conversion tuple:
 
@@ -227,6 +228,19 @@ Possible returns:
 - `False, "<propagated validator message>"`
 - `True, ""`
 
+### `ltspice_netlist_footer_cmp(filepath1, filepath2)`
+
+Checks that:
+
+- Both input files pass `is_valid_ltspice_netlist_file(filepath)`
+- The normalized footer regions of both netlists match
+- Directive order and content in the footer remain equivalent after normalization
+
+Possible returns:
+
+- `True`
+- `False`
+
 ### `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)`
 
 Checks that:
@@ -319,6 +333,7 @@ from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
 from electronics_design import is_valid_ltspice_netlist_file
+from electronics_design import ltspice_netlist_footer_cmp
 from electronics_design import ltspice_netlist_plot_networkx
 from electronics_design import ltspice_netlist_structure_cmp
 
@@ -340,6 +355,7 @@ format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
 file_ok, file_message = is_valid_ltspice_netlist_file("example.net")
+same_footer = ltspice_netlist_footer_cmp("example_a.net", "example_b.net")
 plot_ok, plot_message = ltspice_netlist_plot_networkx("example.net", "example.png")
 plot_svg_ok, plot_svg_message = ltspice_netlist_plot_networkx("example.net", "example.svg", 1280, 720)
 plot_jpg_ok, plot_jpg_message = ltspice_netlist_plot_networkx("example.net", "example.jpg", 1280, 720)
