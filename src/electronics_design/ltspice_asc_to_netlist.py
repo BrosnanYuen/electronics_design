@@ -27,10 +27,10 @@ _DEFAULT_ANALYSIS_DIRECTIVE = ".op"
 _OK_RESULT: ConversionResult = (True, "OK", 0)
 
 _STANDARD_LIBRARY_RULES = {
-    "D": [(".model D D", "standard.dio")],
-    "Q": [(".model NPN NPN", "standard.bjt"), (".model PNP PNP", None)],
-    "J": [(".model NJF NJF", "standard.jft"), (".model PJF PJF", None)],
-    "M": [(".model NMOS NMOS", "standard.mos"), (".model PMOS PMOS", None)],
+    "D": ((".model D D",), "standard.dio"),
+    "Q": ((".model NPN NPN", ".model PNP PNP"), "standard.bjt"),
+    "J": ((".model NJF NJF", ".model PJF PJF"), "standard.jft"),
+    "M": ((".model NMOS NMOS", ".model PMOS PMOS"), "standard.mos"),
 }
 
 
@@ -353,7 +353,7 @@ def _build_netlist_lines(
     auxiliary_device_lines: List[str] = []
     directive_lines: List[str] = []
     include_lines: List[str] = []
-    model_lines: List[str] = []
+    standard_footer_lines: List[str] = []
     analysis_found = False
     used_standard_prefixes: Set[str] = set()
     used_symbol_libraries: Dict[str, None] = {}
@@ -366,7 +366,7 @@ def _build_netlist_lines(
             return False, line_result[1], symbol_instance.line_number, ()
         component_lines.append(line_result[3])
         normalized_prefix = line_result[4]
-        if normalized_prefix in _STANDARD_LIBRARY_RULES:
+        if normalized_prefix in _STANDARD_LIBRARY_RULES and normalized_prefix not in used_standard_prefixes:
             used_standard_prefixes.add(normalized_prefix)
         library_reference = _infer_symbol_library_reference(symbol_instance, symbol_definition)
         if library_reference is not None:
@@ -384,19 +384,21 @@ def _build_netlist_lines(
     if not analysis_found:
         directive_lines.append(_DEFAULT_ANALYSIS_DIRECTIVE)
     cmp_root = _resolve_cmp_root(convert_settings)
-    for prefix in sorted(used_standard_prefixes):
-        for model_line, library_name in _STANDARD_LIBRARY_RULES[prefix]:
-            model_lines.append(model_line)
-            if library_name is not None:
-                include_lines.append(_build_library_line(cmp_root, library_name))
-    for library_reference in used_symbol_libraries:
-        include_lines.append(f".lib {library_reference}")
+    for prefix in _STANDARD_LIBRARY_RULES:
+        if prefix not in used_standard_prefixes:
+            continue
+        model_lines_for_prefix, library_name = _STANDARD_LIBRARY_RULES[prefix]
+        for model_line in model_lines_for_prefix:
+            standard_footer_lines.append(model_line)
+        if library_name is not None:
+            standard_footer_lines.append(_build_library_line(cmp_root, library_name))
+    symbol_include_lines = tuple(f".lib {library_reference}" for library_reference in used_symbol_libraries)
     final_lines = _dedupe_lines(
         tuple(component_lines)
         + tuple(auxiliary_device_lines)
-        + tuple(model_lines)
+        + tuple(standard_footer_lines)
         + tuple(directive_lines)
-        + tuple(include_lines)
+        + symbol_include_lines
         + (".backanno", ".end")
     )
     return True, "OK", 0, final_lines
@@ -816,10 +818,11 @@ def _library_basename(value: str) -> str:
 
 
 def _build_library_line(root_path: str, filename: str) -> str:
-    if root_path.endswith("\\") or root_path.endswith("/"):
-        return f".lib {root_path}{filename}"
-    separator = "\\" if "\\" in root_path else "/"
-    return f".lib {root_path}{separator}{filename}"
+    normalized_root_path = root_path.rstrip("\\/")
+    if normalized_root_path == "":
+        return f".lib {filename}"
+    separator = "\\" if "\\" in normalized_root_path else "/"
+    return f".lib {normalized_root_path}{separator}{filename}"
 
 
 def _dedupe_lines(lines: Iterable[str]) -> Tuple[str, ...]:

@@ -298,19 +298,17 @@ def is_valid_ltspice_netlist_file(filepath: str) -> ValidationResult:  # Validat
 
 
 def ltspice_netlist_footer_cmp(filepath1: str, filepath2: str) -> bool:  # Compare two valid LTspice netlist footers while ignoring comments and component sections.
-    first_validation_result = is_valid_ltspice_netlist_file(filepath1)  # Validate the first netlist through the required whole-file public API.
-    if not first_validation_result[0]:  # Stop when the first input netlist is invalid.
-        return False  # Return False because footer comparison only applies to valid netlists.
-    second_validation_result = is_valid_ltspice_netlist_file(filepath2)  # Validate the second netlist through the required whole-file public API.
-    if not second_validation_result[0]:  # Stop when the second input netlist is invalid.
-        return False  # Return False because footer comparison only applies to valid netlists.
     first_footer_result = _load_normalized_footer_lines(filepath1)  # Load the normalized comparable footer sequence for the first netlist.
     if not first_footer_result[0]:  # Stop when the first footer cannot be read or derived reliably.
         return False  # Return False because the footer comparison cannot proceed safely.
     second_footer_result = _load_normalized_footer_lines(filepath2)  # Load the normalized comparable footer sequence for the second netlist.
     if not second_footer_result[0]:  # Stop when the second footer cannot be read or derived reliably.
         return False  # Return False because the footer comparison cannot proceed safely.
-    return first_footer_result[1] == second_footer_result[1]  # Return True only when the normalized footer sequences are identical.
+    first_footer_lines = first_footer_result[1]  # Extract the comparable footer sequence for the first file.
+    second_footer_lines = second_footer_result[1]  # Extract the comparable footer sequence for the second file.
+    if first_footer_lines == second_footer_lines:  # Fast-path exact equality for the common case.
+        return True  # Return True immediately when the normalized footer sequences already match.
+    return _normalize_optional_default_op(first_footer_lines) == _normalize_optional_default_op(second_footer_lines)  # Treat an injected fallback .op as optional when it is the only analysis directive.
 
 
 def ltspice_netlist_structure_cmp(filepath1: str, filepath2: str) -> bool:  # Compare two validated LTspice netlists for structural equivalence while ignoring footer directives.
@@ -489,6 +487,24 @@ def _extract_normalized_footer_lines(lines: Sequence[str]) -> Tuple[bool, Tuple[
         if code_part != "":  # Ignore lines that become empty after semicolon-comment stripping.
             normalized_footer_lines.append(code_part)  # Record the normalized footer line in source order.
     return True, tuple(normalized_footer_lines)  # Return the final normalized footer sequence for comparison.
+
+
+def _normalize_optional_default_op(footer_lines: Sequence[str]) -> Tuple[str, ...]:  # Remove an auto-inserted fallback .op when it is the only analysis directive in the footer.
+    analysis_line_indexes: List[int] = []
+    for index, footer_line in enumerate(footer_lines):
+        directive_result = _parse_directive_name(footer_line)
+        if directive_result[0] and directive_result[1] in _ANALYSIS_DIRECTIVES:
+            analysis_line_indexes.append(index)
+    if len(analysis_line_indexes) != 1:
+        return tuple(footer_lines)
+    analysis_line = footer_lines[analysis_line_indexes[0]].strip().lower()
+    if analysis_line != ".op":
+        return tuple(footer_lines)
+    return tuple(
+        footer_line
+        for index, footer_line in enumerate(footer_lines)
+        if index != analysis_line_indexes[0]
+    )
 
 
 def _validate_connectivity(lines: Sequence[str]) -> Tuple[bool, int]:  # Validate that every non-exempt node is connected in at least two element pins.
