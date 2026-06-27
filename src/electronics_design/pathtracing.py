@@ -9,6 +9,69 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+import numpy as np
+
+
+def are_wires_connected(wires: np.ndarray) -> bool:
+    wires = np.asarray(wires)
+    if wires.ndim != 2 or wires.shape[1] != 4:
+        raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    n = len(wires)
+    if n <= 1:
+        return True
+    parent = list(range(n))
+
+    def _find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def _union(i: int, j: int) -> None:
+        ri = _find(i)
+        rj = _find(j)
+        if ri != rj:
+            parent[rj] = ri
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if _wires_share_point(tuple(wires[i]), tuple(wires[j])):
+                _union(i, j)
+    root = _find(0)
+    return all(_find(i) == root for i in range(1, n))
+
+
+def _ranges_overlap(a1: int, a2: int, b1: int, b2: int) -> bool:
+    return max(min(a1, a2), min(b1, b2)) <= min(max(a1, a2), max(b1, b2))
+
+
+def _wires_share_point(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int]) -> bool:
+    x1a, y1a, x2a, y2a = w1
+    x1b, y1b, x2b, y2b = w2
+    a_vert = x1a == x2a
+    b_vert = x1b == x2b
+    if a_vert and b_vert:
+        if x1a != x1b:
+            return False
+        return _ranges_overlap(y1a, y2a, y1b, y2b)
+    if not a_vert and not b_vert:
+        if y1a != y1b:
+            return False
+        return _ranges_overlap(x1a, x2a, x1b, x2b)
+    if a_vert:
+        vx, vy1, vy2 = x1a, y1a, y2a
+        hx1, hx2, hy = x1b, x2b, y1b
+    else:
+        vx, vy1, vy2 = x1b, y1b, y2b
+        hx1, hx2, hy = x1a, x2a, y1a
+    if not (min(hx1, hx2) <= vx <= max(hx1, hx2)):
+        return False
+    if not (min(vy1, vy2) <= hy <= max(vy1, vy2)):
+        return False
+    intersection = (vx, hy)
+    endpoints = {(x1a, y1a), (x2a, y2a), (x1b, y1b), (x2b, y2b)}
+    return intersection in endpoints
+
 
 class _PathTracingGUI:
     def __init__(self, root: tk.Tk) -> None:
