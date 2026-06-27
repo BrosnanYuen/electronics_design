@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import messagebox
 from tkinter import ttk
 from typing import List
 from typing import Optional
@@ -201,8 +202,7 @@ class _PathTracingGUI:
 
         ttk.Separator(ctrl, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=4, fill=tk.Y)
 
-        ttk.Button(ctrl, text="AUTO ROUTE").pack(side=tk.LEFT, padx=2)
-        ttk.Button(ctrl, text="COLLISIONS").pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="INTERSECTIONS", command=self._check_intersections).pack(side=tk.LEFT, padx=2)
 
         self.mode_label = ttk.Label(ctrl, text="Mode: WIRE", foreground="gray")
         self.mode_label.pack(side=tk.RIGHT, padx=4)
@@ -426,6 +426,20 @@ class _PathTracingGUI:
         self.obstacle_items.clear()
         self.flag_items.clear()
         self.current_mode.set("WIRE")
+
+    def _check_intersections(self) -> None:
+        if not self.wires:
+            messagebox.showinfo("INTERSECTIONS", "No wires to check.")
+            return
+        if not self.obstacles:
+            messagebox.showinfo("INTERSECTIONS", "No obstacles to check.")
+            return
+        wires_array = np.array(self.wires, dtype=int)
+        obstacles_array = np.array(self.obstacles, dtype=int)
+        if are_wires_intersecting_obstacles(wires_array, obstacles_array):
+            messagebox.showinfo("INTERSECTIONS", "Wires INTERSECT obstacles!")
+        else:
+            messagebox.showinfo("INTERSECTIONS", "Wires DO NOT intersect obstacles.")
 
     def _save(self) -> None:
         path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
