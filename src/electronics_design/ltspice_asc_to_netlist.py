@@ -413,6 +413,7 @@ def _resolve_symbol_nets(
                 wire_union.union(first_index, second_index)
     entity_names: Dict[Tuple[str, object], List[str]] = {}
     entity_first_seen: Dict[Tuple[str, object], int] = {}
+    entity_pin_counts: Dict[Tuple[str, object], int] = {}
     coordinate_entities: Dict[Point, Tuple[str, object]] = {}
     next_standalone_net = 0
     all_pin_coordinates: List[Point] = []
@@ -427,6 +428,7 @@ def _resolve_symbol_nets(
                 next_standalone_net += 1
             all_pin_coordinates.append(pin_coordinate)
             entity_first_seen.setdefault(entity_key, len(entity_first_seen))
+            entity_pin_counts[entity_key] = entity_pin_counts.get(entity_key, 0) + 1
     for flag in parsed_asc.flags:
         entity_key = _entity_for_point(flag.point, parsed_asc.wires, wire_union, coordinate_entities, next_standalone_net)
         if entity_key[0] == "coord" and entity_key[1] == next_standalone_net:
@@ -454,14 +456,23 @@ def _resolve_symbol_nets(
             merged_entities[entity_key] = canonical_entity
     canonical_names: Dict[Tuple[str, object], str] = {}
     auto_index = 1
+    no_connect_index = 1
     for entity_key in sorted(entity_first_seen, key=lambda entry: entity_first_seen[entry]):
         canonical_entity = merged_entities[entity_key]
         if canonical_entity in canonical_names:
             continue
         explicit_names = []
+        canonical_pin_count = 0
         for grouped_entity, names in entity_names.items():
             if merged_entities[grouped_entity] == canonical_entity:
                 explicit_names.extend(name for name in names if name.strip() != "")
+        for grouped_entity, pin_count in entity_pin_counts.items():
+            if merged_entities[grouped_entity] == canonical_entity:
+                canonical_pin_count += pin_count
+        if canonical_pin_count == 1:
+            canonical_names[canonical_entity] = _choose_single_pin_net_name(explicit_names, no_connect_index)
+            no_connect_index += 1
+            continue
         if explicit_names:
             canonical_names[canonical_entity] = _choose_explicit_net_name(explicit_names)
             continue
@@ -505,23 +516,33 @@ def _choose_explicit_net_name(names: Sequence[str]) -> str:
     return names[0].strip()
 
 
+def _choose_single_pin_net_name(names: Sequence[str], no_connect_index: int) -> str:
+    for candidate_name in names:
+        normalized_name = candidate_name.strip()
+        if normalized_name.upper() in {"0", "GND"}:
+            return "0"
+        if normalized_name.upper().startswith(("NC", "NC_", "NC-")):
+            return normalized_name
+    return f"NC_{no_connect_index:02d}"
+
+
 def _build_component_line(
     symbol_instance: SymbolInstance,
     symbol_definition: SymbolDefinition,
     point_to_net: Mapping[Point, str],
 ) -> Tuple[bool, str, int, str, str]:
-    pin_nets: List[str] = []
+    pin_nets_by_order: List[Tuple[PinDefinition, str]] = []
     for pin_definition in symbol_definition.pins:
         pin_coordinate = _transform_pin_point(pin_definition.point, symbol_instance.origin, symbol_instance.orientation)
         net_name = _resolve_point_net(pin_coordinate, point_to_net)
         if net_name is None:
             return False, "UNCONNECTED_SYMBOL_PIN", symbol_instance.line_number, "", ""
-        pin_nets.append(net_name)
+        pin_nets_by_order.append((pin_definition, net_name))
     normalized_prefix = _normalized_component_prefix(symbol_definition.prefix)
-    ordered_nets = _expand_component_nodes(symbol_instance.symbol_name, normalized_prefix, pin_nets)
+    ordered_nets = _expand_component_nodes(symbol_instance.symbol_name, normalized_prefix, pin_nets_by_order)
     component_instance_name = _component_instance_name(symbol_instance.attributes.get("InstName", ""), normalized_prefix)
     payload_tokens = _component_payload_tokens(symbol_instance, symbol_definition)
-    if not payload_tokens:
+    if not payload_tokens and not _payload_optional_for_prefix(normalized_prefix):
         return False, "MISSING_COMPONENT_PAYLOAD", symbol_instance.line_number, "", ""
     component_line = " ".join((component_instance_name, *ordered_nets, *payload_tokens)).strip()
     return True, "OK", 0, component_line, normalized_prefix
@@ -538,8 +559,22 @@ def _normalized_component_prefix(prefix: str) -> str:
     return upper_prefix[:1]
 
 
-def _expand_component_nodes(symbol_name: str, normalized_prefix: str, pin_nets: Sequence[str]) -> Tuple[str, ...]:
+def _expand_component_nodes(
+    symbol_name: str,
+    normalized_prefix: str,
+    pin_nets_by_order: Sequence[Tuple[PinDefinition, str]],
+) -> Tuple[str, ...]:
+    pin_nets = tuple(net_name for _, net_name in pin_nets_by_order)
     lowered_symbol_name = symbol_name.lower()
+    if normalized_prefix == "A":
+        ordered_pin_nets = {}
+        for pin_definition, net_name in pin_nets_by_order:
+            normalized_net_name = net_name
+            if pin_definition.pin_name.strip().lower() == "com" and net_name.upper().startswith(("NC", "NC_", "NC-")):
+                normalized_net_name = "0"
+            ordered_pin_nets[pin_definition.spice_order] = normalized_net_name
+        highest_order = max((pin_definition.spice_order for pin_definition, _ in pin_nets_by_order), default=0)
+        return tuple(ordered_pin_nets.get(spice_order, "0") for spice_order in range(1, max(8, highest_order) + 1))
     if normalized_prefix == "Q":
         return tuple(pin_nets) + ("0",)
     if normalized_prefix == "M":
@@ -563,12 +598,14 @@ def _component_payload_tokens(symbol_instance: SymbolInstance, symbol_definition
     normalized_prefix = _normalized_component_prefix(symbol_definition.prefix)
     explicit_value = _clean_optional_text(symbol_instance.attributes.get("Value", ""))
     explicit_value2 = _clean_optional_text(symbol_instance.attributes.get("Value2", ""))
+    explicit_spice_model = _clean_optional_text(symbol_instance.attributes.get("SpiceModel", ""))
     explicit_spice_line = _clean_optional_text(symbol_instance.attributes.get("SpiceLine", ""))
     explicit_spice_line2 = _clean_optional_text(symbol_instance.attributes.get("SpiceLine2", ""))
     default_value = _clean_optional_text(symbol_definition.default_value)
     default_value2 = _clean_optional_text(symbol_definition.default_value2)
     default_spice_line = _clean_optional_text(symbol_definition.default_spice_line)
     default_spice_line2 = _clean_optional_text(symbol_definition.default_spice_line2)
+    default_spice_model = _clean_optional_text(symbol_definition.default_spice_model)
     if normalized_prefix in {"R", "C", "L", "D", "V", "I", "J", "Q", "M", "S", "T", "B"}:
         return _join_payload_tokens(
             explicit_value if explicit_value != "" else _default_payload_value_for_prefix(normalized_prefix, default_value),
@@ -576,12 +613,26 @@ def _component_payload_tokens(symbol_instance: SymbolInstance, symbol_definition
             explicit_spice_line if explicit_spice_line != "" else default_spice_line,
             explicit_spice_line2 if explicit_spice_line2 != "" else default_spice_line2,
         )
+    if normalized_prefix == "A":
+        model_token = explicit_spice_model or default_spice_model or explicit_value or default_value or explicit_value2 or default_value2
+        if model_token == "":
+            return ()
+        trailing_tokens = [
+            token
+            for token in _non_empty_tokens(explicit_value, explicit_value2, explicit_spice_line, explicit_spice_line2, default_spice_line, default_spice_line2)
+            if token != model_token
+        ]
+        return (model_token, *trailing_tokens)
     if normalized_prefix in {"E", "G"}:
         gain_token = explicit_value if explicit_value != "" else "G={G}"
         return _join_payload_tokens(gain_token, explicit_value2, explicit_spice_line, explicit_spice_line2)
     if normalized_prefix == "X":
         return _subcircuit_payload_tokens(symbol_instance, symbol_definition)
     return _join_payload_tokens(explicit_value, explicit_value2, explicit_spice_line, explicit_spice_line2)
+
+
+def _payload_optional_for_prefix(normalized_prefix: str) -> bool:
+    return normalized_prefix in {"V", "I"}
 
 
 def _subcircuit_payload_tokens(symbol_instance: SymbolInstance, symbol_definition: SymbolDefinition) -> Tuple[str, ...]:
@@ -673,8 +724,6 @@ def _resolve_symbol_definition(symbol_name: str, symbol_definitions: Mapping[str
 def _transform_pin_point(local_point: Point, origin: Point, orientation: str) -> Point:
     x_position, y_position = local_point
     normalized_orientation = orientation.upper()
-    if normalized_orientation.startswith("M"):
-        x_position = -x_position
     angle = _orientation_angle(normalized_orientation)
     if angle == 90:
         x_position, y_position = -y_position, x_position
@@ -682,6 +731,8 @@ def _transform_pin_point(local_point: Point, origin: Point, orientation: str) ->
         x_position, y_position = -x_position, -y_position
     elif angle == 270:
         x_position, y_position = y_position, -x_position
+    if normalized_orientation.startswith("M"):
+        x_position = -x_position
     return origin[0] + x_position, origin[1] + y_position
 
 

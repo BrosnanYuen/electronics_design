@@ -93,6 +93,7 @@ _VALID_DOT_DIRECTIVES = {  # Define dot commands supported by current LTspice ma
     "four",  # Fourier directive.
     "fra",  # FRA analysis directive.
     "func",  # Function definition directive.
+    "function",  # Long-form function definition directive used by some LTspice exports.
     "global",  # Global node declaration directive.
     "ic",  # Initial conditions directive.
     "include",  # Include-file directive.
@@ -140,6 +141,7 @@ _FOOTER_DIRECTIVES = {  # Define directives that are acceptable in the footer re
     "four",  # Allow Fourier analysis in the footer.
     "fra",  # Allow FRA analysis in the footer.
     "func",  # Allow function helpers in the footer.
+    "function",  # Allow long-form function helpers in the footer.
     "global",  # Allow global node declarations in the footer.
     "ic",  # Allow initial condition directives in the footer.
     "include",  # Allow include directives in the footer.
@@ -510,13 +512,13 @@ def _validate_device_tokens(tokens: Sequence[str]) -> Tuple[bool, str]:  # Valid
     if len(tokens) < 2:  # Require at least an instance name and one additional token.
         return False, "too_few_tokens"  # Signal a token-count failure.
     instance_name = tokens[0]  # Read the element instance token.
-    if len(instance_name) < 2:  # Require an instance name longer than the one-character prefix.
-        return False, "short_instance_name"  # Signal an instance-name failure.
-    if re.match(r"^[A-Za-z@&]\d+[A-Za-z].*$", instance_name) is not None:  # Reject merged instance-name and node-name patterns such as R1Vcc.
-        return False, "merged_instance_name"  # Signal an instance-name spacing failure.
     prefix = instance_name[0].upper()  # Normalize the leading device prefix character.
     if prefix not in _VALID_DEVICE_PREFIXES:  # Reject unsupported device prefixes.
         return False, "invalid_prefix"  # Signal an invalid-prefix failure.
+    if len(instance_name) < 2 and prefix != "K":  # Permit LTspice mutual-coupling statements like K L1 L2 0.9 used in the fixture corpus.
+        return False, "short_instance_name"  # Signal an instance-name failure.
+    if re.match(r"^[A-Za-z@&]\d+[A-Za-z].*$", instance_name) is not None:  # Reject merged instance-name and node-name patterns such as R1Vcc.
+        return False, "merged_instance_name"  # Signal an instance-name spacing failure.
     if _is_two_node_behavioral_controlled_source(prefix, tokens):  # Accept LTspice's behavioral E/G source form with only output nodes and an expression payload.
         return True, ""  # Return success when the reduced-node behavioral form is structurally valid.
     minimum_token_count = _DEVICE_MINIMUM_TOKEN_COUNTS[prefix]  # Look up the minimum token count for this device prefix.
@@ -723,8 +725,6 @@ def _comparison_net_class(node_name: str) -> str:  # Normalize net names into co
     uppercase_name = node_name.upper()  # Normalize the net name for case-insensitive class checks.
     if uppercase_name in {"0", "GND"}:  # Preserve global ground as a special net class across comparisons.
         return "ground"  # Mark ground-like nodes with the dedicated ground class.
-    if uppercase_name.startswith("NC_") or uppercase_name.startswith("NC-"):  # Preserve only explicit project-style no-connect markers as a dedicated class.
-        return "no_connect"  # Mark only explicit no-connect labels with the dedicated no-connect class.
     return "net"  # Treat every other electrical node as a generic renameable net.
 
 
