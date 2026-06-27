@@ -48,6 +48,42 @@ def are_wires_connected(wires: np.ndarray) -> bool:
     return all(_find(i) == root for i in range(1, n))
 
 
+def are_wires_intersecting_obstacles(wires: np.ndarray, obstacles: np.ndarray) -> bool:
+    wires = np.asarray(wires)
+    obstacles = np.asarray(obstacles)
+    if wires.ndim != 2 or wires.shape[1] != 4:
+        raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    if obstacles.ndim != 2 or obstacles.shape[1] != 4:
+        raise ValueError("obstacles must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    for wire in wires:
+        for obstacle in obstacles:
+            if _lines_intersect(tuple(wire), tuple(obstacle)):
+                return True
+    return False
+
+
+def _lines_intersect(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int]) -> bool:
+    x1a, y1a, x2a, y2a = w1
+    x1b, y1b, x2b, y2b = w2
+    a_vert = x1a == x2a
+    b_vert = x1b == x2b
+    if a_vert and b_vert:
+        if x1a != x1b:
+            return False
+        return _ranges_overlap(y1a, y2a, y1b, y2b)
+    if not a_vert and not b_vert:
+        if y1a != y1b:
+            return False
+        return _ranges_overlap(x1a, x2a, x1b, x2b)
+    if a_vert:
+        vx, vy1, vy2 = x1a, y1a, y2a
+        hx1, hx2, hy = x1b, x2b, y1b
+    else:
+        vx, vy1, vy2 = x1b, y1b, y2b
+        hx1, hx2, hy = x1a, x2a, y1a
+    return min(hx1, hx2) <= vx <= max(hx1, hx2) and min(vy1, vy2) <= hy <= max(vy1, vy2)
+
+
 def _ranges_overlap(a1: int, a2: int, b1: int, b2: int) -> bool:
     return max(min(a1, a2), min(b1, b2)) <= min(max(a1, a2), max(b1, b2))
 
