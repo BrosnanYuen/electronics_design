@@ -1,0 +1,380 @@
+"""Path tracing GUI for CAD-style wire, obstacle and flag drawing on a 2D grid."""
+
+from __future__ import annotations
+
+import tkinter as tk
+from tkinter import filedialog
+from tkinter import ttk
+from typing import List
+from typing import Optional
+from typing import Tuple
+
+
+class _PathTracingGUI:
+    def __init__(self, root: tk.Tk) -> None:
+        self.root = root
+        root.title("Path Tracing Debug GUI")
+        root.geometry("900x700")
+
+        self.grid_spacing = tk.IntVar(value=16)
+        self.grid_points_x = tk.IntVar(value=400)
+        self.grid_points_y = tk.IntVar(value=400)
+        self.current_mode = tk.StringVar(value="WIRE")
+
+        self.wires: List[Tuple[int, int, int, int]] = []
+        self.obstacles: List[Tuple[int, int, int, int]] = []
+        self.flags: List[Tuple[int, int]] = []
+
+        self.wire_items: List[int] = []
+        self.obstacle_items: List[int] = []
+        self.flag_items: List[Tuple[int, int]] = []
+
+        self.draw_start: Optional[Tuple[int, int]] = None
+        self.preview_line: Optional[int] = None
+        self.preview_flag_lines: Optional[Tuple[int, int]] = None
+        self.last_motion_grid: Optional[Tuple[int, int]] = None
+
+        self._build_ui()
+        self._redraw_grid()
+
+    def _to_pixel(self, gx: int, gy: int) -> Tuple[int, int]:
+        spacing = self.grid_spacing.get()
+        return gx * spacing, gy * spacing
+
+    def _to_grid(self, px: int, py: int) -> Tuple[int, int]:
+        spacing = self.grid_spacing.get()
+        return round(px / spacing), round(py / spacing)
+
+    def _pixel_w(self) -> int:
+        return self.grid_points_x.get() * self.grid_spacing.get()
+
+    def _pixel_h(self) -> int:
+        return self.grid_points_y.get() * self.grid_spacing.get()
+
+    def _clear_preview(self) -> None:
+        if self.preview_line is not None:
+            self.canvas.delete(self.preview_line)
+            self.preview_line = None
+        if self.preview_flag_lines is not None:
+            self.canvas.delete(self.preview_flag_lines[0])
+            self.canvas.delete(self.preview_flag_lines[1])
+            self.preview_flag_lines = None
+        self.last_motion_grid = None
+
+    def _cancel_drawing(self) -> None:
+        self._clear_preview()
+        self.draw_start = None
+
+    def _build_ui(self) -> None:
+        ctrl = ttk.Frame(self.root, padding=5)
+        ctrl.pack(fill=tk.X)
+
+        ttk.Label(ctrl, text="Spacing:").pack(side=tk.LEFT)
+        ttk.Entry(ctrl, textvariable=self.grid_spacing, width=5).pack(side=tk.LEFT, padx=2)
+        ttk.Label(ctrl, text="W:").pack(side=tk.LEFT)
+        ttk.Entry(ctrl, textvariable=self.grid_points_x, width=5).pack(side=tk.LEFT, padx=2)
+        ttk.Label(ctrl, text="H:").pack(side=tk.LEFT)
+        ttk.Entry(ctrl, textvariable=self.grid_points_y, width=5).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="Apply Grid", command=self._apply_grid).pack(side=tk.LEFT, padx=4)
+
+        ttk.Separator(ctrl, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=4, fill=tk.Y)
+
+        ttk.Button(ctrl, text="WIRE", command=lambda: self._set_mode("WIRE")).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="OBSTACLE", command=lambda: self._set_mode("OBSTACLE")).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="FLAG", command=lambda: self._set_mode("FLAG")).pack(side=tk.LEFT, padx=2)
+
+        ttk.Separator(ctrl, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=4, fill=tk.Y)
+
+        ttk.Button(ctrl, text="DELETE", command=lambda: self._set_mode("DELETE")).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="DELETE ALL", command=self._delete_all).pack(side=tk.LEFT, padx=2)
+
+        ttk.Separator(ctrl, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=4, fill=tk.Y)
+
+        ttk.Button(ctrl, text="SAVE AS", command=self._save).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="LOAD", command=self._load).pack(side=tk.LEFT, padx=2)
+
+        ttk.Separator(ctrl, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=4, fill=tk.Y)
+
+        ttk.Button(ctrl, text="AUTO ROUTE").pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="COLLISIONS").pack(side=tk.LEFT, padx=2)
+
+        self.mode_label = ttk.Label(ctrl, text="Mode: WIRE", foreground="gray")
+        self.mode_label.pack(side=tk.RIGHT, padx=4)
+        self.current_mode.trace_add("write", lambda *_: self._update_mode_label())
+
+        canvas_frame = ttk.Frame(self.root)
+        canvas_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.hbar = ttk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL)
+        self.vbar = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL)
+
+        self.canvas = tk.Canvas(
+            canvas_frame, bg="white",
+            xscrollcommand=self.hbar.set,
+            yscrollcommand=self.vbar.set,
+        )
+        self.hbar.config(command=self.canvas.xview)
+        self.vbar.config(command=self.canvas.yview)
+
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.hbar.grid(row=1, column=0, sticky="ew")
+        self.vbar.grid(row=0, column=1, sticky="ns")
+        canvas_frame.columnconfigure(0, weight=1)
+        canvas_frame.rowconfigure(0, weight=1)
+
+        self.canvas.bind("<Button-1>", self._on_click)
+        self.canvas.bind("<Motion>", self._on_motion)
+
+    def _set_mode(self, mode: str) -> None:
+        self._cancel_drawing()
+        self.current_mode.set(mode)
+
+    def _update_mode_label(self) -> None:
+        self.mode_label.config(text=f"Mode: {self.current_mode.get()}")
+
+    def _apply_grid(self) -> None:
+        try:
+            spacing = int(self.grid_spacing.get())
+            width_pts = int(self.grid_points_x.get())
+            height_pts = int(self.grid_points_y.get())
+        except (ValueError, tk.TclError):
+            return
+        if spacing < 2 or width_pts < 1 or height_pts < 1:
+            return
+        self._cancel_drawing()
+        self._redraw_grid()
+
+    def _redraw_grid(self) -> None:
+        self.canvas.delete("grid")
+        self.canvas.delete("line")
+        self.canvas.delete("flag")
+
+        spacing = self.grid_spacing.get()
+        w_grid = self.grid_points_x.get()
+        h_grid = self.grid_points_y.get()
+        pw = w_grid * spacing
+        ph = h_grid * spacing
+
+        self.canvas.config(scrollregion=(0, 0, pw, ph))
+
+        for col in range(w_grid + 1):
+            x = col * spacing
+            self.canvas.create_line(x, 0, x, ph, fill="#e0e0e0", tags="grid")
+        for row in range(h_grid + 1):
+            y = row * spacing
+            self.canvas.create_line(0, y, pw, y, fill="#e0e0e0", tags="grid")
+
+        self.wire_items.clear()
+        for gx1, gy1, gx2, gy2 in self.wires:
+            p1 = self._to_pixel(gx1, gy1)
+            p2 = self._to_pixel(gx2, gy2)
+            item = self.canvas.create_line(*p1, *p2, fill="black", width=2, tags=("line",))
+            self.wire_items.append(item)
+
+        self.obstacle_items.clear()
+        for gx1, gy1, gx2, gy2 in self.obstacles:
+            p1 = self._to_pixel(gx1, gy1)
+            p2 = self._to_pixel(gx2, gy2)
+            item = self.canvas.create_line(*p1, *p2, fill="red", width=2, tags=("line",))
+            self.obstacle_items.append(item)
+
+        for gx, gy in self.flags:
+            px, py = self._to_pixel(gx, gy)
+            half = max(4, spacing // 4)
+            self.canvas.create_line(px - half, py - half, px + half, py + half, fill="blue", width=2, tags=("flag",))
+            self.canvas.create_line(px - half, py + half, px + half, py - half, fill="blue", width=2, tags=("flag",))
+
+    def _on_motion(self, event: tk.Event) -> None:
+        mode = self.current_mode.get()
+        cx = int(self.canvas.canvasx(event.x))
+        cy = int(self.canvas.canvasy(event.y))
+        gx, gy = self._to_grid(cx, cy)
+
+        if self.last_motion_grid == (gx, gy):
+            return
+        self.last_motion_grid = (gx, gy)
+
+        if mode == "FLAG":
+            self._draw_preview_flag(gx, gy)
+        elif mode in ("WIRE", "OBSTACLE") and self.draw_start is not None:
+            self._draw_preview_line(gx, gy)
+
+    def _draw_preview_flag(self, gx: int, gy: int) -> None:
+        if self.preview_flag_lines is not None:
+            self.canvas.delete(self.preview_flag_lines[0])
+            self.canvas.delete(self.preview_flag_lines[1])
+        px, py = self._to_pixel(gx, gy)
+        half = max(4, self.grid_spacing.get() // 4)
+        line1 = self.canvas.create_line(px - half, py - half, px + half, py + half, fill="blue", width=2)
+        line2 = self.canvas.create_line(px - half, py + half, px + half, py - half, fill="blue", width=2)
+        self.preview_flag_lines = (line1, line2)
+
+    def _draw_preview_line(self, cursor_gx: int, cursor_gy: int) -> None:
+        if self.preview_line is not None:
+            self.canvas.delete(self.preview_line)
+        sgx, sgy = self.draw_start  # type: ignore[union-attr]
+        if abs(cursor_gx - sgx) > abs(cursor_gy - sgy):
+            egx, egy = cursor_gx, sgy
+        else:
+            egx, egy = sgx, cursor_gy
+        p1 = self._to_pixel(sgx, sgy)
+        p2 = self._to_pixel(egx, egy)
+        color = "red" if self.current_mode.get() == "OBSTACLE" else "black"
+        self.preview_line = self.canvas.create_line(*p1, *p2, fill=color, width=2)
+
+    def _on_click(self, event: tk.Event) -> None:
+        mode = self.current_mode.get()
+        cx = int(self.canvas.canvasx(event.x))
+        cy = int(self.canvas.canvasy(event.y))
+        gx, gy = self._to_grid(cx, cy)
+
+        if mode in ("WIRE", "OBSTACLE"):
+            if self.draw_start is None:
+                self.draw_start = (gx, gy)
+            else:
+                sgx, sgy = self.draw_start
+                if abs(gx - sgx) > abs(gy - sgy):
+                    egx, egy = gx, sgy
+                else:
+                    egx, egy = sgx, gy
+                self._clear_preview()
+                self.draw_start = None
+                if sgx == egx and sgy == egy:
+                    return
+                p1 = self._to_pixel(sgx, sgy)
+                p2 = self._to_pixel(egx, egy)
+                color = "red" if mode == "OBSTACLE" else "black"
+                item = self.canvas.create_line(*p1, *p2, fill=color, width=2, tags=("line",))
+                if mode == "OBSTACLE":
+                    self.obstacles.append((sgx, sgy, egx, egy))
+                    self.obstacle_items.append(item)
+                else:
+                    self.wires.append((sgx, sgy, egx, egy))
+                    self.wire_items.append(item)
+            return
+
+        if mode == "FLAG":
+            if self.preview_flag_lines is not None:
+                self.canvas.itemconfig(self.preview_flag_lines[0], tags=("flag",))
+                self.canvas.itemconfig(self.preview_flag_lines[1], tags=("flag",))
+                self.preview_flag_lines = None
+            else:
+                px, py = self._to_pixel(gx, gy)
+                half = max(4, self.grid_spacing.get() // 4)
+                self.canvas.create_line(px - half, py - half, px + half, py + half, fill="blue", width=2, tags=("flag",))
+                self.canvas.create_line(px - half, py + half, px + half, py - half, fill="blue", width=2, tags=("flag",))
+            self.flags.append((gx, gy))
+            self.flag_items.append((gx, gy))
+            self.last_motion_grid = None
+            return
+
+        if mode == "DELETE":
+            self._delete_at(int(cx), int(cy))
+
+    def _delete_at(self, px: int, py: int) -> None:
+        threshold = max(6, self.grid_spacing.get() // 2)
+
+        for idx, (fgx, fgy) in enumerate(self.flag_items):
+            fpx, fpy = self._to_pixel(fgx, fgy)
+            if abs(px - fpx) <= threshold and abs(py - fpy) <= threshold:
+                items = self.canvas.find_overlapping(px - threshold, py - threshold, px + threshold, py + threshold)
+                for item in items:
+                    if "flag" in self.canvas.gettags(item):
+                        self.canvas.delete(item)
+                del self.flag_items[idx]
+                del self.flags[idx]
+                return
+
+        for idx, item in enumerate(self.wire_items):
+            gx1, gy1, gx2, gy2 = self.wires[idx]
+            if self._near_segment(px, py, gx1, gy1, gx2, gy2, threshold):
+                self.canvas.delete(item)
+                del self.wire_items[idx]
+                del self.wires[idx]
+                return
+
+        for idx, item in enumerate(self.obstacle_items):
+            gx1, gy1, gx2, gy2 = self.obstacles[idx]
+            if self._near_segment(px, py, gx1, gy1, gx2, gy2, threshold):
+                self.canvas.delete(item)
+                del self.obstacle_items[idx]
+                del self.obstacles[idx]
+                return
+
+    def _near_segment(self, px: int, py: int, gx1: int, gy1: int, gx2: int, gy2: int, threshold: int) -> bool:
+        spacing = self.grid_spacing.get()
+        px1, py1 = gx1 * spacing, gy1 * spacing
+        px2, py2 = gx2 * spacing, gy2 * spacing
+        if px1 == px2:
+            return abs(px - px1) <= threshold and min(py1, py2) - threshold <= py <= max(py1, py2) + threshold
+        return abs(py - py1) <= threshold and min(px1, px2) - threshold <= px <= max(px1, px2) + threshold
+
+    def _delete_all(self) -> None:
+        self._cancel_drawing()
+        self.canvas.delete("line")
+        self.canvas.delete("flag")
+        self.wires.clear()
+        self.obstacles.clear()
+        self.flags.clear()
+        self.wire_items.clear()
+        self.obstacle_items.clear()
+        self.flag_items.clear()
+        self.current_mode.set("WIRE")
+
+    def _save(self) -> None:
+        path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+        if not path:
+            return
+        spacing = self.grid_spacing.get()
+        with open(path, "w", encoding="utf-8") as f:
+            for gx1, gy1, gx2, gy2 in self.wires:
+                f.write(f"WIRE {gx1 * spacing} {gy1 * spacing} {gx2 * spacing} {gy2 * spacing}\n")
+            for gx1, gy1, gx2, gy2 in self.obstacles:
+                f.write(f"OBSTACLE {gx1 * spacing} {gy1 * spacing} {gx2 * spacing} {gy2 * spacing}\n")
+            for gx, gy in self.flags:
+                f.write(f"FLAG {gx * spacing} {gy * spacing}\n")
+
+    def _load(self) -> None:
+        path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw_lines = [line.strip() for line in f if line.strip() != ""]
+        except OSError:
+            return
+        self._delete_all()
+        spacing = self.grid_spacing.get()
+        for line in raw_lines:
+            parts = line.split()
+            if not parts:
+                continue
+            kind = parts[0].upper()
+            if kind == "WIRE" and len(parts) == 5:
+                px1, py1, px2, py2 = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])
+                gx1, gy1 = px1 // spacing, py1 // spacing
+                gx2, gy2 = px2 // spacing, py2 // spacing
+                self.wires.append((gx1, gy1, gx2, gy2))
+                item = self.canvas.create_line(px1, py1, px2, py2, fill="black", width=2, tags=("line",))
+                self.wire_items.append(item)
+            elif kind == "OBSTACLE" and len(parts) == 5:
+                px1, py1, px2, py2 = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])
+                gx1, gy1 = px1 // spacing, py1 // spacing
+                gx2, gy2 = px2 // spacing, py2 // spacing
+                self.obstacles.append((gx1, gy1, gx2, gy2))
+                item = self.canvas.create_line(px1, py1, px2, py2, fill="red", width=2, tags=("line",))
+                self.obstacle_items.append(item)
+            elif kind == "FLAG" and len(parts) == 3:
+                px, py = int(parts[1]), int(parts[2])
+                gx, gy = px // spacing, py // spacing
+                self.flags.append((gx, gy))
+                self.flag_items.append((gx, gy))
+                half = max(4, spacing // 4)
+                self.canvas.create_line(px - half, py - half, px + half, py + half, fill="blue", width=2, tags=("flag",))
+                self.canvas.create_line(px - half, py + half, px + half, py - half, fill="blue", width=2, tags=("flag",))
+
+
+def gui_debug() -> None:
+    root = tk.Tk()
+    _PathTracingGUI(root)
+    root.mainloop()

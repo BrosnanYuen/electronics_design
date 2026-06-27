@@ -8,6 +8,7 @@ from . import ltspice_asc as _asc  # Import the ASC-specific implementation modu
 from . import ltspice_asc_plot_schemdraw as _asc_plot_schemdraw  # Import the dedicated ASC plotting module.
 from . import ltspice_asc_to_netlist as _asc_to_netlist  # Import the ASC-to-netlist conversion module.
 from . import ltspice_net as _net  # Import the netlist-specific implementation module.
+from . import pathtracing as _pathtracing  # Import the path tracing GUI module.
 
 is_valid_ltspice_asc_header = _asc.is_valid_ltspice_asc_header  # Re-export the ASC header validator.
 is_valid_ltspice_asc_spacing = _asc.is_valid_ltspice_asc_spacing  # Re-export the ASC spacing validator.
@@ -24,6 +25,7 @@ is_valid_ltspice_netlist_file = _net.is_valid_ltspice_netlist_file  # Re-export 
 ltspice_netlist_plot_networkx = _net.ltspice_netlist_plot_networkx  # Re-export the network graph plotting helper.
 ltspice_netlist_footer_cmp = _net.ltspice_netlist_footer_cmp  # Re-export the footer comparison helper.
 ltspice_netlist_structure_cmp = _net.ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
+gui_debug = _pathtracing.gui_debug  # Re-export the path tracing GUI helper.
 
 _classify_asc_line = _asc._classify_asc_line  # Re-export the ASC line classifier for focused tests.
 _extract_asc_text_directive = _asc._extract_asc_text_directive  # Re-export the ASC directive extractor for focused tests.
@@ -47,4 +49,5 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_netlist_plot_networkx",  # Export the network graph plotting helper.
     "ltspice_netlist_footer_cmp",  # Export the footer comparison helper.
     "ltspice_netlist_structure_cmp",  # Export the structural comparison helper.
+    "gui_debug",  # Export the path tracing GUI helper.
 ]  # Finish the public export list.

@@ -14,6 +14,7 @@ from .ltspice import is_valid_ltspice_netlist_format  # Re-export the format val
 from .ltspice import ltspice_netlist_footer_cmp  # Re-export the footer comparison helper.
 from .ltspice import ltspice_netlist_plot_networkx  # Re-export the graph plotting helper.
 from .ltspice import ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
+from .ltspice import gui_debug  # Re-export the path tracing GUI helper.
 
 __all__ = [  # Define the supported public API surface.
     "is_valid_ltspice_asc_header",  # Export the ASC header validator name.
@@ -30,4 +31,5 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_netlist_footer_cmp",  # Export the footer comparison helper name.
     "ltspice_netlist_plot_networkx",  # Export the networkx plotting helper name.
     "ltspice_netlist_structure_cmp",  # Export the structural comparison helper name.
+    "gui_debug",  # Export the path tracing GUI helper name.
 ]  # Finish the public export list.
