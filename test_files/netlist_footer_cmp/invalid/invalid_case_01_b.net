@@ -1,0 +1,7 @@
+V5 SRC 0 5
+R7 SRC MID 2k
+C3 MID 0 220n
+.tran 0 10m
+.lib analog_alt.lib
+.backanno
+.end

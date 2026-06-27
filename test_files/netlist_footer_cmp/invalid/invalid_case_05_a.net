@@ -1,0 +1,7 @@
+V1 IN 0 5
+R1 IN OUT 4.7k
+R2 OUT 0 1k
+.noise V(OUT) V1 dec 10 1 100k
+.lib noise.lib
+.backanno
+.end

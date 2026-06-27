@@ -1,0 +1,7 @@
+V1 IN 0 5
+R1 IN OUT 1k
+RLOAD OUT 0 {RLOAD}
+.step param RLOAD list 1k 2k 5k
+.op
+.backanno
+.end

@@ -1,0 +1,7 @@
+V1 IN 0 10
+R1 IN MID 1k
+R2 MID 0 2k
+.dc V1 0 12 1
+.options plotwinsize=0
+.backanno
+.end

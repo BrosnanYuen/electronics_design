@@ -1,0 +1,9 @@
+V1 VCC 0 10
+R1 VCC C 3.9k
+R2 VCC B 68k
+R3 B 0 10k
+Q1 C B 0 0 NPN
+.dc V1 0 10 1
+.options plotwinsize=0
+.backanno
+.end

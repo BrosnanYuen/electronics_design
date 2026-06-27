@@ -1,0 +1,10 @@
+V1 0 VEE 9
+R1 E 0 2.7k
+R2 E B 68k
+R3 B VEE 15k
+R4 C VEE 3.3k
+Q1 C B E 0 PNP
+.temp 50
+.ac dec 5 10 100k
+.backanno
+.end

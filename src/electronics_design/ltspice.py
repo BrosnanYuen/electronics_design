@@ -21,6 +21,7 @@ is_valid_ltspice_netlist_footer = _net.is_valid_ltspice_netlist_footer  # Re-exp
 is_ltspice_netlist_structure_connected = _net.is_ltspice_netlist_structure_connected  # Re-export the connectivity validator.
 is_valid_ltspice_netlist_file = _net.is_valid_ltspice_netlist_file  # Re-export the netlist whole-file validator.
 ltspice_netlist_plot_networkx = _net.ltspice_netlist_plot_networkx  # Re-export the network graph plotting helper.
+ltspice_netlist_footer_cmp = _net.ltspice_netlist_footer_cmp  # Re-export the footer comparison helper.
 ltspice_netlist_structure_cmp = _net.ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
 
 _classify_asc_line = _asc._classify_asc_line  # Re-export the ASC line classifier for focused tests.
@@ -42,5 +43,6 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "is_ltspice_netlist_structure_connected",  # Export the connectivity validator.
     "is_valid_ltspice_netlist_file",  # Export the netlist whole-file validator.
     "ltspice_netlist_plot_networkx",  # Export the network graph plotting helper.
+    "ltspice_netlist_footer_cmp",  # Export the footer comparison helper.
     "ltspice_netlist_structure_cmp",  # Export the structural comparison helper.
 ]  # Finish the public export list.

@@ -1,0 +1,6 @@
+V1 IN 0 8
+R1 IN OUT 3.3k
+C1 OUT 0 100n
+.tran 0 1m
+.backanno
+.end

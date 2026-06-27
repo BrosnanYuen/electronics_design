@@ -1,0 +1,11 @@
+V1 VCC 0 9
+R1 VCC OUT 1.8k
+R2 VCC B 56k
+R3 B 0 8.2k
+Q1 OUT B 0 0 NPN
+R4 VCC OUT 1k
+.tran 0 1m 0 1u
+; save line comment ignored
+.save V(OUT)
+.backanno
+.end

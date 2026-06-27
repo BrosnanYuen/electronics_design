@@ -1,0 +1,8 @@
+V1 IN 0 10
+R1 IN OUT 5k
+R2 OUT 0 1k
+.tran 0 10m
+* resistor divider footer comment
+.lib analog.lib
+.backanno
+.end

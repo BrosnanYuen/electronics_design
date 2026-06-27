@@ -1,0 +1,10 @@
+V1 0 VEE 12
+R1 E 0 4.7k
+R2 E B 100k
+R3 B VEE 22k
+R4 C VEE 2k
+Q1 C B E 0 PNP
+.ac dec 10 1 1Meg
+.include filters.lib
+.backanno
+.end

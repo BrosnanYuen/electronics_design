@@ -1,0 +1,9 @@
+V1 IN 0 5
+R2 IN OUT 2k
+C1 OUT 0 1u
+RLOAD OUT 0 {RLOAD}
+.step param RLOAD list 1k 2k 5k
+* comment between footer lines
+.op
+.backanno
+.end

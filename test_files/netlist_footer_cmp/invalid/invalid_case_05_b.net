@@ -1,0 +1,9 @@
+V1 VCC 0 12
+R1 VCC OUT 3.3k
+R2 VCC B 82k
+R3 B 0 12k
+Q1 OUT B 0 0 NPN
+.noise V(OUT) V1 dec 10 1 10k
+.lib noise.lib
+.backanno
+.end

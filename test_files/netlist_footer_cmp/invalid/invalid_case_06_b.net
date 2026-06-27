@@ -1,0 +1,6 @@
+V1 IN 0 12
+R1 IN MID 5k
+R2 MID 0 1k
+.tf V(IN) V1
+.backanno
+.end

@@ -297,6 +297,22 @@ def is_valid_ltspice_netlist_file(filepath: str) -> ValidationResult:  # Validat
     return True, ""  # Return success only when all three required validators succeed.
 
 
+def ltspice_netlist_footer_cmp(filepath1: str, filepath2: str) -> bool:  # Compare two valid LTspice netlist footers while ignoring comments and component sections.
+    first_validation_result = is_valid_ltspice_netlist_file(filepath1)  # Validate the first netlist through the required whole-file public API.
+    if not first_validation_result[0]:  # Stop when the first input netlist is invalid.
+        return False  # Return False because footer comparison only applies to valid netlists.
+    second_validation_result = is_valid_ltspice_netlist_file(filepath2)  # Validate the second netlist through the required whole-file public API.
+    if not second_validation_result[0]:  # Stop when the second input netlist is invalid.
+        return False  # Return False because footer comparison only applies to valid netlists.
+    first_footer_result = _load_normalized_footer_lines(filepath1)  # Load the normalized comparable footer sequence for the first netlist.
+    if not first_footer_result[0]:  # Stop when the first footer cannot be read or derived reliably.
+        return False  # Return False because the footer comparison cannot proceed safely.
+    second_footer_result = _load_normalized_footer_lines(filepath2)  # Load the normalized comparable footer sequence for the second netlist.
+    if not second_footer_result[0]:  # Stop when the second footer cannot be read or derived reliably.
+        return False  # Return False because the footer comparison cannot proceed safely.
+    return first_footer_result[1] == second_footer_result[1]  # Return True only when the normalized footer sequences are identical.
+
+
 def ltspice_netlist_structure_cmp(filepath1: str, filepath2: str) -> bool:  # Compare two validated LTspice netlists for structural equivalence while ignoring footer directives.
     first_parse_result = _load_parsed_elements(filepath1)  # Parse the first input file into device elements after format validation.
     if not first_parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
@@ -352,6 +368,13 @@ def _load_parsed_elements(filepath: str) -> ElementParseResult:  # Load a file a
     if not read_result[0]:  # Stop when the file cannot be read safely.
         return False, [], 0, "read_error"  # Return a generic parse failure marker for the caller.
     return _parse_elements(read_result[1])  # Parse the loaded source lines into structured device elements.
+
+
+def _load_normalized_footer_lines(filepath: str) -> Tuple[bool, Tuple[str, ...]]:  # Load one validated netlist footer into a normalized comparable sequence.
+    read_result = _read_text_file_lines(filepath)  # Re-read the file through the shared safe text loader after validation succeeds.
+    if not read_result[0]:  # Stop when the file cannot be read safely.
+        return False, ()  # Signal footer-loading failure to the caller.
+    return _extract_normalized_footer_lines(read_result[1])  # Extract the normalized footer sequence from the loaded source lines.
 
 
 def _validate_format_lines(lines: Sequence[str]) -> Tuple[bool, int]:  # Validate each line for directive spelling and minimum token structure.
@@ -439,6 +462,33 @@ def _validate_footer_lines(lines: Sequence[str]) -> Tuple[bool, int]:  # Validat
     if analysis_count == 0:  # Require at least one LTspice analysis directive somewhere in the deck.
         return False, previous_line_number  # Report the footer region because the simulation command is missing.
     return True, 0  # Return success when the footer is valid.
+
+
+def _extract_normalized_footer_lines(lines: Sequence[str]) -> Tuple[bool, Tuple[str, ...]]:  # Extract a comparable footer sequence while ignoring blank lines and comments.
+    format_result = _validate_format_lines(lines)  # Reuse the line-format validator before deriving the footer region.
+    if not format_result[0]:  # Stop when the file is not even structurally parseable.
+        return False, ()  # Signal extraction failure because the footer boundary cannot be trusted.
+    last_device_line_number = 0  # Track the final device line so the footer region starts immediately after it.
+    normalized_footer_lines: List[str] = []  # Collect the normalized comparable footer lines in source order.
+    for line_number, raw_line in enumerate(lines, start=1):  # Walk every source line with its one-based line number.
+        classification_result = _classify_line(raw_line)  # Classify the line before deciding whether it belongs to the footer sequence.
+        if not classification_result[0]:  # Stop when line classification fails unexpectedly.
+            return False, ()  # Signal extraction failure because the footer cannot be derived safely.
+        line_kind = classification_result[1]  # Extract the validated line category.
+        if line_kind == "device":  # Update the footer boundary whenever a device statement is encountered.
+            last_device_line_number = line_number  # Record the current line as the latest device line.
+            continue  # Move to the next line because component lines are never part of the compared footer sequence.
+        if line_number <= last_device_line_number:  # Ignore everything before or on the final device line.
+            continue  # Move to the next line because only the post-device footer region is compared.
+        if line_kind in {"blank", "comment"}:  # Ignore blank lines and whole-line comments in the footer region.
+            continue  # Move to the next line because comments do not affect footer equivalence.
+        if line_kind == "continuation":  # Preserve valid continuation lines because they are part of the logical footer content.
+            normalized_footer_lines.append(raw_line.lstrip())  # Record the continuation line text with leading whitespace removed.
+            continue  # Move to the next line after saving the continuation.
+        code_part = _strip_semicolon_comment(raw_line).strip()  # Remove inline semicolon comments before comparing the footer line text.
+        if code_part != "":  # Ignore lines that become empty after semicolon-comment stripping.
+            normalized_footer_lines.append(code_part)  # Record the normalized footer line in source order.
+    return True, tuple(normalized_footer_lines)  # Return the final normalized footer sequence for comparison.
 
 
 def _validate_connectivity(lines: Sequence[str]) -> Tuple[bool, int]:  # Validate that every non-exempt node is connected in at least two element pins.

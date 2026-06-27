@@ -1,0 +1,7 @@
+V1 IN 0 6
+R1 IN OUT 2.2k
+C1 OUT 0 470n
+.param GAIN=11
+.tran 0 5m
+.backanno
+.end

@@ -1,0 +1,7 @@
+V1 IN 0 1
+R1 IN OUT 10k
+C1 OUT 0 10n
+.ac dec 20 1 1Meg
+.include filters.lib
+.backanno
+.end
