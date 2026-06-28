@@ -7,6 +7,7 @@ import os  # Re-export the shared os module so existing test patches still apply
 from . import ltspice_asc as _asc  # Import the ASC-specific implementation module.
 from . import ltspice_asc_plot_schemdraw as _asc_plot_schemdraw  # Import the dedicated ASC plotting module.
 from . import ltspice_asc_to_netlist as _asc_to_netlist  # Import the ASC-to-netlist conversion module.
+from . import ltspice_asy as _asy  # Import the ASY-specific implementation module.
 from . import ltspice_net as _net  # Import the netlist-specific implementation module.
 from . import pathtracing as _pathtracing  # Import the path tracing GUI module.
 
@@ -17,6 +18,8 @@ is_valid_ltspice_asc_file = _asc.is_valid_ltspice_asc_file  # Re-export the ASC 
 ltspice_asc_plot_schemdraw = _asc_plot_schemdraw.ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
 ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
+is_valid_ltspice_asy = _asy.is_valid_ltspice_asy  # Re-export the ASY validator.
+get_ltspice_asy_size = _asy.get_ltspice_asy_size  # Re-export the ASY size helper.
 
 is_valid_ltspice_netlist_format = _net.is_valid_ltspice_netlist_format  # Re-export the netlist format validator.
 is_valid_ltspice_netlist_footer = _net.is_valid_ltspice_netlist_footer  # Re-export the netlist footer validator.
@@ -43,6 +46,8 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_asc_plot_schemdraw",  # Export the schemdraw schematic plotting helper.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper.
+    "is_valid_ltspice_asy",  # Export the ASY validator.
+    "get_ltspice_asy_size",  # Export the ASY size helper.
     "is_valid_ltspice_netlist_format",  # Export the netlist format validator.
     "is_valid_ltspice_netlist_footer",  # Export the netlist footer validator.
     "is_ltspice_netlist_structure_connected",  # Export the connectivity validator.

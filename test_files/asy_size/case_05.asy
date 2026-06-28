@@ -1,0 +1,23 @@
+Version 4
+SymbolType CELL
+LINE Normal -32 -48 -32 48
+LINE Normal -32 -48 32 0
+LINE Normal -32 48 32 0
+CIRCLE Normal -4 -4 4 4
+LINE Normal 0 -24 0 -48
+WINDOW 0 0 -64 Center 2
+WINDOW 3 0 64 Center 2
+SYMATTR Prefix X
+SYMATTR Value MyOpAmp
+PIN -32 -32 LEFT 8
+PINATTR PinName In+
+PINATTR SpiceOrder 1
+PIN -32 32 LEFT 8
+PINATTR PinName In-
+PINATTR SpiceOrder 2
+PIN 0 -48 TOP 8
+PINATTR PinName V+
+PINATTR SpiceOrder 3
+PIN 32 0 RIGHT 8
+PINATTR PinName OUT
+PINATTR SpiceOrder 4

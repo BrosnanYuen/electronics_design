@@ -1,13 +1,15 @@
 # electronics_design
 
-`electronics_design` is a small Python API library for validating LTspice simulation netlists and LTspice schematic files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
+`electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes seventeen public functions:
+It currently exposes nineteen public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
 - `is_valid_ltspice_asc_footer(filepath)`
 - `is_valid_ltspice_asc_file(filepath)`
+- `is_valid_ltspice_asy(filepath)`
+- `get_ltspice_asy_size(filepath)`
 - `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 - `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
 - `ltspice_asc_structure_cmp(filepath1, filepath2)`
@@ -61,6 +63,17 @@ or:
 ```python
 (False, "<error message>", <line number>)
 ```
+
+`get_ltspice_asy_size(filepath)` returns a numpy array containing the bounding rectangle of the drawable symbol geometry:
+
+```python
+np.array([
+    [x1, y1],
+    [x2, y2],
+])
+```
+
+It raises `ValueError` when the input `.asy` file is invalid or when the file contains no drawable `LINE`, `RECTANGLE`, `CIRCLE`, or `ARC` geometry.
 
 ## What The Library Checks
 
@@ -127,6 +140,43 @@ Possible returns:
 - `False, "No permission to read file!"`
 - `False, "<propagated validator message>"`
 - `True, ""`
+
+### `is_valid_ltspice_asy(filepath)`
+
+Checks that:
+
+- The file exists and is readable
+- The first nonblank structural line is `Version`
+- The second nonblank structural line is `SymbolType`
+- Each nonblank line starts with a supported LTspice `.asy` keyword
+- Supported records such as `LINE`, `RECTANGLE`, `CIRCLE`, `ARC`, `WINDOW`, `SYMATTR`, `TEXT`, `PIN`, and `PINATTR` have valid token structure
+- `PINATTR` records only appear immediately after a `PIN` record
+- UTF-8, Latin-1, and UTF-16 encoded `.asy` files are accepted
+
+Possible returns:
+
+- `False, "File not found!"`
+- `False, "No permission to read file!"`
+- `False, "LTspice ASY file is invalid! Line <n>"`
+- `True, ""`
+
+### `get_ltspice_asy_size(filepath)`
+
+Checks that:
+
+- The source LTspice symbol passes `is_valid_ltspice_asy(filepath)`
+- Only the `LINE`, `RECTANGLE`, `CIRCLE`, and `ARC` records are used to determine the drawable bounds
+- The minimum `x`, minimum `y`, maximum `x`, and maximum `y` across those records are returned as the symbol bounding rectangle
+- All non-geometry records such as `WINDOW`, `SYMATTR`, `PIN`, `PINATTR`, and `TEXT` are ignored for sizing
+
+Returns:
+
+- `np.array([[min_x, min_y], [max_x, max_y]])` for a valid symbol with drawable geometry
+
+Raises:
+
+- `ValueError` when the `.asy` file is invalid
+- `ValueError` when the `.asy` file contains no drawable `LINE`, `RECTANGLE`, `CIRCLE`, or `ARC` geometry
 
 ### `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 
@@ -419,6 +469,8 @@ from electronics_design import is_valid_ltspice_asc_header
 from electronics_design import is_valid_ltspice_asc_spacing
 from electronics_design import is_valid_ltspice_asc_footer
 from electronics_design import is_valid_ltspice_asc_file
+from electronics_design import is_valid_ltspice_asy
+from electronics_design import get_ltspice_asy_size
 from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_asc_structure_cmp
@@ -438,6 +490,8 @@ asc_header_ok, asc_header_message = is_valid_ltspice_asc_header("example.asc")
 asc_spacing_ok, asc_spacing_message = is_valid_ltspice_asc_spacing("example.asc")
 asc_footer_ok, asc_footer_message = is_valid_ltspice_asc_footer("example.asc")
 asc_file_ok, asc_file_message = is_valid_ltspice_asc_file("example.asc")
+asy_ok, asy_message = is_valid_ltspice_asy("example.asy")
+asy_bounds = get_ltspice_asy_size("example.asy")
 schemdraw_ok, schemdraw_message = ltspice_asc_plot_schemdraw("example.asc", "example.svg")
 convert_settings = {
     "ltspice_lib_cmp_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\cmp",
@@ -474,6 +528,9 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `tests/unit/` contains focused unit tests
 - `tests/integration/` contains integration tests against repository netlists and schematic samples
 - `tests/unit/test_asc_to_netlist.py` converts every fixture in `valid_convert/asc/` and compares the generated netlist against the matching ground-truth file in `valid_convert/netlist/`
+- `tests/unit/test_asy_validation.py` validates every symbol file in `valid_asy/`
+- `tests/unit/test_asy_size.py` covers `.asy` bounding-rectangle extraction
+- `test_files/asy_size/` contains 20 `.asy` symbol-size fixtures
 - `test_files/asc_header/` contains valid and invalid ASC header fixtures
 - `test_files/asc_spacing/` contains valid and invalid ASC spacing fixtures
 - `test_files/asc_footer/` contains valid and invalid ASC footer fixtures
@@ -492,6 +549,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
 - `test_files/netlist_validation/` contains 10 valid and 10 invalid whole-file validation fixtures
 - `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
+- `valid_asy/` contains valid LTspice ASY symbol fixtures
 - `valid_convert/asc/` contains valid LTspice ASC conversion fixtures
 - `valid_convert/netlist/` contains the expected LTspice netlists for the conversion fixtures
 - `scripts/ltspice_asc_plot_schemdraw.py` renders one validated LTspice ASC schematic to a `.png`, `.svg`, or `.jpg` image file
@@ -507,6 +565,7 @@ src/electronics_design/
     ltspice_asc.py
     ltspice_asc_plot_schemdraw.py
     ltspice_asc_to_netlist.py
+    ltspice_asy.py
     ltspice_net.py
     ltspice_netlist_plot_networkx.py
     pathtracing.py
