@@ -2,6 +2,7 @@
 
 from .autoroute import auto_route_wires  # Re-export the orthogonal autorouting helper.
 from .ltspice import is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
+from .pathtracing import are_wires_intersecting_obstacles_detailed  # Re-export the detailed intersection helper.
 from .ltspice import is_valid_ltspice_asc_footer  # Re-export the ASC footer validator.
 from .ltspice import is_valid_ltspice_asc_header  # Re-export the ASC header validator.
 from .ltspice import is_valid_ltspice_asc_spacing  # Re-export the ASC spacing validator.
@@ -34,4 +35,5 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_netlist_plot_networkx",  # Export the networkx plotting helper name.
     "ltspice_netlist_structure_cmp",  # Export the structural comparison helper name.
     "gui_debug",  # Export the path tracing GUI helper name.
+    "are_wires_intersecting_obstacles_detailed",  # Export the detailed intersection helper name.
 ]  # Finish the public export list.

@@ -14,6 +14,7 @@ It currently exposes seventeen public functions:
 - `are_wires_connected(wires)`
 - `are_wires_horizontal_or_vertical(wires)`
 - `are_wires_intersecting_obstacles_fast(wires, obstacles)`
+- `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -239,6 +240,21 @@ Returns:
 - `True` when at least one wire line intersects at least one obstacle line
 - `False` when no wire line intersects any obstacle line
 
+### `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
+
+Checks that:
+
+- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
+- `obstacles` is a numpy array of shape `(M, 4)` where each row is `[X1, Y1, X2, Y2]`
+- Each wire and obstacle is an axis-aligned line segment
+- Two lines intersect if they cross at a shared interior point or touch at a shared endpoint
+- Collinear lines intersect if their ranges overlap
+
+Returns:
+
+- `True, intersections` when at least one wire line intersects at least one obstacle line, where `intersections` is a numpy array of shape `(K, 2)` listing all `[wire_index, obstacle_index]` pairs
+- `False, None` when no wire line intersects any obstacle line
+
 ### `is_valid_ltspice_netlist_format(filepath)`
 
 Checks that:
@@ -409,6 +425,7 @@ from electronics_design import ltspice_asc_structure_cmp
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
+from electronics_design.pathtracing import are_wires_intersecting_obstacles_detailed
 from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
@@ -440,6 +457,7 @@ wires_connected = are_wires_connected(wires_array)
 all_axis_aligned = are_wires_horizontal_or_vertical(wires_array)
 obstacles_array = np.array([[48, 32, 0, 32], [0, 16, 0, 72]])
 intersects_obstacles = are_wires_intersecting_obstacles_fast(wires_array, obstacles_array)
+intersects_detailed, detailed_pairs = are_wires_intersecting_obstacles_detailed(wires_array, obstacles_array)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
@@ -466,7 +484,9 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `tests/unit/test_wires_horizontal_vertical.py` covers the wire axis-alignment API
 - `test_files/wires_horizontal_vertical/` contains 10 valid and 10 invalid axis-alignment fixtures
 - `tests/unit/test_wires_intersect_obstacles.py` covers the wire-obstacle intersection API
+- `tests/unit/test_wires_intersect_obstacles_detailed.py` covers the detailed wire-obstacle intersection API
 - `test_files/wires_intersect_obstacles/` contains 15 valid and 15 invalid wire-obstacle intersection fixtures
+- `test_files/wires_intersect_obstacles_detailed/` contains 10 valid and 10 invalid detailed wire-obstacle intersection fixtures
 - `test_files/netlist_format/` contains 10 valid and 10 invalid format fixtures
 - `test_files/netlist_footer/` contains 10 valid and 10 invalid footer fixtures
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures

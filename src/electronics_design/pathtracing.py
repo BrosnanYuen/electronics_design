@@ -63,6 +63,26 @@ def are_wires_intersecting_obstacles_fast(wires: np.ndarray, obstacles: np.ndarr
     return False
 
 
+def are_wires_intersecting_obstacles_detailed(
+    wires: np.ndarray,
+    obstacles: np.ndarray,
+) -> Tuple[bool, Optional[np.ndarray]]:
+    wires = np.asarray(wires)
+    obstacles = np.asarray(obstacles)
+    if wires.ndim != 2 or wires.shape[1] != 4:
+        raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    if obstacles.ndim != 2 or obstacles.shape[1] != 4:
+        raise ValueError("obstacles must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    intersections: List[List[int]] = []
+    for wire_idx, wire in enumerate(wires):
+        for obstacle_idx, obstacle in enumerate(obstacles):
+            if _lines_intersect(tuple(wire), tuple(obstacle)):
+                intersections.append([wire_idx, obstacle_idx])
+    if not intersections:
+        return False, None
+    return True, np.array(intersections, dtype=int)
+
+
 def _lines_intersect(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int]) -> bool:
     x1a, y1a, x2a, y2a = w1
     x1b, y1b, x2b, y2b = w2
