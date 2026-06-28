@@ -10,7 +10,7 @@ import numpy as np
 from electronics_design import auto_route_wires
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
-from electronics_design.pathtracing import are_wires_intersecting_obstacles
+from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _VALID_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "auto_route_wires" / "valid"
@@ -99,7 +99,7 @@ class TestAutoRouteWires(unittest.TestCase):
                 self.assertTrue(are_wires_horizontal_or_vertical(result), msg=f"{fixture_path.name} should be axis-aligned.")
                 self.assertTrue(are_wires_connected(result), msg=f"{fixture_path.name} should be connected.")
                 self.assertFalse(
-                    are_wires_intersecting_obstacles(result, obstacles),
+                    are_wires_intersecting_obstacles_fast(result, obstacles),
                     msg=f"{fixture_path.name} should avoid obstacle intersections.",
                 )
                 self.assertTrue(_path_matches_flags(result, start_point, end_point), msg=f"{fixture_path.name} should start and end at the FLAG points.")
@@ -118,7 +118,7 @@ class TestAutoRouteWires(unittest.TestCase):
                     or not _obstacles_are_axis_aligned(obstacles)
                     or not are_wires_horizontal_or_vertical(reference_wires)
                     or not are_wires_connected(reference_wires)
-                    or are_wires_intersecting_obstacles(reference_wires, obstacles)
+                    or are_wires_intersecting_obstacles_fast(reference_wires, obstacles)
                     or not _path_matches_flags(reference_wires, start_point, end_point)
                 )
                 self.assertTrue(

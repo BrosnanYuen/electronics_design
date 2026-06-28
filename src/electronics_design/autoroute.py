@@ -14,7 +14,7 @@ import numpy as np
 
 from .pathtracing import are_wires_connected
 from .pathtracing import are_wires_horizontal_or_vertical
-from .pathtracing import are_wires_intersecting_obstacles
+from .pathtracing import are_wires_intersecting_obstacles_fast
 
 Point = Tuple[int, int]
 Segment = Tuple[int, int, int, int]
@@ -219,7 +219,7 @@ def _validate_generated_route(
         raise ValueError("generated route must be horizontal or vertical only")
     if not are_wires_connected(wires):
         raise ValueError("generated route must be connected")
-    if are_wires_intersecting_obstacles(wires, obstacles):
+    if are_wires_intersecting_obstacles_fast(wires, obstacles):
         raise ValueError("generated route intersects an obstacle")
 
 

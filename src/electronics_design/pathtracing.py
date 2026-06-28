@@ -49,7 +49,7 @@ def are_wires_connected(wires: np.ndarray) -> bool:
     return all(_find(i) == root for i in range(1, n))
 
 
-def are_wires_intersecting_obstacles(wires: np.ndarray, obstacles: np.ndarray) -> bool:
+def are_wires_intersecting_obstacles_fast(wires: np.ndarray, obstacles: np.ndarray) -> bool:
     wires = np.asarray(wires)
     obstacles = np.asarray(obstacles)
     if wires.ndim != 2 or wires.shape[1] != 4:
@@ -470,7 +470,7 @@ class _PathTracingGUI:
             return
         wires_array = np.array(self.wires, dtype=int)
         obstacles_array = np.array(self.obstacles, dtype=int)
-        if are_wires_intersecting_obstacles(wires_array, obstacles_array):
+        if are_wires_intersecting_obstacles_fast(wires_array, obstacles_array):
             messagebox.showinfo("INTERSECTIONS", "Wires INTERSECT obstacles!")
         else:
             messagebox.showinfo("INTERSECTIONS", "Wires DO NOT intersect obstacles.")
