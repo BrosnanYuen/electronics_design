@@ -1,0 +1,24 @@
+Version 4
+SymbolType CELL
+CIRCLE Normal -32 -32 32 32
+LINE Normal 0 -64 0 -32
+LINE Normal -64 0 -32 0
+LINE Normal 32 0 64 0
+LINE Normal 0 32 0 64
+WINDOW 0 0 -48 Center 2
+SYMATTR Prefix Y
+SYMATTR Value Circle4
+PIN 0 -64 TOP 8
+PINATTR Description Power pin
+PINATTR PinName TOP
+PINATTR SpiceOrder 1
+PIN -64 0 LEFT 8
+PINATTR PinName LEFT
+PINATTR PinRole Input
+PINATTR SpiceOrder 2
+PIN 64 0 RIGHT 8
+PINATTR PinName RIGHT
+PINATTR SpiceOrder 3
+PIN 0 64 BOTTOM 8
+PINATTR PinName BOTTOM
+PINATTR SpiceOrder 4

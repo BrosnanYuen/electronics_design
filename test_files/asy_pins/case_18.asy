@@ -1,0 +1,23 @@
+Version 4
+SymbolType CELL
+RECTANGLE Normal -32 -32 32 32
+LINE Normal 0 -64 0 -32
+LINE Normal -64 0 -32 0
+LINE Normal -64 32 -32 32
+LINE Normal 32 16 64 16
+WINDOW 0 0 -48 Center 2
+WINDOW 3 0 48 Center 2
+SYMATTR Prefix M
+SYMATTR Value Mixer
+PIN 0 -64 TOP 8
+PINATTR PinName PWR
+PINATTR SpiceOrder 1
+PIN -64 0 LEFT 8
+PINATTR PinName IN_A
+PINATTR SpiceOrder 2
+PIN -64 32 LEFT 8
+PINATTR PinName IN_B
+PINATTR SpiceOrder 3
+PIN 64 16 RIGHT 8
+PINATTR PinName OUT
+PINATTR SpiceOrder 4

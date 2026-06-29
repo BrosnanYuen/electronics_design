@@ -1,0 +1,22 @@
+Version 4
+SymbolType CELL
+ARC Normal -32 -32 32 32 -32 0 32 0
+LINE Normal -64 0 -32 0
+LINE Normal -16 -48 -16 -32
+LINE Normal 16 32 16 48
+LINE Normal 32 0 64 0
+WINDOW 0 0 -56 Center 2
+SYMATTR Prefix Z
+SYMATTR Value ArcCell
+PIN -64 0 LEFT 8
+PINATTR PinName A1
+PINATTR SpiceOrder 1
+PIN -16 -48 TOP 8
+PINATTR PinName A2
+PINATTR SpiceOrder 2
+PIN 16 48 BOTTOM 8
+PINATTR PinName A3
+PINATTR SpiceOrder 3
+PIN 64 0 RIGHT 8
+PINATTR PinName A4
+PINATTR SpiceOrder 4

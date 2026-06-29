@@ -20,6 +20,8 @@ ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the
 ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
 is_valid_ltspice_asy = _asy.is_valid_ltspice_asy  # Re-export the ASY validator.
 get_ltspice_asy_size = _asy.get_ltspice_asy_size  # Re-export the ASY size helper.
+get_ltspice_asy_pins = _asy.get_ltspice_asy_pins  # Re-export the ASY pin extraction helper.
+rectangle_points_to_lines = _asy.rectangle_points_to_lines  # Re-export the rectangle edge helper.
 
 is_valid_ltspice_netlist_format = _net.is_valid_ltspice_netlist_format  # Re-export the netlist format validator.
 is_valid_ltspice_netlist_footer = _net.is_valid_ltspice_netlist_footer  # Re-export the netlist footer validator.
@@ -48,6 +50,8 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper.
     "is_valid_ltspice_asy",  # Export the ASY validator.
     "get_ltspice_asy_size",  # Export the ASY size helper.
+    "get_ltspice_asy_pins",  # Export the ASY pin extraction helper.
+    "rectangle_points_to_lines",  # Export the rectangle edge helper.
     "is_valid_ltspice_netlist_format",  # Export the netlist format validator.
     "is_valid_ltspice_netlist_footer",  # Export the netlist footer validator.
     "is_ltspice_netlist_structure_connected",  # Export the connectivity validator.

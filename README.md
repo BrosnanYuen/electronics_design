@@ -2,7 +2,7 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes nineteen public functions:
+It currently exposes twenty-one public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -10,6 +10,8 @@ It currently exposes nineteen public functions:
 - `is_valid_ltspice_asc_file(filepath)`
 - `is_valid_ltspice_asy(filepath)`
 - `get_ltspice_asy_size(filepath)`
+- `get_ltspice_asy_pins(filepath)`
+- `rectangle_points_to_lines(points)`
 - `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 - `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
 - `ltspice_asc_structure_cmp(filepath1, filepath2)`
@@ -74,6 +76,27 @@ np.array([
 ```
 
 It raises `ValueError` when the input `.asy` file is invalid or when the file contains no drawable `LINE`, `RECTANGLE`, `CIRCLE`, or `ARC` geometry.
+
+`get_ltspice_asy_pins(filepath)` returns a Python list of pin rows:
+
+```python
+[
+    [x, y, "PinName", spice_order],
+]
+```
+
+It raises `ValueError` when the input `.asy` file is invalid or when a declared pin is missing a `PinName` or `SpiceOrder`.
+
+`rectangle_points_to_lines(points)` returns a numpy array containing the four rectangle edges implied by two opposite corner points:
+
+```python
+np.array([
+    [x1, y1, x2, y1],
+    [x2, y1, x2, y2],
+    [x1, y1, x1, y2],
+    [x1, y2, x2, y2],
+])
+```
 
 ## What The Library Checks
 
@@ -177,6 +200,39 @@ Raises:
 
 - `ValueError` when the `.asy` file is invalid
 - `ValueError` when the `.asy` file contains no drawable `LINE`, `RECTANGLE`, `CIRCLE`, or `ARC` geometry
+
+### `get_ltspice_asy_pins(filepath)`
+
+Checks that:
+
+- The source LTspice symbol passes `is_valid_ltspice_asy(filepath)`
+- Every declared `PIN` block includes both a `PINATTR PinName ...` and a `PINATTR SpiceOrder ...`
+- Returned pins are sorted by ascending `SpiceOrder`
+
+Returns:
+
+- `[[x, y, "PinName", spice_order], ...]` for a valid symbol
+
+Raises:
+
+- `ValueError` when the `.asy` file is invalid
+- `ValueError` when a declared pin is missing a `PinName` or `SpiceOrder`
+
+### `rectangle_points_to_lines(points)`
+
+Checks that:
+
+- `points` is a numpy array of shape `(2, 2)` containing integer coordinates
+- The two rows describe opposite rectangle corners
+- The returned line order is top, right, left, bottom
+
+Returns:
+
+- `np.array([[x1, y1, x2, y1], [x2, y1, x2, y2], [x1, y1, x1, y2], [x1, y2, x2, y2]])`
+
+Raises:
+
+- `ValueError` when `points` is not shape `(2, 2)` or contains non-integer coordinates
 
 ### `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 
@@ -471,6 +527,8 @@ from electronics_design import is_valid_ltspice_asc_footer
 from electronics_design import is_valid_ltspice_asc_file
 from electronics_design import is_valid_ltspice_asy
 from electronics_design import get_ltspice_asy_size
+from electronics_design import get_ltspice_asy_pins
+from electronics_design import rectangle_points_to_lines
 from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_asc_structure_cmp
@@ -492,6 +550,8 @@ asc_footer_ok, asc_footer_message = is_valid_ltspice_asc_footer("example.asc")
 asc_file_ok, asc_file_message = is_valid_ltspice_asc_file("example.asc")
 asy_ok, asy_message = is_valid_ltspice_asy("example.asy")
 asy_bounds = get_ltspice_asy_size("example.asy")
+asy_pins = get_ltspice_asy_pins("example.asy")
+rectangle_lines = rectangle_points_to_lines(np.array([[-16, -32], [48, 32]]))
 schemdraw_ok, schemdraw_message = ltspice_asc_plot_schemdraw("example.asc", "example.svg")
 convert_settings = {
     "ltspice_lib_cmp_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\cmp",

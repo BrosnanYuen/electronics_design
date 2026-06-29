@@ -1,0 +1,22 @@
+Version 4
+SymbolType BLOCK
+RECTANGLE Normal -24 -24 24 24
+LINE Normal -48 -48 -24 -24
+LINE Normal 48 -48 24 -24
+LINE Normal -48 48 -24 24
+LINE Normal 48 48 24 24
+WINDOW 0 0 -40 Center 2
+SYMATTR Prefix X
+SYMATTR Value CornerPins
+PIN -48 -48 LEFT 8
+PINATTR PinName A
+PINATTR SpiceOrder 1
+PIN 48 -48 RIGHT 8
+PINATTR PinName B
+PINATTR SpiceOrder 2
+PIN -48 48 LEFT 8
+PINATTR PinName C
+PINATTR SpiceOrder 3
+PIN 48 48 RIGHT 8
+PINATTR PinName D
+PINATTR SpiceOrder 4

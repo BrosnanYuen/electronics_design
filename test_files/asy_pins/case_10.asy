@@ -1,0 +1,19 @@
+Version 4
+SymbolType CELL
+RECTANGLE Normal -24 0 24 48
+LINE Normal -16 64 -16 48
+LINE Normal 16 64 16 48
+LINE Normal 0 0 0 -16
+TEXT 24 72 Left 2 Comparator stage
+WINDOW 0 0 -24 Center 2
+SYMATTR Prefix A
+SYMATTR Value CMP
+PIN -16 64 BOTTOM 8
+PINATTR PinName CTRL
+PINATTR SpiceOrder 1
+PIN 16 64 BOTTOM 8
+PINATTR PinName SENSE
+PINATTR SpiceOrder 2
+PIN 0 -16 TOP 8
+PINATTR PinName OUT
+PINATTR SpiceOrder 3

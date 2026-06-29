@@ -1,0 +1,23 @@
+Version 4
+SymbolType BLOCK
+RECTANGLE Normal -32 -32 32 32
+LINE Normal -48 0 -32 0
+LINE Normal 32 0 48 0
+LINE Normal 0 -48 0 -32
+LINE Normal 0 32 0 48
+WINDOW 0 0 -48 Center 2
+WINDOW 3 0 48 Center 2
+SYMATTR Prefix X
+SYMATTR Value LogicCell
+PIN -48 0 LEFT 8
+PINATTR PinName IN1
+PINATTR SpiceOrder 1
+PIN 0 -48 TOP 8
+PINATTR PinName IN2
+PINATTR SpiceOrder 2
+PIN 48 0 RIGHT 8
+PINATTR PinName OUT1
+PINATTR SpiceOrder 3
+PIN 0 48 BOTTOM 8
+PINATTR PinName OUT2
+PINATTR SpiceOrder 4

@@ -1,0 +1,23 @@
+Version 4
+SymbolType BLOCK
+RECTANGLE Normal -48 -48 48 48
+TEXT -16 -8 Left 2 REG
+LINE Normal -96 32 -48 32
+LINE Normal -96 -32 -48 -32
+LINE Normal 48 0 96 0
+LINE Normal 0 48 0 96
+WINDOW 0 0 -64 Center 2
+SYMATTR Prefix U
+SYMATTR Value RegBlock
+PIN -96 32 LEFT 8
+PINATTR PinName CLK
+PINATTR SpiceOrder 1
+PIN -96 -32 LEFT 8
+PINATTR PinName DATA
+PINATTR SpiceOrder 2
+PIN 96 0 RIGHT 8
+PINATTR PinName Q
+PINATTR SpiceOrder 3
+PIN 0 96 BOTTOM 8
+PINATTR PinName RST
+PINATTR SpiceOrder 4

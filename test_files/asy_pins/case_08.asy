@@ -1,0 +1,21 @@
+Version 4
+SymbolType CELL
+LINE Normal -48 -24 48 -24
+LINE Normal -48 24 48 24
+LINE Normal -48 -24 -48 24
+LINE Normal 48 -24 48 24
+LINE Normal -64 0 -48 0
+LINE Normal 48 0 64 0
+LINE Normal 0 -48 0 -24
+WINDOW 0 0 32 Center 2
+SYMATTR Prefix U
+SYMATTR Value MUX
+PIN 64 0 RIGHT 8
+PINATTR PinName RIGHT
+PINATTR SpiceOrder 2
+PIN -64 0 LEFT 8
+PINATTR PinName LEFT
+PINATTR SpiceOrder 1
+PIN 0 -48 TOP 8
+PINATTR PinName TOP
+PINATTR SpiceOrder 3

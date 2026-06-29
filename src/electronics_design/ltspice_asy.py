@@ -1,9 +1,11 @@
-"""LTspice ASY symbol validation helpers and size extraction APIs."""
+"""LTspice ASY symbol validation, size extraction, and pin parsing APIs."""
 
 from __future__ import annotations
 
+from numbers import Integral
 import os
 import re
+from typing import Any
 from typing import List
 from typing import Sequence
 from typing import Tuple
@@ -12,6 +14,8 @@ import numpy as np
 
 ValidationResult = Tuple[bool, str]
 ReadLinesResult = Tuple[bool, List[str], str]
+PinInfo = Tuple[int, int, str, int]
+PinParseResult = Tuple[bool, List[PinInfo], int]
 
 _VALID_ASY_KEYWORDS = {
     "VERSION",
@@ -81,6 +85,40 @@ def get_ltspice_asy_size(filepath: str) -> np.ndarray:
     if bounds is None:
         raise ValueError("LTspice ASY file does not contain any drawable geometry!")
     return np.array([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], dtype=int)
+
+
+def rectangle_points_to_lines(points: np.ndarray) -> np.ndarray:
+    """Return the four axis-aligned rectangle edges for two opposite corner points."""
+
+    normalized_points = _normalize_rectangle_points(points)
+    x1 = min(normalized_points[0][0], normalized_points[1][0])
+    y1 = min(normalized_points[0][1], normalized_points[1][1])
+    x2 = max(normalized_points[0][0], normalized_points[1][0])
+    y2 = max(normalized_points[0][1], normalized_points[1][1])
+    return np.array(
+        [
+            [x1, y1, x2, y1],
+            [x2, y1, x2, y2],
+            [x1, y1, x1, y2],
+            [x1, y2, x2, y2],
+        ],
+        dtype=int,
+    )
+
+
+def get_ltspice_asy_pins(filepath: str) -> List[List[Any]]:
+    """Return LTspice ASY pins as ``[x, y, pin_name, spice_order]`` rows."""
+
+    validation_result = is_valid_ltspice_asy(filepath)
+    if not validation_result[0]:
+        raise ValueError(validation_result[1])
+    read_result = _read_text_file_lines(filepath)
+    if not read_result[0]:
+        raise ValueError(read_result[2])
+    parse_result = _extract_asy_pins(read_result[1])
+    if not parse_result[0]:
+        raise ValueError(_format_line_message("LTspice ASY pin information is incomplete!", parse_result[2]))
+    return [[pin_x, pin_y, pin_name, spice_order] for pin_x, pin_y, pin_name, spice_order in parse_result[1]]
 
 
 def _read_text_file_lines(filepath: str) -> ReadLinesResult:
@@ -281,6 +319,88 @@ def _extract_asy_shape_bounds(lines: Sequence[str]) -> Tuple[int, int, int, int]
     return minimum_x, minimum_y, maximum_x, maximum_y
 
 
+def _extract_asy_pins(lines: Sequence[str]) -> PinParseResult:
+    pins: List[PinInfo] = []
+    current_pin_x = 0
+    current_pin_y = 0
+    current_pin_name = ""
+    current_pin_order = None
+    current_pin_line_number = 0
+    for line_number, raw_line in enumerate(lines, start=1):
+        if raw_line.strip() == "":
+            continue
+        classification_result = _classify_asy_line(raw_line)
+        if not classification_result[0]:
+            continue
+        keyword = classification_result[1]
+        if keyword == "PIN":
+            finalize_result = _finalize_asy_pin(
+                pins,
+                current_pin_x,
+                current_pin_y,
+                current_pin_name,
+                current_pin_order,
+                current_pin_line_number,
+            )
+            if not finalize_result[0]:
+                return False, [], finalize_result[1]
+            pin_tokens = raw_line.split()
+            current_pin_x = int(pin_tokens[1])
+            current_pin_y = int(pin_tokens[2])
+            current_pin_name = ""
+            current_pin_order = None
+            current_pin_line_number = line_number
+            continue
+        if keyword == "PINATTR" and current_pin_line_number != 0:
+            attribute_tokens = raw_line.split(maxsplit=2)
+            attribute_name = attribute_tokens[1].upper()
+            attribute_value = attribute_tokens[2]
+            if attribute_name == "PINNAME":
+                current_pin_name = attribute_value
+            elif attribute_name == "SPICEORDER":
+                current_pin_order = int(attribute_value)
+            continue
+        finalize_result = _finalize_asy_pin(
+            pins,
+            current_pin_x,
+            current_pin_y,
+            current_pin_name,
+            current_pin_order,
+            current_pin_line_number,
+        )
+        if not finalize_result[0]:
+            return False, [], finalize_result[1]
+        current_pin_line_number = 0
+    finalize_result = _finalize_asy_pin(
+        pins,
+        current_pin_x,
+        current_pin_y,
+        current_pin_name,
+        current_pin_order,
+        current_pin_line_number,
+    )
+    if not finalize_result[0]:
+        return False, [], finalize_result[1]
+    pins.sort(key=lambda pin: pin[3])
+    return True, pins, 0
+
+
+def _finalize_asy_pin(
+    pins: List[PinInfo],
+    pin_x: int,
+    pin_y: int,
+    pin_name: str,
+    pin_order: int | None,
+    pin_line_number: int,
+) -> Tuple[bool, int]:
+    if pin_line_number == 0:
+        return True, 0
+    if pin_name == "" or pin_order is None:
+        return False, pin_line_number
+    pins.append((pin_x, pin_y, pin_name, pin_order))
+    return True, 0
+
+
 def _shape_coordinate_values(raw_line: str, keyword: str) -> Tuple[int, ...] | None:
     tokens = raw_line.split()
     if keyword in {"LINE", "RECTANGLE", "CIRCLE"}:
@@ -292,6 +412,22 @@ def _shape_coordinate_values(raw_line: str, keyword: str) -> Tuple[int, ...] | N
 
 def _is_integer_token(token: str) -> bool:
     return re.match(r"^-?\d+$", token) is not None
+
+
+def _normalize_rectangle_points(points: np.ndarray) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    point_array = np.asarray(points)
+    if point_array.ndim != 2 or point_array.shape != (2, 2):
+        raise ValueError("points must be a 2D array with shape (2, 2)")
+    normalized_points: List[Tuple[int, int]] = []
+    for row_index in range(2):
+        coordinate_pair: List[int] = []
+        for column_index in range(2):
+            raw_value = point_array[row_index, column_index]
+            if isinstance(raw_value, bool) or not isinstance(raw_value, Integral):
+                raise ValueError(f"points[{row_index}, {column_index}] must be an integer")
+            coordinate_pair.append(int(raw_value))
+        normalized_points.append((coordinate_pair[0], coordinate_pair[1]))
+    return normalized_points[0], normalized_points[1]
 
 
 def _format_line_message(prefix: str, line_number: int) -> str:

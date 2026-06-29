@@ -8,6 +8,8 @@ from .ltspice import is_valid_ltspice_asc_header  # Re-export the ASC header val
 from .ltspice import is_valid_ltspice_asc_spacing  # Re-export the ASC spacing validator.
 from .ltspice import is_valid_ltspice_asy  # Re-export the ASY validator.
 from .ltspice import get_ltspice_asy_size  # Re-export the ASY size helper.
+from .ltspice import get_ltspice_asy_pins  # Re-export the ASY pin extraction helper.
+from .ltspice import rectangle_points_to_lines  # Re-export the rectangle edge helper.
 from .ltspice import ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
 from .ltspice import ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 from .ltspice import ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
@@ -28,6 +30,8 @@ __all__ = [  # Define the supported public API surface.
     "is_valid_ltspice_asc_file",  # Export the ASC whole-file validator name.
     "is_valid_ltspice_asy",  # Export the ASY validator name.
     "get_ltspice_asy_size",  # Export the ASY size helper name.
+    "get_ltspice_asy_pins",  # Export the ASY pin extraction helper name.
+    "rectangle_points_to_lines",  # Export the rectangle edge helper name.
     "ltspice_asc_plot_schemdraw",  # Export the schemdraw schematic plotting helper name.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper name.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper name.

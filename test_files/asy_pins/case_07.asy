@@ -1,0 +1,19 @@
+Version 4
+SymbolType CELL
+RECTANGLE Normal -16 -16 16 16
+LINE Normal -32 -16 -16 -16
+LINE Normal 16 -16 32 -16
+LINE Normal 0 16 0 32
+TEXT 0 48 Left 2 Enable buffer
+WINDOW 0 0 -32 Center 2
+SYMATTR Prefix U
+SYMATTR Value BUF_EN
+PIN -32 -16 LEFT 8
+PINATTR PinName IN
+PINATTR SpiceOrder 1
+PIN 32 -16 RIGHT 8
+PINATTR PinName OUT
+PINATTR SpiceOrder 2
+PIN 0 32 BOTTOM 8
+PINATTR PinName EN
+PINATTR SpiceOrder 3

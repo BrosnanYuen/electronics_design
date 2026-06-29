@@ -1,0 +1,29 @@
+Version 4
+SymbolType BLOCK
+
+RECTANGLE Normal -48 -24 48 24
+
+LINE Normal -80 -16 -48 -16
+LINE Normal -80 16 -48 16
+LINE Normal 48 -16 80 -16
+LINE Normal 48 16 80 16
+
+WINDOW 0 0 -40 Center 2
+SYMATTR Prefix X
+SYMATTR Value DualIO
+
+PIN -80 -16 LEFT 8
+PINATTR PinName I1
+PINATTR SpiceOrder 1
+
+PIN -80 16 LEFT 8
+PINATTR PinName I2
+PINATTR SpiceOrder 2
+
+PIN 80 -16 RIGHT 8
+PINATTR PinName O1
+PINATTR SpiceOrder 3
+
+PIN 80 16 RIGHT 8
+PINATTR PinName O2
+PINATTR SpiceOrder 4
