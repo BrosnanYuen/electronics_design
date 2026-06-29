@@ -15,8 +15,8 @@ _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]  # Resolve the project roo
 _VALID_ASC_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "asc"  # Point to the repository ASC fixtures used for conversion tests.
 _VALID_NETLIST_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "netlist"  # Point to the ground-truth LTspice netlists for structural comparison.
 _CONVERT_SETTINGS = {  # Define the LTspice library settings passed into the converter for every test fixture.
-    "ltspice_lib_cmp_path": r"C:\users\brosnan\AppData\Local\LTspice\lib\cmp\\",
-    "ltspice_lib_sym_path": r"C:\users\brosnan\AppData\Local\LTspice\lib\sym\\",
+    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
 }  # Finish the shared conversion settings dictionary.
 
 

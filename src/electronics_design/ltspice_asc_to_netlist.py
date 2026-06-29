@@ -28,7 +28,17 @@ _LINE_NUMBER_PATTERN = re.compile(r"Line (?P<line>\d+)")
 _DIRECTIVE_SPLIT_PATTERN = re.compile(r"(?:\\n|\r\n|\r|\n)+")
 _DEFAULT_ANALYSIS_DIRECTIVE = ".op"
 _OK_RESULT: ConversionResult = (True, "OK", 0)
-_DEFAULT_ASC_COMPARE_CONVERT_SETTINGS: Mapping[str, object] = {}
+_LIBRARY_FILE_SUFFIXES = {".bjt", ".dio", ".jft", ".lib", ".mos", ".sub"}
+
+
+def _default_asc_compare_convert_settings() -> Mapping[str, object]:
+    return {
+        "ltspice_windows_path": os.environ.get("LTSPICE_WINDOWS_PATH", ""),
+        "ltspice_wine_path": os.environ.get("LTSPICE_WINE_PATH", ""),
+    }
+
+
+_DEFAULT_ASC_COMPARE_CONVERT_SETTINGS: Mapping[str, object] = _default_asc_compare_convert_settings()
 
 _STANDARD_LIBRARY_RULES = {
     "D": ((".model D D",), "standard.dio"),
@@ -130,9 +140,15 @@ def ltspice_asc_to_netlist(
     parse_result = _parse_asc_for_conversion(read_result[1])
     if not parse_result[0]:
         return False, "ASC_PARSE_ERROR", parse_result[2]
-    symbol_root = _resolve_symbol_root(convert_settings)
-    symbol_definitions = _build_symbol_lookup(symbol_root)
-    net_build_result = _build_netlist_lines(parse_result[1], symbol_definitions, convert_settings)
+    ltspice_root = _resolve_ltspice_root(convert_settings)
+    symbol_definitions = _build_symbol_lookup(ltspice_root)
+    library_lookup = _build_library_lookup(ltspice_root)
+    net_build_result = _build_netlist_lines(
+        parse_result[1],
+        symbol_definitions,
+        library_lookup,
+        convert_settings,
+    )
     if not net_build_result[0]:
         return False, net_build_result[1], net_build_result[2]
     write_result = _write_netlist_file(net_filepath_out, net_build_result[3])
@@ -144,25 +160,30 @@ def ltspice_asc_to_netlist(
     return _OK_RESULT
 
 
-def ltspice_asc_structure_cmp(filepath1: str, filepath2: str) -> StructureCompareResult:
+def ltspice_asc_structure_cmp(
+    filepath1: str,
+    filepath2: str,
+    convert_settings: Optional[Mapping[str, object]] = None,
+) -> StructureCompareResult:
     first_validation_result = _asc.is_valid_ltspice_asc_file(filepath1)
     if not first_validation_result[0]:
         return False, _message_without_line_number(first_validation_result[1]), _line_number_from_message(first_validation_result[1], 0)
     second_validation_result = _asc.is_valid_ltspice_asc_file(filepath2)
     if not second_validation_result[0]:
         return False, _message_without_line_number(second_validation_result[1]), _line_number_from_message(second_validation_result[1], 0)
+    effective_convert_settings = convert_settings if convert_settings is not None else _DEFAULT_ASC_COMPARE_CONVERT_SETTINGS
     with tempfile.TemporaryDirectory() as temporary_directory:
         first_netlist_path = Path(temporary_directory) / "first.net"
         second_netlist_path = Path(temporary_directory) / "second.net"
-        first_convert_result = ltspice_asc_to_netlist(filepath1, str(first_netlist_path), _DEFAULT_ASC_COMPARE_CONVERT_SETTINGS)
+        first_convert_result = ltspice_asc_to_netlist(filepath1, str(first_netlist_path), effective_convert_settings)
         if not first_convert_result[0]:
             return False, first_convert_result[1], first_convert_result[2]
-        second_convert_result = ltspice_asc_to_netlist(filepath2, str(second_netlist_path), _DEFAULT_ASC_COMPARE_CONVERT_SETTINGS)
+        second_convert_result = ltspice_asc_to_netlist(filepath2, str(second_netlist_path), effective_convert_settings)
         if not second_convert_result[0]:
             return False, second_convert_result[1], second_convert_result[2]
         if _net.ltspice_netlist_structure_cmp(str(first_netlist_path), str(second_netlist_path)):
             return True, "", 0
-    return _diagnose_asc_structure_difference(filepath1, filepath2)
+    return _diagnose_asc_structure_difference(filepath1, filepath2, effective_convert_settings)
 
 
 def _validate_asc_for_conversion(filepath: str) -> Tuple[bool, int]:
@@ -175,11 +196,15 @@ def _validate_asc_for_conversion(filepath: str) -> Tuple[bool, int]:
     return True, 0
 
 
-def _diagnose_asc_structure_difference(filepath1: str, filepath2: str) -> StructureCompareResult:
-    first_signature_result = _build_asc_component_signature_records(filepath1)
+def _diagnose_asc_structure_difference(
+    filepath1: str,
+    filepath2: str,
+    convert_settings: Mapping[str, object],
+) -> StructureCompareResult:
+    first_signature_result = _build_asc_component_signature_records(filepath1, convert_settings)
     if not first_signature_result[0]:
         return False, first_signature_result[1], first_signature_result[2]
-    second_signature_result = _build_asc_component_signature_records(filepath2)
+    second_signature_result = _build_asc_component_signature_records(filepath2, convert_settings)
     if not second_signature_result[0]:
         return False, second_signature_result[1], second_signature_result[2]
     first_records = first_signature_result[3]
@@ -197,6 +222,7 @@ def _diagnose_asc_structure_difference(filepath1: str, filepath2: str) -> Struct
 
 def _build_asc_component_signature_records(
     filepath: str,
+    convert_settings: Mapping[str, object],
 ) -> Tuple[bool, str, int, Tuple[Tuple[Tuple[str, Tuple[str, ...]], int], ...]]:
     read_result = _asc._read_text_file_lines(filepath)
     if not read_result[0]:
@@ -204,8 +230,8 @@ def _build_asc_component_signature_records(
     parse_result = _parse_asc_for_conversion(read_result[1])
     if not parse_result[0]:
         return False, "ASC_PARSE_ERROR", parse_result[2], ()
-    symbol_root = _resolve_symbol_root(_DEFAULT_ASC_COMPARE_CONVERT_SETTINGS)
-    symbol_definitions = _build_symbol_lookup(symbol_root)
+    ltspice_root = _resolve_ltspice_root(convert_settings)
+    symbol_definitions = _build_symbol_lookup(ltspice_root)
     connectivity_result = _resolve_symbol_nets(parse_result[1], symbol_definitions)
     if not connectivity_result[0]:
         return False, connectivity_result[1], connectivity_result[2], ()
@@ -284,39 +310,19 @@ def _split_embedded_commands(command_text: str) -> Tuple[str, ...]:
     return commands
 
 
-def _resolve_symbol_root(convert_settings: Mapping[str, object]) -> str:
-    configured_root = str(convert_settings.get("ltspice_lib_sym_path", "")).strip()
-    if configured_root == "":
-        configured_root = os.path.expanduser("~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/lib/sym")
-    local_root = _resolve_local_ltspice_path(configured_root)
-    return local_root
-
-
-def _resolve_cmp_root(convert_settings: Mapping[str, object]) -> str:
-    configured_root = str(convert_settings.get("ltspice_lib_cmp_path", "")).strip()
-    if configured_root == "":
-        configured_root = r"C:\users\brosnan\AppData\Local\LTspice\lib\cmp"
-    return configured_root
-
-
-def _resolve_local_ltspice_path(path_value: str) -> str:
-    if path_value == "":
-        return path_value
-    if os.path.exists(path_value):
-        return path_value
-    windows_match = re.match(r"^(?P<drive>[A-Za-z]):[\\/](?P<rest>.*)$", path_value)
-    if windows_match is None:
-        return path_value
-    rest_path = windows_match.group("rest").replace("\\", "/")
-    drive_letter = windows_match.group("drive").lower()
-    candidate_paths = (
-        os.path.expanduser(f"~/.wine/drive_{drive_letter}/{rest_path}"),
-        os.path.join("/home", os.getenv("USER", ""), ".wine", f"drive_{drive_letter}", rest_path),
-    )
-    for candidate_path in candidate_paths:
-        if os.path.exists(candidate_path):
+def _resolve_ltspice_root(convert_settings: Mapping[str, object]) -> str:
+    wine_path = os.path.expanduser(str(convert_settings.get("ltspice_wine_path", "")).strip())
+    windows_path = str(convert_settings.get("ltspice_windows_path", "")).strip()
+    for candidate_path in (wine_path, windows_path):
+        if candidate_path != "" and os.path.isdir(candidate_path):
             return candidate_path
-    return path_value
+    if wine_path != "":
+        return wine_path
+    return windows_path
+
+
+def _resolve_windows_ltspice_path(convert_settings: Mapping[str, object]) -> str:
+    return str(convert_settings.get("ltspice_windows_path", "")).strip()
 
 
 def _build_symbol_lookup(symbol_root: str) -> Dict[str, SymbolDefinition]:
@@ -327,7 +333,26 @@ def _build_symbol_lookup(symbol_root: str) -> Dict[str, SymbolDefinition]:
             definition = _load_symbol_definition(str(symbol_path), relative_path)
             if definition is not None:
                 lookup[relative_path.lower()] = definition
+                lookup.setdefault(symbol_path.name.lower(), definition)
     lookup["gain"] = _SYNTHETIC_GAIN_SYMBOL
+    return lookup
+
+
+def _build_library_lookup(ltspice_root: str) -> Dict[str, str]:
+    lookup: Dict[str, str] = {}
+    if not os.path.isdir(ltspice_root):
+        return lookup
+    for library_path in Path(ltspice_root).rglob("*"):
+        if not library_path.is_file():
+            continue
+        if library_path.suffix.lower() not in _LIBRARY_FILE_SUFFIXES and not library_path.name.lower().startswith("standard."):
+            continue
+        relative_path = library_path.relative_to(ltspice_root).as_posix()
+        normalized_relative_path = relative_path.lower()
+        lookup.setdefault(normalized_relative_path, relative_path)
+        lookup.setdefault(library_path.name.lower(), relative_path)
+        if normalized_relative_path.startswith("lib/"):
+            lookup.setdefault(normalized_relative_path[4:], relative_path)
     return lookup
 
 
@@ -425,6 +450,7 @@ def _load_symbol_definition(filepath: str, relative_path: str) -> Optional[Symbo
 def _build_netlist_lines(
     parsed_asc: ParsedAsc,
     symbol_definitions: Mapping[str, SymbolDefinition],
+    library_lookup: Mapping[str, str],
     convert_settings: Mapping[str, object],
 ) -> Tuple[bool, str, int, Tuple[str, ...]]:
     connectivity_result = _resolve_symbol_nets(parsed_asc, symbol_definitions)
@@ -434,7 +460,6 @@ def _build_netlist_lines(
     component_lines: List[str] = []
     auxiliary_device_lines: List[str] = []
     directive_lines: List[str] = []
-    include_lines: List[str] = []
     standard_footer_lines: List[str] = []
     analysis_found = False
     used_standard_prefixes: Set[str] = set()
@@ -452,7 +477,9 @@ def _build_netlist_lines(
             used_standard_prefixes.add(normalized_prefix)
         library_reference = _infer_symbol_library_reference(symbol_instance, symbol_definition)
         if library_reference is not None:
-            used_symbol_libraries[library_reference] = None
+            resolved_library_reference = _resolve_library_relative_path(library_reference, library_lookup)
+            if resolved_library_reference is not None:
+                used_symbol_libraries[_library_basename(resolved_library_reference)] = None
     for text_command in parsed_asc.text_commands:
         if text_command.text.startswith("."):
             if text_command.text.lower() in {".backanno", ".end"}:
@@ -465,7 +492,7 @@ def _build_netlist_lines(
         auxiliary_device_lines.append(text_command.text)
     if not analysis_found:
         directive_lines.append(_DEFAULT_ANALYSIS_DIRECTIVE)
-    cmp_root = _resolve_cmp_root(convert_settings)
+    windows_ltspice_path = _resolve_windows_ltspice_path(convert_settings)
     for prefix in _STANDARD_LIBRARY_RULES:
         if prefix not in used_standard_prefixes:
             continue
@@ -473,8 +500,10 @@ def _build_netlist_lines(
         for model_line in model_lines_for_prefix:
             standard_footer_lines.append(model_line)
         if library_name is not None:
-            standard_footer_lines.append(_build_library_line(cmp_root, library_name))
-    symbol_include_lines = tuple(f".lib {library_reference}" for library_reference in used_symbol_libraries)
+            resolved_standard_library = _resolve_library_relative_path(library_name, library_lookup)
+            if resolved_standard_library is not None:
+                standard_footer_lines.append(_build_library_line(windows_ltspice_path, resolved_standard_library))
+    symbol_include_lines = tuple(f".lib {library_name}" for library_name in used_symbol_libraries)
     final_lines = _dedupe_lines(
         tuple(component_lines)
         + tuple(auxiliary_device_lines)
@@ -899,12 +928,24 @@ def _library_basename(value: str) -> str:
     return normalized_value.split("/")[-1]
 
 
-def _build_library_line(root_path: str, filename: str) -> str:
-    normalized_root_path = root_path.rstrip("\\/")
-    if normalized_root_path == "":
-        return f".lib {filename}"
-    separator = "\\" if "\\" in normalized_root_path else "/"
-    return f".lib {normalized_root_path}{separator}{filename}"
+def _resolve_library_relative_path(library_reference: str, library_lookup: Mapping[str, str]) -> Optional[str]:
+    normalized_reference = library_reference.replace("\\", "/").lstrip("./").lower()
+    for lookup_key in (
+        normalized_reference,
+        normalized_reference[4:] if normalized_reference.startswith("lib/") else normalized_reference,
+        normalized_reference.split("/")[-1],
+    ):
+        if lookup_key in library_lookup:
+            return library_lookup[lookup_key]
+    return None
+
+
+def _build_library_line(windows_root_path: str, relative_library_path: str) -> str:
+    normalized_relative_path = relative_library_path.replace("/", "\\")
+    normalized_windows_root_path = windows_root_path.rstrip("\\/")
+    if normalized_windows_root_path == "":
+        return f".lib {normalized_relative_path}"
+    return f".lib {normalized_windows_root_path}\\{normalized_relative_path}"
 
 
 def _dedupe_lines(lines: Iterable[str]) -> Tuple[str, ...]:

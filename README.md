@@ -258,7 +258,7 @@ Possible returns:
 Checks that:
 
 - The source LTspice schematic is acceptable for conversion and is first validated with `is_valid_ltspice_asc_file(filepath)`
-- The converter resolves LTspice symbols and component metadata from the paths supplied in `convert_settings`
+- The converter resolves LTspice symbols and library files by browsing the LTspice root supplied in `convert_settings`
 - The generated netlist is written to `net_filepath_out`
 - The generated netlist is validated with `is_valid_ltspice_netlist_file(filepath)`
 - ASC comments are ignored during conversion and no comments are emitted into the generated netlist
@@ -268,8 +268,8 @@ Example `convert_settings`:
 
 ```python
 convert_settings = {
-    "ltspice_lib_cmp_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\cmp",
-    "ltspice_lib_sym_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\sym",
+    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
 }
 ```
 
@@ -554,8 +554,8 @@ asy_pins = get_ltspice_asy_pins("example.asy")
 rectangle_lines = rectangle_points_to_lines(np.array([[-16, -32], [48, 32]]))
 schemdraw_ok, schemdraw_message = ltspice_asc_plot_schemdraw("example.asc", "example.svg")
 convert_settings = {
-    "ltspice_lib_cmp_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\cmp",
-    "ltspice_lib_sym_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\sym",
+    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
 }
 convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
     "example.asc",
@@ -565,6 +565,7 @@ convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
 same_asc_structure, asc_compare_message, asc_compare_line = ltspice_asc_structure_cmp(
     "example_a.asc",
     "example_b.asc",
+    convert_settings,
 )
 wires_array = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
 wires_connected = are_wires_connected(wires_array)

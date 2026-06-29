@@ -22,14 +22,14 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("asc_filepath", help="Path to the LTspice .asc file to convert.")
     parser.add_argument("net_filepath_out", help="Path where the output .net file should be written.")
     parser.add_argument(
-        "--lib-cmp-path",
-        default=r"C:\users\brosnan\AppData\Local\LTspice\lib\cmp\\",
-        help="Path to the LTspice component library directory (cmp).",
+        "--ltspice-windows-path",
+        default="C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+        help="Windows-style LTspice root path used when writing .lib lines into the generated netlist.",
     )
     parser.add_argument(
-        "--lib-sym-path",
-        default=r"C:\users\brosnan\AppData\Local\LTspice\lib\sym\\",
-        help="Path to the LTspice symbol library directory (sym).",
+        "--ltspice-wine-path",
+        default="~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+        help="Local LTspice root path used at runtime to browse .asy and library files.",
     )
     return parser
 
@@ -38,8 +38,8 @@ def main() -> int:
     parser = _build_argument_parser()
     arguments = parser.parse_args()
     convert_settings = {
-        "ltspice_lib_cmp_path": arguments.lib_cmp_path,
-        "ltspice_lib_sym_path": arguments.lib_sym_path,
+        "ltspice_windows_path": arguments.ltspice_windows_path,
+        "ltspice_wine_path": arguments.ltspice_wine_path,
     }
     result = ltspice_asc_to_netlist(
         arguments.asc_filepath,
