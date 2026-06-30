@@ -83,6 +83,23 @@ def are_wires_intersecting_obstacles_detailed(
     return True, np.array(intersections, dtype=int)
 
 
+def get_wires_startpos_endpos(wires: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    wires = np.asarray(wires)
+    if wires.ndim != 2 or wires.shape[1] != 4:
+        raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    point_counts: dict[Tuple[int, int], int] = {}
+    for wire in wires:
+        first_point = (int(wire[0]), int(wire[1]))
+        second_point = (int(wire[2]), int(wire[3]))
+        point_counts[first_point] = point_counts.get(first_point, 0) + 1
+        point_counts[second_point] = point_counts.get(second_point, 0) + 1
+    endpoints = [point for point, count in point_counts.items() if count % 2 == 1]
+    if len(endpoints) != 2:
+        raise ValueError("wires must form a single continuous path with exactly two endpoints")
+    endpoints.sort(key=lambda pt: (pt[0], pt[1]))
+    return np.array(endpoints[0], dtype=int), np.array(endpoints[1], dtype=int)
+
+
 def _lines_intersect(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int]) -> bool:
     x1a, y1a, x2a, y2a = w1
     x1b, y1b, x2b, y2b = w2
