@@ -83,7 +83,7 @@ def are_wires_intersecting_obstacles_detailed(
     return True, np.array(intersections, dtype=int)
 
 
-def get_wires_startpos_endpos(wires: np.ndarray) -> np.ndarray:
+def get_wires_endpos(wires: np.ndarray) -> np.ndarray:
     wires = np.asarray(wires)
     if wires.ndim != 2 or wires.shape[1] != 4:
         raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")

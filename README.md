@@ -20,7 +20,7 @@ It currently exposes twenty-three public functions:
 - `are_wires_horizontal_or_vertical(wires)`
 - `are_wires_intersecting_obstacles_fast(wires, obstacles)`
 - `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
-- `get_wires_startpos_endpos(wires)`
+- `get_wires_endpos(wires)`
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -44,7 +44,7 @@ or:
 
 `ltspice_netlist_footer_cmp(filepath1, filepath2)`, `ltspice_netlist_structure_cmp(filepath1, filepath2)`, `are_wires_connected(wires)`, and `are_wires_intersecting_obstacles_fast(wires, obstacles)` return `True` or `False`.
 
-`get_wires_startpos_endpos(wires)` returns a numpy array of shape `(N, 2)` where `N >= 2`:
+`get_wires_endpos(wires)` returns a numpy array of shape `(N, 2)` where `N >= 2`:
 
 ```python
 endpos = np.array([[x1, y1], [x2, y2], ...])
@@ -393,7 +393,7 @@ Returns:
 - `True, intersections` when at least one wire line intersects at least one obstacle line, where `intersections` is a numpy array of shape `(K, 2)` listing all `[wire_index, obstacle_index]` pairs
 - `False, None` when no wire line intersects any obstacle line
 
-### `get_wires_startpos_endpos(wires)`
+### `get_wires_endpos(wires)`
 
 Checks that:
 
@@ -586,7 +586,7 @@ from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_detailed
-from electronics_design.pathtracing import get_wires_startpos_endpos
+from electronics_design.pathtracing import get_wires_endpos
 from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_ltspice_netlist_structure_connected
@@ -626,7 +626,7 @@ obstacles_array = np.array([[48, 32, 0, 32], [0, 16, 0, 72]])
 intersects_obstacles = are_wires_intersecting_obstacles_fast(wires_array, obstacles_array)
 intersects_detailed, detailed_pairs = are_wires_intersecting_obstacles_detailed(wires_array, obstacles_array)
 path_wires = np.array([[160, 192, 256, 192], [256, 192, 256, 384], [256, 384, 432, 384]])
-endpos = get_wires_startpos_endpos(path_wires)
+endpos = get_wires_endpos(path_wires)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
