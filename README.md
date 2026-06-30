@@ -2,7 +2,7 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, and for comparing and plotting validated netlists.
 
-It currently exposes twenty-two public functions:
+It currently exposes twenty-three public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -15,6 +15,7 @@ It currently exposes twenty-two public functions:
 - `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
 - `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
 - `ltspice_asc_structure_cmp(filepath1, filepath2)`
+- `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
 - `are_wires_connected(wires)`
 - `are_wires_horizontal_or_vertical(wires)`
 - `are_wires_intersecting_obstacles_fast(wires, obstacles)`
@@ -314,6 +315,28 @@ Possible returns:
 - `False, "ASC structures are different!", <line>`
 - `True, "", 0`
 
+### `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
+
+Checks that:
+
+- The source LTspice schematic can be read and parsed for `SYMBOL` and `SYMATTR InstName` records
+- The LTspice symbol library root is resolved from `convert_settings`
+- Each ASC symbol is matched to its corresponding `.asy` file by searching the configured LTspice library
+- `get_ltspice_asy_pins(filepath)` is used to read the symbol pin names, local pin coordinates, and `SpiceOrder`
+- `get_ltspice_asy_size(filepath)` is used to read the symbol drawable bounding rectangle
+- Local `.asy` pin and rectangle coordinates are transformed into absolute ASC coordinates using the symbol origin and orientation
+
+Returns:
+
+- A dictionary keyed by `InstName`
+- Each entry contains `SYMBOL`, `X`, `Y`, `ROTATION`, `RECTANGLE`, and `PINS`
+
+Raises:
+
+- `ValueError` when the ASC file cannot be read
+- `ValueError` when a symbol is missing `InstName`
+- `ValueError` when a symbol `.asy` file cannot be found through `convert_settings`
+
 ### `are_wires_connected(wires)`
 
 Checks that:
@@ -557,6 +580,7 @@ from electronics_design import rectangle_points_to_lines
 from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_asc_structure_cmp
+from electronics_design import get_ltspice_asc_symbol_info
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
@@ -593,6 +617,7 @@ same_asc_structure, asc_compare_message, asc_compare_line = ltspice_asc_structur
     "example_b.asc",
     convert_settings,
 )
+symbol_info = get_ltspice_asc_symbol_info("example.asc", convert_settings)
 wires_array = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
 wires_connected = are_wires_connected(wires_array)
 all_axis_aligned = are_wires_horizontal_or_vertical(wires_array)

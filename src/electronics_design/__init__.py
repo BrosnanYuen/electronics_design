@@ -13,6 +13,7 @@ from .ltspice import rectangle_points_to_lines  # Re-export the rectangle edge h
 from .ltspice import ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
 from .ltspice import ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 from .ltspice import ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
+from .ltspice import get_ltspice_asc_symbol_info  # Re-export the ASC symbol-info helper.
 from .ltspice import is_ltspice_netlist_structure_connected  # Re-export the connectivity validator.
 from .ltspice import is_valid_ltspice_netlist_file  # Re-export the whole-file validator.
 from .ltspice import is_valid_ltspice_netlist_footer  # Re-export the footer validator.
@@ -36,6 +37,7 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_asc_plot_schemdraw",  # Export the schemdraw schematic plotting helper name.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper name.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper name.
+    "get_ltspice_asc_symbol_info",  # Export the ASC symbol-info helper name.
     "is_valid_ltspice_netlist_format",  # Export the format validator name.
     "is_valid_ltspice_netlist_footer",  # Export the footer validator name.
     "is_ltspice_netlist_structure_connected",  # Export the connectivity validator name.

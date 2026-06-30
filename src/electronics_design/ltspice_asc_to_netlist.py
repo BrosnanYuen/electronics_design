@@ -18,6 +18,7 @@ from typing import Set
 from typing import Tuple
 
 from . import ltspice_asc as _asc
+from . import ltspice_asy as _asy
 from . import ltspice_net as _net
 
 ConversionResult = Tuple[bool, str, int]
@@ -158,6 +159,53 @@ def ltspice_asc_to_netlist(
     if not generated_validation_result[0]:
         return False, "INVALID_GENERATED_NETLIST", _line_number_from_message(generated_validation_result[1], 0)
     return _OK_RESULT
+
+
+def get_ltspice_asc_symbol_info(
+    asc_filepath: str,
+    convert_settings: Mapping[str, object],
+) -> Dict[str, Dict[str, object]]:
+    if not isinstance(convert_settings, Mapping):
+        raise ValueError("convert_settings must be a mapping")
+    read_result = _asc._read_text_file_lines(asc_filepath)
+    if not read_result[0]:
+        raise ValueError(read_result[2])
+    parse_result = _parse_asc_for_conversion(read_result[1])
+    if not parse_result[0]:
+        raise ValueError(f"Unable to parse LTspice ASC file! Line {parse_result[2]}")
+    ltspice_root = _resolve_ltspice_root(convert_settings)
+    symbol_path_lookup = _build_symbol_filepath_lookup(ltspice_root)
+    symbol_info: Dict[str, Dict[str, object]] = {}
+    for symbol_instance in parse_result[1].symbols:
+        instance_name = symbol_instance.attributes.get("InstName", "").strip()
+        if instance_name == "":
+            raise ValueError(f"LTspice ASC symbol is missing InstName! Line {symbol_instance.line_number}")
+        if instance_name in symbol_info:
+            raise ValueError(f"Duplicate LTspice ASC symbol InstName '{instance_name}'! Line {symbol_instance.line_number}")
+        symbol_filepath = _resolve_symbol_filepath(symbol_instance.symbol_name, symbol_path_lookup)
+        if symbol_filepath is None:
+            raise ValueError(f"Unable to locate LTspice symbol file for '{symbol_instance.symbol_name}'! Line {symbol_instance.line_number}")
+        pins = _asy.get_ltspice_asy_pins(symbol_filepath)
+        bounds = _asy.get_ltspice_asy_size(symbol_filepath)
+        transformed_pins = [
+            [
+                transformed_point[0],
+                transformed_point[1],
+                pin_name,
+                spice_order,
+            ]
+            for pin_x, pin_y, pin_name, spice_order in pins
+            for transformed_point in [_transform_pin_point((int(pin_x), int(pin_y)), symbol_instance.origin, symbol_instance.orientation)]
+        ]
+        symbol_info[instance_name] = {
+            "SYMBOL": _display_symbol_name(symbol_instance.symbol_name),
+            "X": symbol_instance.origin[0],
+            "Y": symbol_instance.origin[1],
+            "ROTATION": _orientation_angle(symbol_instance.orientation),
+            "RECTANGLE": _transform_symbol_rectangle(bounds, symbol_instance.origin, symbol_instance.orientation),
+            "PINS": transformed_pins,
+        }
+    return symbol_info
 
 
 def ltspice_asc_structure_cmp(
@@ -335,6 +383,21 @@ def _build_symbol_lookup(symbol_root: str) -> Dict[str, SymbolDefinition]:
                 lookup[relative_path.lower()] = definition
                 lookup.setdefault(symbol_path.name.lower(), definition)
     lookup["gain"] = _SYNTHETIC_GAIN_SYMBOL
+    return lookup
+
+
+def _build_symbol_filepath_lookup(symbol_root: str) -> Dict[str, str]:
+    lookup: Dict[str, str] = {}
+    if not os.path.isdir(symbol_root):
+        return lookup
+    for symbol_path in Path(symbol_root).rglob("*.asy"):
+        normalized_relative_path = symbol_path.relative_to(symbol_root).as_posix().lower()
+        normalized_filename = symbol_path.name.lower()
+        normalized_stem = symbol_path.stem.lower()
+        symbol_path_string = str(symbol_path)
+        lookup.setdefault(normalized_relative_path, symbol_path_string)
+        lookup.setdefault(normalized_filename, symbol_path_string)
+        lookup.setdefault(normalized_stem, symbol_path_string)
     return lookup
 
 
@@ -832,6 +895,35 @@ def _resolve_symbol_definition(symbol_name: str, symbol_definitions: Mapping[str
         if relative_path.endswith(f"/{base_name}.asy") or relative_path == f"{base_name}.asy":
             return definition
     return None
+
+
+def _resolve_symbol_filepath(symbol_name: str, symbol_paths: Mapping[str, str]) -> Optional[str]:
+    normalized_symbol = symbol_name.replace("\\", "/").strip().lstrip("./").lower()
+    direct_key = f"{normalized_symbol}.asy"
+    basename = normalized_symbol.split("/")[-1]
+    for lookup_key in (direct_key, normalized_symbol, f"{basename}.asy", basename):
+        if lookup_key in symbol_paths:
+            return symbol_paths[lookup_key]
+    return None
+
+
+def _display_symbol_name(symbol_name: str) -> str:
+    return symbol_name.replace("\\", "/").split("/")[-1]
+
+
+def _transform_symbol_rectangle(bounds, origin: Point, orientation: str) -> List[List[int]]:
+    minimum_point = (int(bounds[0][0]), int(bounds[0][1]))
+    maximum_point = (int(bounds[1][0]), int(bounds[1][1]))
+    corners = (
+        minimum_point,
+        (maximum_point[0], minimum_point[1]),
+        (minimum_point[0], maximum_point[1]),
+        maximum_point,
+    )
+    transformed_corners = [_transform_pin_point(corner, origin, orientation) for corner in corners]
+    x_positions = [point[0] for point in transformed_corners]
+    y_positions = [point[1] for point in transformed_corners]
+    return [[min(x_positions), min(y_positions)], [max(x_positions), max(y_positions)]]
 
 
 def _transform_pin_point(local_point: Point, origin: Point, orientation: str) -> Point:
