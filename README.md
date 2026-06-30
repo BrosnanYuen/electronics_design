@@ -44,13 +44,13 @@ or:
 
 `ltspice_netlist_footer_cmp(filepath1, filepath2)`, `ltspice_netlist_structure_cmp(filepath1, filepath2)`, `are_wires_connected(wires)`, and `are_wires_intersecting_obstacles_fast(wires, obstacles)` return `True` or `False`.
 
-`get_wires_startpos_endpos(wires)` returns a pair of numpy arrays:
+`get_wires_startpos_endpos(wires)` returns a numpy array of shape `(N, 2)` where `N >= 2`:
 
 ```python
-startpos, endpos = np.array([x1, y1]), np.array([x2, y2])
+endpos = np.array([[x1, y1], [x2, y2], ...])
 ```
 
-It raises `ValueError` when the wires do not form a single continuous path with exactly two endpoints.
+Each row is an endpoint sorted by ascending `x` then `y`. It raises `ValueError` when the wires do not form a single continuous graph with at least two endpoints or when the input shape is invalid.
 
 `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` returns a conversion tuple:
 
@@ -399,15 +399,16 @@ Checks that:
 
 - `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
 - Each wire is an axis-aligned line segment
-- The wires form a single continuous path with exactly two endpoints
+- The wires form a single continuous graph with at least two endpoints
+- Wire endpoints that lie on the interior of another wire segment are treated as branch points, not endpoints
 
 Returns:
 
-- `startpos, endpos` as two numpy arrays `[x, y]` identifying the path endpoints, ordered by ascending `x` then `y`
+- A numpy array of shape `(N, 2)` where `N >= 2`, each row is `[x, y]` identifying a leaf endpoint, ordered by ascending `x` then `y`
 
 Raises:
 
-- `ValueError` when `wires` is not shape `(N, 4)`, is not a single continuous path, or does not have exactly two endpoints
+- `ValueError` when `wires` is not shape `(N, 4)`, is not a single continuous graph, or has fewer than two endpoints
 
 ### `is_valid_ltspice_netlist_format(filepath)`
 
@@ -625,7 +626,7 @@ obstacles_array = np.array([[48, 32, 0, 32], [0, 16, 0, 72]])
 intersects_obstacles = are_wires_intersecting_obstacles_fast(wires_array, obstacles_array)
 intersects_detailed, detailed_pairs = are_wires_intersecting_obstacles_detailed(wires_array, obstacles_array)
 path_wires = np.array([[160, 192, 256, 192], [256, 192, 256, 384], [256, 384, 432, 384]])
-startpos, endpos = get_wires_startpos_endpos(path_wires)
+endpos = get_wires_startpos_endpos(path_wires)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")

@@ -83,21 +83,57 @@ def are_wires_intersecting_obstacles_detailed(
     return True, np.array(intersections, dtype=int)
 
 
-def get_wires_startpos_endpos(wires: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def get_wires_startpos_endpos(wires: np.ndarray) -> np.ndarray:
     wires = np.asarray(wires)
     if wires.ndim != 2 or wires.shape[1] != 4:
         raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    n = len(wires)
+    if n == 0:
+        raise ValueError("wires must form a single continuous path with at least two endpoints")
+    wire_tuples = [(int(w[0]), int(w[1]), int(w[2]), int(w[3])) for w in wires]
     point_counts: dict[Tuple[int, int], int] = {}
-    for wire in wires:
-        first_point = (int(wire[0]), int(wire[1]))
-        second_point = (int(wire[2]), int(wire[3]))
+    for w in wire_tuples:
+        first_point = (w[0], w[1])
+        second_point = (w[2], w[3])
         point_counts[first_point] = point_counts.get(first_point, 0) + 1
         point_counts[second_point] = point_counts.get(second_point, 0) + 1
-    endpoints = [point for point, count in point_counts.items() if count % 2 == 1]
-    if len(endpoints) != 2:
-        raise ValueError("wires must form a single continuous path with exactly two endpoints")
+    parent = list(range(n))
+    def _find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    def _union(i: int, j: int) -> None:
+        ri = _find(i)
+        rj = _find(j)
+        if ri != rj:
+            parent[rj] = ri
+    for i in range(n):
+        wi = wire_tuples[i]
+        for j in range(i + 1, n):
+            wj = wire_tuples[j]
+            if _wires_share_point(wi, wj):
+                _union(i, j)
+    for i in range(n):
+        wi = wire_tuples[i]
+        for j in range(n):
+            if i == j:
+                continue
+            wj = wire_tuples[j]
+            if _point_on_wire_interior((wi[0], wi[1]), wj) or _point_on_wire_interior((wi[2], wi[3]), wj):
+                _union(i, j)
+    root = _find(0)
+    if any(_find(i) != root for i in range(1, n)):
+        raise ValueError("wires must form a single continuous path with at least two endpoints")
+    for point in list(point_counts.keys()):
+        for w in wire_tuples:
+            if _point_on_wire_interior(point, w):
+                point_counts[point] = point_counts.get(point, 0) + 2
+    endpoints = [point for point, count in point_counts.items() if count == 1]
+    if len(endpoints) < 2:
+        raise ValueError("wires must form a single continuous path with at least two endpoints")
     endpoints.sort(key=lambda pt: (pt[0], pt[1]))
-    return np.array(endpoints[0], dtype=int), np.array(endpoints[1], dtype=int)
+    return np.array(endpoints, dtype=int)
 
 
 def _lines_intersect(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int]) -> bool:
@@ -124,6 +160,29 @@ def _lines_intersect(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int
 
 def _ranges_overlap(a1: int, a2: int, b1: int, b2: int) -> bool:
     return max(min(a1, a2), min(b1, b2)) <= min(max(a1, a2), max(b1, b2))
+
+
+def _point_on_wire_interior(point: Tuple[int, int], wire: Tuple[int, int, int, int]) -> bool:
+    px, py = point
+    x1, y1, x2, y2 = wire
+    if px == x1 and py == y1:
+        return False
+    if px == x2 and py == y2:
+        return False
+    if x1 == x2:
+        if px != x1:
+            return False
+        return min(y1, y2) < py < max(y1, y2)
+    if y1 == y2:
+        if py != y1:
+            return False
+        return min(x1, x2) < px < max(x1, x2)
+    if x1 == x2 or y1 == y2:
+        return False
+    cross_product = (px - x1) * (y2 - y1) - (py - y1) * (x2 - x1)
+    if cross_product != 0:
+        return False
+    return min(x1, x2) <= px <= max(x1, x2) and min(y1, y2) <= py <= max(y1, y2)
 
 
 def _wires_share_point(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int]) -> bool:
