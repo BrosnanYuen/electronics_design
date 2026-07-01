@@ -119,6 +119,41 @@ def place_wires_into_groups(wires: np.ndarray) -> List[np.ndarray]:
     return [np.array(group, dtype=int) for group in groups.values()]
 
 
+def find_wire_group_index(point: np.ndarray, wire_groups: List[np.ndarray]) -> int:
+    point_array = np.asarray(point)
+    if point_array.ndim != 1 or point_array.shape[0] != 2:
+        raise ValueError("point must be a 1D array of shape (2,)")
+    px = int(point_array[0])
+    py = int(point_array[1])
+    for group_index, group in enumerate(wire_groups):
+        group_array = np.asarray(group)
+        if group_array.ndim != 2 or group_array.shape[1] != 4:
+            raise ValueError("each wire group must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+        for row_index in range(len(group_array)):
+            x1 = int(group_array[row_index, 0])
+            y1 = int(group_array[row_index, 1])
+            x2 = int(group_array[row_index, 2])
+            y2 = int(group_array[row_index, 3])
+            if _point_on_segment((px, py), (x1, y1, x2, y2)):
+                return group_index
+    return -1
+
+
+def _point_on_segment(point: Tuple[int, int], segment: Tuple[int, int, int, int]) -> bool:
+    point_x, point_y = point
+    x1, y1, x2, y2 = segment
+    if x1 == x2:
+        return point_x == x1 and min(y1, y2) <= point_y <= max(y1, y2)
+    if y1 == y2:
+        return point_y == y1 and min(x1, x2) <= point_x <= max(x1, x2)
+    if x1 == x2 or y1 == y2:
+        return False
+    cross_product = (point_x - x1) * (y2 - y1) - (point_y - y1) * (x2 - x1)
+    if cross_product != 0:
+        return False
+    return min(x1, x2) <= point_x <= max(x1, x2) and min(y1, y2) <= point_y <= max(y1, y2)
+
+
 def _lines_intersect(w1: Tuple[int, int, int, int], w2: Tuple[int, int, int, int]) -> bool:
     x1a, y1a, x2a, y2a = w1
     x1b, y1b, x2b, y2b = w2

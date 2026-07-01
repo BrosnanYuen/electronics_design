@@ -22,10 +22,12 @@ from .ltspice import ltspice_netlist_footer_cmp  # Re-export the footer comparis
 from .ltspice import ltspice_netlist_plot_networkx  # Re-export the graph plotting helper.
 from .ltspice import ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
 from .ltspice import gui_debug  # Re-export the path tracing GUI helper.
+from .ltspice import find_wire_group_index  # Re-export the wire-group-index helper.
 from .ltspice import place_wires_into_groups  # Re-export the wire-grouping helper.
 
 __all__ = [  # Define the supported public API surface.
     "auto_route_wires",  # Export the orthogonal autorouting helper name.
+    "find_wire_group_index",  # Export the wire-group-index helper name.
     "is_valid_ltspice_asc_header",  # Export the ASC header validator name.
     "is_valid_ltspice_asc_spacing",  # Export the ASC spacing validator name.
     "is_valid_ltspice_asc_footer",  # Export the ASC footer validator name.

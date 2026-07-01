@@ -32,6 +32,7 @@ ltspice_netlist_plot_networkx = _net.ltspice_netlist_plot_networkx  # Re-export 
 ltspice_netlist_footer_cmp = _net.ltspice_netlist_footer_cmp  # Re-export the footer comparison helper.
 ltspice_netlist_structure_cmp = _net.ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
 gui_debug = _pathtracing.gui_debug  # Re-export the path tracing GUI helper.
+find_wire_group_index = _pathtracing.find_wire_group_index  # Re-export the wire-group-index helper.
 are_wires_intersecting_obstacles_detailed = _pathtracing.are_wires_intersecting_obstacles_detailed  # Re-export the detailed intersection helper.
 place_wires_into_groups = _pathtracing.place_wires_into_groups  # Re-export the wire-grouping helper.
 
@@ -63,6 +64,7 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_netlist_footer_cmp",  # Export the footer comparison helper.
     "ltspice_netlist_structure_cmp",  # Export the structural comparison helper.
     "gui_debug",  # Export the path tracing GUI helper.
+    "find_wire_group_index",  # Export the wire-group-index helper.
     "are_wires_intersecting_obstacles_detailed",  # Export the detailed intersection helper.
     "place_wires_into_groups",  # Export the start/end position helper.
 ]  # Finish the public export list.
