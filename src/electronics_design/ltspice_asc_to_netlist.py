@@ -1030,8 +1030,6 @@ def _infer_symbol_library_reference(symbol_instance: SymbolInstance, symbol_defi
         return _library_basename(symbol_definition.model_file)
     if _looks_like_library_reference(symbol_definition.default_spice_model):
         return _library_basename(symbol_definition.default_spice_model)
-    if symbol_instance.symbol_name.replace("\\", "/").lower() == "opamps/opamp":
-        return "opamp.sub"
     return None
 
 
