@@ -395,7 +395,7 @@ def _finalize_asy_pin(
 ) -> Tuple[bool, int]:
     if pin_line_number == 0:
         return True, 0
-    if pin_name == "" or pin_order is None:
+    if pin_order is None:
         return False, pin_line_number
     pins.append((pin_x, pin_y, pin_name, pin_order))
     return True, 0

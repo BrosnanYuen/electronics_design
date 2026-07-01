@@ -17,9 +17,13 @@ from typing import Sequence
 from typing import Set
 from typing import Tuple
 
+import numpy as np
+
 from . import ltspice_asc as _asc
 from . import ltspice_asy as _asy
 from . import ltspice_net as _net
+from .pathtracing import find_wire_group_index
+from .pathtracing import place_wires_into_groups
 
 ConversionResult = Tuple[bool, str, int]
 StructureCompareResult = Tuple[bool, str, int]
@@ -30,12 +34,17 @@ _DIRECTIVE_SPLIT_PATTERN = re.compile(r"(?:\\n|\r\n|\r|\n)+")
 _DEFAULT_ANALYSIS_DIRECTIVE = ".op"
 _OK_RESULT: ConversionResult = (True, "OK", 0)
 _LIBRARY_FILE_SUFFIXES = {".bjt", ".dio", ".jft", ".lib", ".mos", ".sub"}
+_SYMBOL_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, "SymbolDefinition"]] = {}
+_SYMBOL_FILEPATH_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, str]] = {}
+_LIBRARY_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, str]] = {}
 
 
 def _default_asc_compare_convert_settings() -> Mapping[str, object]:
+    custom_search_paths_text = os.environ.get("LTSPICE_CUSTOM_SEARCH_PATHS", "")
     return {
         "ltspice_windows_path": os.environ.get("LTSPICE_WINDOWS_PATH", ""),
         "ltspice_wine_path": os.environ.get("LTSPICE_WINE_PATH", ""),
+        "custom_search_paths": [path for path in custom_search_paths_text.split(os.pathsep) if path.strip() != ""],
     }
 
 
@@ -104,21 +113,11 @@ class ParsedAsc:
     text_commands: Tuple[TextCommand, ...]
 
 
-class _UnionFind:
-    def __init__(self, size: int) -> None:
-        self._parent = list(range(size))
-
-    def find(self, index: int) -> int:
-        parent = self._parent[index]
-        if parent != index:
-            self._parent[index] = self.find(parent)
-        return self._parent[index]
-
-    def union(self, first: int, second: int) -> None:
-        first_root = self.find(first)
-        second_root = self.find(second)
-        if first_root != second_root:
-            self._parent[second_root] = first_root
+@dataclass(frozen=True)
+class PinNet:
+    pin_name: str
+    spice_order: int
+    net_name: str
 
 
 def ltspice_asc_to_netlist(
@@ -141,11 +140,16 @@ def ltspice_asc_to_netlist(
     parse_result = _parse_asc_for_conversion(read_result[1])
     if not parse_result[0]:
         return False, "ASC_PARSE_ERROR", parse_result[2]
-    ltspice_root = _resolve_ltspice_root(convert_settings)
-    symbol_definitions = _build_symbol_lookup(ltspice_root)
-    library_lookup = _build_library_lookup(ltspice_root)
+    try:
+        symbol_info = get_ltspice_asc_symbol_info(asc_filepath, convert_settings)
+    except ValueError as error:
+        return _symbol_info_error_to_conversion_result(str(error))
+    search_roots = _resolve_search_roots_for_asc(asc_filepath, convert_settings)
+    symbol_definitions = _build_symbol_lookup(search_roots)
+    library_lookup = _build_library_lookup(search_roots)
     net_build_result = _build_netlist_lines(
         parse_result[1],
+        symbol_info,
         symbol_definitions,
         library_lookup,
         convert_settings,
@@ -173,8 +177,8 @@ def get_ltspice_asc_symbol_info(
     parse_result = _parse_asc_for_conversion(read_result[1])
     if not parse_result[0]:
         raise ValueError(f"Unable to parse LTspice ASC file! Line {parse_result[2]}")
-    ltspice_root = _resolve_ltspice_root(convert_settings)
-    symbol_path_lookup = _build_symbol_filepath_lookup(ltspice_root)
+    search_roots = _resolve_search_roots_for_asc(asc_filepath, convert_settings)
+    symbol_path_lookup = _build_symbol_filepath_lookup(search_roots)
     symbol_info: Dict[str, Dict[str, object]] = {}
     for symbol_instance in parse_result[1].symbols:
         instance_name = symbol_instance.attributes.get("InstName", "").strip()
@@ -278,18 +282,26 @@ def _build_asc_component_signature_records(
     parse_result = _parse_asc_for_conversion(read_result[1])
     if not parse_result[0]:
         return False, "ASC_PARSE_ERROR", parse_result[2], ()
-    ltspice_root = _resolve_ltspice_root(convert_settings)
-    symbol_definitions = _build_symbol_lookup(ltspice_root)
-    connectivity_result = _resolve_symbol_nets(parse_result[1], symbol_definitions)
+    try:
+        symbol_info = get_ltspice_asc_symbol_info(filepath, convert_settings)
+    except ValueError as error:
+        conversion_result = _symbol_info_error_to_conversion_result(str(error))
+        return conversion_result[0], conversion_result[1], conversion_result[2], ()
+    search_roots = _resolve_search_roots_for_asc(filepath, convert_settings)
+    symbol_definitions = _build_symbol_lookup(search_roots)
+    connectivity_result = _resolve_symbol_nets(parse_result[1], symbol_info)
     if not connectivity_result[0]:
         return False, connectivity_result[1], connectivity_result[2], ()
-    point_to_net = connectivity_result[3]
+    symbol_pin_nets = connectivity_result[3]
     signature_records: List[Tuple[Tuple[str, Tuple[str, ...]], int]] = []
     for symbol_instance in parse_result[1].symbols:
         symbol_definition = _resolve_symbol_definition(symbol_instance.symbol_name, symbol_definitions)
         if symbol_definition is None:
             return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, ()
-        component_line_result = _build_component_line(symbol_instance, symbol_definition, point_to_net)
+        instance_name = symbol_instance.attributes.get("InstName", "").strip()
+        if instance_name == "" or instance_name not in symbol_pin_nets:
+            return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, ()
+        component_line_result = _build_component_line(symbol_instance, symbol_definition, symbol_pin_nets[instance_name])
         if not component_line_result[0]:
             return False, component_line_result[1], symbol_instance.line_number, ()
         tokens = component_line_result[3].split()
@@ -358,81 +370,132 @@ def _split_embedded_commands(command_text: str) -> Tuple[str, ...]:
     return commands
 
 
-def _resolve_ltspice_root(convert_settings: Mapping[str, object]) -> str:
-    wine_path = os.path.expanduser(str(convert_settings.get("ltspice_wine_path", "")).strip())
-    windows_path = str(convert_settings.get("ltspice_windows_path", "")).strip()
-    for candidate_path in (wine_path, windows_path):
-        if candidate_path != "" and os.path.isdir(candidate_path):
-            return candidate_path
-    if wine_path != "":
-        return wine_path
-    return windows_path
+def _resolve_search_roots(convert_settings: Mapping[str, object]) -> Tuple[str, ...]:
+    custom_search_paths = _normalize_custom_search_paths(convert_settings.get("custom_search_paths", ()))
+    wine_path = _normalize_search_path(convert_settings.get("ltspice_wine_path", ""))
+    windows_path = _normalize_search_path(convert_settings.get("ltspice_windows_path", ""))
+    search_roots: List[str] = []
+    for candidate_path in (*custom_search_paths, wine_path, windows_path):
+        if candidate_path == "" or candidate_path in search_roots:
+            continue
+        search_roots.append(candidate_path)
+    return tuple(search_roots)
+
+
+def _resolve_search_roots_for_asc(asc_filepath: str, convert_settings: Mapping[str, object]) -> Tuple[str, ...]:
+    search_roots = list(_resolve_search_roots(convert_settings))
+    for candidate_path in _discover_local_search_roots(asc_filepath):
+        if candidate_path not in search_roots:
+            search_roots.append(candidate_path)
+    return tuple(search_roots)
+
+
+def _discover_local_search_roots(asc_filepath: str) -> Tuple[str, ...]:
+    coerced_path_result = _asc._coerce_path(asc_filepath)
+    if not coerced_path_result[0]:
+        return ()
+    asc_path = Path(coerced_path_result[1]).resolve()
+    if not asc_path.exists():
+        return ()
+    search_roots = [str(asc_path.parent)]
+    for parent in asc_path.parents:
+        if parent == asc_path.parent:
+            continue
+        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
+            search_roots.append(str(parent))
+            break
+    return tuple(search_roots)
+
+
+def _normalize_custom_search_paths(value: object) -> Tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (str, os.PathLike)):
+        return (_normalize_search_path(value),)
+    try:
+        values = tuple(value)
+    except TypeError:
+        return ()
+    return tuple(
+        normalized_path
+        for normalized_path in (_normalize_search_path(item) for item in values)
+        if normalized_path != ""
+    )
+
+
+def _normalize_search_path(value: object) -> str:
+    try:
+        path_string = os.fspath(value).strip()
+    except TypeError:
+        return ""
+    if path_string == "":
+        return ""
+    return os.path.expanduser(path_string)
 
 
 def _resolve_windows_ltspice_path(convert_settings: Mapping[str, object]) -> str:
     return str(convert_settings.get("ltspice_windows_path", "")).strip()
 
 
-def _build_symbol_lookup(symbol_root: str) -> Dict[str, SymbolDefinition]:
+def _build_symbol_lookup(search_roots: Sequence[str]) -> Dict[str, SymbolDefinition]:
+    cache_key = tuple(search_roots)
+    if cache_key in _SYMBOL_LOOKUP_CACHE:
+        return _SYMBOL_LOOKUP_CACHE[cache_key]
     lookup: Dict[str, SymbolDefinition] = {}
-    if os.path.isdir(symbol_root):
+    for symbol_root in search_roots:
+        if not os.path.isdir(symbol_root):
+            continue
         for symbol_path in Path(symbol_root).rglob("*.asy"):
             relative_path = symbol_path.relative_to(symbol_root).as_posix()
             definition = _load_symbol_definition(str(symbol_path), relative_path)
             if definition is not None:
-                lookup[relative_path.lower()] = definition
+                lookup.setdefault(relative_path.lower(), definition)
                 lookup.setdefault(symbol_path.name.lower(), definition)
-    lookup["gain"] = _SYNTHETIC_GAIN_SYMBOL
+    _SYMBOL_LOOKUP_CACHE[cache_key] = lookup
     return lookup
 
 
-def _build_symbol_filepath_lookup(symbol_root: str) -> Dict[str, str]:
+def _build_symbol_filepath_lookup(search_roots: Sequence[str]) -> Dict[str, str]:
+    cache_key = tuple(search_roots)
+    if cache_key in _SYMBOL_FILEPATH_LOOKUP_CACHE:
+        return _SYMBOL_FILEPATH_LOOKUP_CACHE[cache_key]
     lookup: Dict[str, str] = {}
-    if not os.path.isdir(symbol_root):
-        return lookup
-    for symbol_path in Path(symbol_root).rglob("*.asy"):
-        normalized_relative_path = symbol_path.relative_to(symbol_root).as_posix().lower()
-        normalized_filename = symbol_path.name.lower()
-        normalized_stem = symbol_path.stem.lower()
-        symbol_path_string = str(symbol_path)
-        lookup.setdefault(normalized_relative_path, symbol_path_string)
-        lookup.setdefault(normalized_filename, symbol_path_string)
-        lookup.setdefault(normalized_stem, symbol_path_string)
+    for symbol_root in search_roots:
+        if not os.path.isdir(symbol_root):
+            continue
+        for symbol_path in Path(symbol_root).rglob("*.asy"):
+            normalized_relative_path = symbol_path.relative_to(symbol_root).as_posix().lower()
+            normalized_filename = symbol_path.name.lower()
+            normalized_stem = symbol_path.stem.lower()
+            symbol_path_string = str(symbol_path)
+            lookup.setdefault(normalized_relative_path, symbol_path_string)
+            lookup.setdefault(normalized_filename, symbol_path_string)
+            lookup.setdefault(normalized_stem, symbol_path_string)
+    _SYMBOL_FILEPATH_LOOKUP_CACHE[cache_key] = lookup
     return lookup
 
 
-def _build_library_lookup(ltspice_root: str) -> Dict[str, str]:
+def _build_library_lookup(search_roots: Sequence[str]) -> Dict[str, str]:
+    cache_key = tuple(search_roots)
+    if cache_key in _LIBRARY_LOOKUP_CACHE:
+        return _LIBRARY_LOOKUP_CACHE[cache_key]
     lookup: Dict[str, str] = {}
-    if not os.path.isdir(ltspice_root):
-        return lookup
-    for library_path in Path(ltspice_root).rglob("*"):
-        if not library_path.is_file():
+    for search_root in search_roots:
+        if not os.path.isdir(search_root):
             continue
-        if library_path.suffix.lower() not in _LIBRARY_FILE_SUFFIXES and not library_path.name.lower().startswith("standard."):
-            continue
-        relative_path = library_path.relative_to(ltspice_root).as_posix()
-        normalized_relative_path = relative_path.lower()
-        lookup.setdefault(normalized_relative_path, relative_path)
-        lookup.setdefault(library_path.name.lower(), relative_path)
-        if normalized_relative_path.startswith("lib/"):
-            lookup.setdefault(normalized_relative_path[4:], relative_path)
+        for library_path in Path(search_root).rglob("*"):
+            if not library_path.is_file():
+                continue
+            if library_path.suffix.lower() not in _LIBRARY_FILE_SUFFIXES and not library_path.name.lower().startswith("standard."):
+                continue
+            relative_path = library_path.relative_to(search_root).as_posix()
+            normalized_relative_path = relative_path.lower()
+            lookup.setdefault(normalized_relative_path, relative_path)
+            lookup.setdefault(library_path.name.lower(), relative_path)
+            if normalized_relative_path.startswith("lib/"):
+                lookup.setdefault(normalized_relative_path[4:], relative_path)
+    _LIBRARY_LOOKUP_CACHE[cache_key] = lookup
     return lookup
-
-
-_SYNTHETIC_GAIN_SYMBOL = SymbolDefinition(
-    relative_path="Gain",
-    prefix="E",
-    default_value="",
-    default_value2="",
-    default_spice_model="",
-    default_spice_line="",
-    default_spice_line2="",
-    model_file="",
-    pins=(
-        PinDefinition(pin_name="OUT+", spice_order=1, point=(-16, 0)),
-        PinDefinition(pin_name="OUT-", spice_order=2, point=(32, 0)),
-    ),
-)
 
 
 def _load_symbol_definition(filepath: str, relative_path: str) -> Optional[SymbolDefinition]:
@@ -512,14 +575,15 @@ def _load_symbol_definition(filepath: str, relative_path: str) -> Optional[Symbo
 
 def _build_netlist_lines(
     parsed_asc: ParsedAsc,
+    symbol_info: Mapping[str, Dict[str, object]],
     symbol_definitions: Mapping[str, SymbolDefinition],
     library_lookup: Mapping[str, str],
     convert_settings: Mapping[str, object],
 ) -> Tuple[bool, str, int, Tuple[str, ...]]:
-    connectivity_result = _resolve_symbol_nets(parsed_asc, symbol_definitions)
+    connectivity_result = _resolve_symbol_nets(parsed_asc, symbol_info)
     if not connectivity_result[0]:
         return False, connectivity_result[1], connectivity_result[2], ()
-    net_map = connectivity_result[3]
+    symbol_pin_nets = connectivity_result[3]
     component_lines: List[str] = []
     auxiliary_device_lines: List[str] = []
     directive_lines: List[str] = []
@@ -531,7 +595,10 @@ def _build_netlist_lines(
         symbol_definition = _resolve_symbol_definition(symbol_instance.symbol_name, symbol_definitions)
         if symbol_definition is None:
             return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, ()
-        line_result = _build_component_line(symbol_instance, symbol_definition, net_map)
+        instance_name = symbol_instance.attributes.get("InstName", "").strip()
+        if instance_name == "" or instance_name not in symbol_pin_nets:
+            return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, ()
+        line_result = _build_component_line(symbol_instance, symbol_definition, symbol_pin_nets[instance_name])
         if not line_result[0]:
             return False, line_result[1], symbol_instance.line_number, ()
         component_lines.append(line_result[3])
@@ -580,41 +647,41 @@ def _build_netlist_lines(
 
 def _resolve_symbol_nets(
     parsed_asc: ParsedAsc,
-    symbol_definitions: Mapping[str, SymbolDefinition],
-) -> Tuple[bool, str, int, Dict[Tuple[int, int], str]]:
-    wire_union = _UnionFind(len(parsed_asc.wires))
-    for first_index, first_wire in enumerate(parsed_asc.wires):
-        for second_index in range(first_index + 1, len(parsed_asc.wires)):
-            if _wires_connected(first_wire, parsed_asc.wires[second_index]):
-                wire_union.union(first_index, second_index)
+    symbol_info: Mapping[str, Dict[str, object]],
+) -> Tuple[bool, str, int, Dict[str, Tuple[PinNet, ...]]]:
+    wire_groups = _wire_groups_from_parsed_asc(parsed_asc)
     entity_names: Dict[Tuple[str, object], List[str]] = {}
     entity_first_seen: Dict[Tuple[str, object], int] = {}
     entity_pin_counts: Dict[Tuple[str, object], int] = {}
     coordinate_entities: Dict[Point, Tuple[str, object]] = {}
     next_standalone_net = 0
-    all_pin_coordinates: List[Point] = []
+    pin_entity_records: Dict[str, List[Tuple[str, int, Tuple[str, object]]]] = {}
     for symbol_instance in parsed_asc.symbols:
-        symbol_definition = _resolve_symbol_definition(symbol_instance.symbol_name, symbol_definitions)
-        if symbol_definition is None:
+        instance_name = symbol_instance.attributes.get("InstName", "").strip()
+        if instance_name == "" or instance_name not in symbol_info:
             return False, "UNKNOWN_SYMBOL", symbol_instance.line_number, {}
-        for pin_definition in symbol_definition.pins:
-            pin_coordinate = _transform_pin_point(pin_definition.point, symbol_instance.origin, symbol_instance.orientation)
-            entity_key = _entity_for_point(pin_coordinate, parsed_asc.wires, wire_union, coordinate_entities, next_standalone_net)
+        raw_pins = symbol_info[instance_name].get("PINS", ())
+        try:
+            pins = tuple(raw_pins)
+        except TypeError:
+            return False, "ASC_PARSE_ERROR", symbol_instance.line_number, {}
+        pin_entity_records[instance_name] = []
+        for pin_row in pins:
+            try:
+                pin_coordinate, pin_name, spice_order = _extract_symbol_info_pin(pin_row, symbol_instance.line_number)
+            except ValueError:
+                return False, "ASC_PARSE_ERROR", symbol_instance.line_number, {}
+            entity_key = _entity_for_grouped_point(pin_coordinate, wire_groups, coordinate_entities, next_standalone_net)
             if entity_key[0] == "coord" and entity_key[1] == next_standalone_net:
                 next_standalone_net += 1
-            all_pin_coordinates.append(pin_coordinate)
+            pin_entity_records[instance_name].append((pin_name, spice_order, entity_key))
             entity_first_seen.setdefault(entity_key, len(entity_first_seen))
             entity_pin_counts[entity_key] = entity_pin_counts.get(entity_key, 0) + 1
     for flag in parsed_asc.flags:
-        entity_key = _entity_for_point(flag.point, parsed_asc.wires, wire_union, coordinate_entities, next_standalone_net)
+        entity_key = _entity_for_grouped_point(flag.point, wire_groups, coordinate_entities, next_standalone_net)
         if entity_key[0] == "coord" and entity_key[1] == next_standalone_net:
             next_standalone_net += 1
         entity_names.setdefault(entity_key, []).append(flag.name.strip())
-        entity_first_seen.setdefault(entity_key, len(entity_first_seen))
-    for coordinate in all_pin_coordinates:
-        entity_key = _entity_for_point(coordinate, parsed_asc.wires, wire_union, coordinate_entities, next_standalone_net)
-        if entity_key[0] == "coord" and entity_key[1] == next_standalone_net:
-            next_standalone_net += 1
         entity_first_seen.setdefault(entity_key, len(entity_first_seen))
     named_groups: Dict[str, List[Tuple[str, object]]] = {}
     for entity_key, names in entity_names.items():
@@ -654,31 +721,46 @@ def _resolve_symbol_nets(
             continue
         canonical_names[canonical_entity] = f"N{auto_index:03d}"
         auto_index += 1
-    point_to_net: Dict[Point, str] = {}
-    for coordinate in coordinate_entities:
-        entity_key = coordinate_entities[coordinate]
-        point_to_net[coordinate] = canonical_names[merged_entities[entity_key]]
-    for wire_index, wire in enumerate(parsed_asc.wires):
-        canonical_entity = merged_entities[("wire", wire_union.find(wire_index))]
-        point_to_net[wire.start] = canonical_names[canonical_entity]
-        point_to_net[wire.end] = canonical_names[canonical_entity]
-    return True, "OK", 0, point_to_net
+    symbol_pin_nets: Dict[str, Tuple[PinNet, ...]] = {}
+    for instance_name, pin_records in pin_entity_records.items():
+        symbol_pin_nets[instance_name] = tuple(
+            PinNet(
+                pin_name=pin_name,
+                spice_order=spice_order,
+                net_name=canonical_names[merged_entities[entity_key]],
+            )
+            for pin_name, spice_order, entity_key in sorted(pin_records, key=lambda record: record[1])
+        )
+    return True, "OK", 0, symbol_pin_nets
 
 
-def _entity_for_point(
+def _wire_groups_from_parsed_asc(parsed_asc: ParsedAsc) -> List[np.ndarray]:
+    if not parsed_asc.wires:
+        return []
+    wire_rows = np.array(
+        [[wire.start[0], wire.start[1], wire.end[0], wire.end[1]] for wire in parsed_asc.wires],
+        dtype=int,
+    )
+    return place_wires_into_groups(wire_rows)
+
+
+def _extract_symbol_info_pin(pin_row: object, line_number: int) -> Tuple[Point, str, int]:
+    try:
+        pin_x, pin_y, pin_name, spice_order = pin_row
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"Invalid symbol pin information! Line {line_number}") from error
+    return (int(pin_x), int(pin_y)), str(pin_name), int(spice_order)
+
+
+def _entity_for_grouped_point(
     point: Point,
-    wires: Sequence[Wire],
-    wire_union: _UnionFind,
+    wire_groups: Sequence[np.ndarray],
     coordinate_entities: Dict[Point, Tuple[str, object]],
     next_standalone_net: int,
 ) -> Tuple[str, object]:
-    attached_wire_roots = {
-        wire_union.find(wire_index)
-        for wire_index, wire in enumerate(wires)
-        if _point_on_wire(point, wire)
-    }
-    if attached_wire_roots:
-        return ("wire", min(attached_wire_roots))
+    group_index = find_wire_group_index(np.array([point[0], point[1]], dtype=int), list(wire_groups))
+    if group_index >= 0:
+        return ("wire_group", group_index)
     if point not in coordinate_entities:
         coordinate_entities[point] = ("coord", next_standalone_net)
     return coordinate_entities[point]
@@ -705,15 +787,10 @@ def _choose_single_pin_net_name(names: Sequence[str], no_connect_index: int) -> 
 def _build_component_line(
     symbol_instance: SymbolInstance,
     symbol_definition: SymbolDefinition,
-    point_to_net: Mapping[Point, str],
+    pin_nets_by_order: Sequence[PinNet],
 ) -> Tuple[bool, str, int, str, str]:
-    pin_nets_by_order: List[Tuple[PinDefinition, str]] = []
-    for pin_definition in symbol_definition.pins:
-        pin_coordinate = _transform_pin_point(pin_definition.point, symbol_instance.origin, symbol_instance.orientation)
-        net_name = _resolve_point_net(pin_coordinate, point_to_net)
-        if net_name is None:
-            return False, "UNCONNECTED_SYMBOL_PIN", symbol_instance.line_number, "", ""
-        pin_nets_by_order.append((pin_definition, net_name))
+    if not pin_nets_by_order:
+        return False, "UNCONNECTED_SYMBOL_PIN", symbol_instance.line_number, "", ""
     normalized_prefix = _normalized_component_prefix(symbol_definition.prefix)
     ordered_nets = _expand_component_nodes(symbol_instance.symbol_name, normalized_prefix, pin_nets_by_order)
     component_instance_name = _component_instance_name(symbol_instance.attributes.get("InstName", ""), normalized_prefix)
@@ -738,18 +815,18 @@ def _normalized_component_prefix(prefix: str) -> str:
 def _expand_component_nodes(
     symbol_name: str,
     normalized_prefix: str,
-    pin_nets_by_order: Sequence[Tuple[PinDefinition, str]],
+    pin_nets_by_order: Sequence[PinNet],
 ) -> Tuple[str, ...]:
-    pin_nets = tuple(net_name for _, net_name in pin_nets_by_order)
+    pin_nets = tuple(pin_net.net_name for pin_net in pin_nets_by_order)
     lowered_symbol_name = symbol_name.lower()
     if normalized_prefix == "A":
         ordered_pin_nets = {}
-        for pin_definition, net_name in pin_nets_by_order:
-            normalized_net_name = net_name
-            if pin_definition.pin_name.strip().lower() == "com" and net_name.upper().startswith(("NC", "NC_", "NC-")):
+        for pin_net in pin_nets_by_order:
+            normalized_net_name = pin_net.net_name
+            if pin_net.pin_name.strip().lower() == "com" and pin_net.net_name.upper().startswith(("NC", "NC_", "NC-")):
                 normalized_net_name = "0"
-            ordered_pin_nets[pin_definition.spice_order] = normalized_net_name
-        highest_order = max((pin_definition.spice_order for pin_definition, _ in pin_nets_by_order), default=0)
+            ordered_pin_nets[pin_net.spice_order] = normalized_net_name
+        highest_order = max((pin_net.spice_order for pin_net in pin_nets_by_order), default=0)
         return tuple(ordered_pin_nets.get(spice_order, "0") for spice_order in range(1, max(8, highest_order) + 1))
     if normalized_prefix == "Q":
         return tuple(pin_nets) + ("0",)
@@ -877,12 +954,6 @@ def _clean_optional_text(value: str) -> str:
     return cleaned_value
 
 
-def _resolve_point_net(point: Point, point_to_net: Mapping[Point, str]) -> Optional[str]:
-    if point in point_to_net:
-        return point_to_net[point]
-    return None
-
-
 def _resolve_symbol_definition(symbol_name: str, symbol_definitions: Mapping[str, SymbolDefinition]) -> Optional[SymbolDefinition]:
     normalized_symbol = symbol_name.replace("\\", "/").lower()
     direct_key = f"{normalized_symbol}.asy"
@@ -946,52 +1017,6 @@ def _orientation_angle(orientation: str) -> int:
     if angle_match is None:
         return 0
     return int(angle_match.group(1)) % 360
-
-
-def _point_on_wire(point: Point, wire: Wire) -> bool:
-    point_x, point_y = point
-    start_x, start_y = wire.start
-    end_x, end_y = wire.end
-    if start_x == end_x:
-        if point_x != start_x:
-            return False
-        lower_y, upper_y = sorted((start_y, end_y))
-        return lower_y <= point_y <= upper_y
-    if start_y == end_y:
-        if point_y != start_y:
-            return False
-        lower_x, upper_x = sorted((start_x, end_x))
-        return lower_x <= point_x <= upper_x
-    lower_x, upper_x = sorted((start_x, end_x))
-    lower_y, upper_y = sorted((start_y, end_y))
-    return lower_x <= point_x <= upper_x and lower_y <= point_y <= upper_y
-
-
-def _wires_connected(first_wire: Wire, second_wire: Wire) -> bool:
-    if first_wire.start[0] == first_wire.end[0] and second_wire.start[0] == second_wire.end[0]:
-        if first_wire.start[0] != second_wire.start[0]:
-            return False
-        return _ranges_overlap((first_wire.start[1], first_wire.end[1]), (second_wire.start[1], second_wire.end[1]))
-    if first_wire.start[1] == first_wire.end[1] and second_wire.start[1] == second_wire.end[1]:
-        if first_wire.start[1] != second_wire.start[1]:
-            return False
-        return _ranges_overlap((first_wire.start[0], first_wire.end[0]), (second_wire.start[0], second_wire.end[0]))
-    vertical_wire = first_wire if first_wire.start[0] == first_wire.end[0] else second_wire
-    horizontal_wire = second_wire if vertical_wire is first_wire else first_wire
-    vertical_x = vertical_wire.start[0]
-    horizontal_y = horizontal_wire.start[1]
-    vertical_range = sorted((vertical_wire.start[1], vertical_wire.end[1]))
-    horizontal_range = sorted((horizontal_wire.start[0], horizontal_wire.end[0]))
-    if not (horizontal_range[0] <= vertical_x <= horizontal_range[1] and vertical_range[0] <= horizontal_y <= vertical_range[1]):
-        return False
-    intersection_point = (vertical_x, horizontal_y)
-    return intersection_point in {first_wire.start, first_wire.end, second_wire.start, second_wire.end}
-
-
-def _ranges_overlap(first_range: Tuple[int, int], second_range: Tuple[int, int]) -> bool:
-    first_lower, first_upper = sorted(first_range)
-    second_lower, second_upper = sorted(second_range)
-    return max(first_lower, second_lower) <= min(first_upper, second_upper)
 
 
 def _infer_symbol_library_reference(symbol_instance: SymbolInstance, symbol_definition: SymbolDefinition) -> Optional[str]:
@@ -1073,6 +1098,14 @@ def _line_number_from_message(message: str, default_line: int) -> int:
     if line_match is None:
         return default_line
     return int(line_match.group("line"))
+
+
+def _symbol_info_error_to_conversion_result(message: str) -> ConversionResult:
+    if "Unable to locate LTspice symbol file" in message:
+        return False, "UNKNOWN_SYMBOL", _line_number_from_message(message, 0)
+    if "Unable to parse LTspice ASC file!" in message:
+        return False, "ASC_PARSE_ERROR", _line_number_from_message(message, 0)
+    return False, "ASC_PARSE_ERROR", _line_number_from_message(message, 0)
 
 
 def _message_without_line_number(message: str) -> str:
