@@ -1,4 +1,4 @@
-"""Unit tests for get_wires_endpos in pathtracing."""
+"""Unit tests for get_wires_endpos in pathtracing — groups of connected wires."""
 
 from __future__ import annotations
 
@@ -12,17 +12,65 @@ from electronics_design.pathtracing import get_wires_endpos
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _FIXTURE_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "wire_start_end"
 
-_EXPECTED_RESULTS = {
-    "case_01.txt": np.array([[160, 192], [432, 384]], dtype=int),
-    "case_02.txt": np.array([[224, 160], [416, 352]], dtype=int),
-    "case_03.txt": np.array([[240, 304], [400, 560], [768, 176], [816, 480]], dtype=int),
-    "case_04.txt": np.array([[128, 128], [384, 128], [512, 256]], dtype=int),
-    "case_05.txt": np.array([[0, 64], [384, 64]], dtype=int),
-    "case_06.txt": np.array([[320, 240], [512, 384]], dtype=int),
-    "case_07.txt": np.array([[128, 256], [160, 160], [256, 96], [256, 384], [384, 256]], dtype=int),
-    "case_08.txt": np.array([[192, 256], [320, 128], [320, 384], [448, 256]], dtype=int),
-    "case_09.txt": np.array([[64, 128], [576, 512]], dtype=int),
-    "case_10.txt": np.array([[96, 256], [384, 384], [480, 96]], dtype=int),
+_EXPECTED_GROUPS = {
+    "case_01.txt": [
+        np.array([[160, 192, 256, 192], [256, 192, 256, 384], [256, 384, 432, 384]], dtype=int),
+    ],
+    "case_02.txt": [
+        np.array([[192, 336, 640, 336], [640, 336, 640, 544]], dtype=int),
+        np.array([[448, 272, 832, 272]], dtype=int),
+    ],
+    "case_03.txt": [
+        np.array(
+            [[192, 336, 640, 336], [640, 336, 640, 544], [640, 544, 800, 544], [640, 336, 784, 336], [640, 336, 640, 224]],
+            dtype=int,
+        ),
+        np.array([[448, 272, 832, 272]], dtype=int),
+        np.array([[704, 464, 448, 464], [448, 464, 448, 544], [448, 464, 448, 416]], dtype=int),
+    ],
+    "case_04.txt": [
+        np.array(
+            [
+                [352, 336, 352, 128], [464, 336, 464, 512], [352, 336, 240, 336],
+                [352, 336, 464, 336], [464, 336, 640, 336], [640, 336, 640, 400],
+                [640, 400, 752, 400],
+            ],
+            dtype=int,
+        ),
+        np.array([[64, 208, 576, 208], [576, 208, 576, 624], [576, 624, 208, 624]], dtype=int),
+    ],
+    "case_05.txt": [
+        np.array([[320, 240, 512, 384]], dtype=int),
+    ],
+    "case_06.txt": [
+        np.array([[128, 64, 128, 320]], dtype=int),
+        np.array([[64, 192, 256, 192]], dtype=int),
+    ],
+    "case_07.txt": [
+        np.array([[0, 0, 64, 0]], dtype=int),
+        np.array([[32, 0, 32, 64], [32, 0, 96, 0]], dtype=int),
+        np.array([[128, 64, 128, 192]], dtype=int),
+        np.array([[64, 128, 192, 128]], dtype=int),
+    ],
+    "case_08.txt": [
+        np.array(
+            [[256, 256, 128, 256], [256, 256, 256, 128], [256, 256, 256, 384], [256, 256, 384, 256]],
+            dtype=int,
+        ),
+    ],
+    "case_09.txt": [
+        np.array(
+            [
+                [64, 128, 192, 128], [192, 128, 192, 256], [192, 256, 320, 256],
+                [320, 256, 320, 384], [320, 384, 448, 384],
+            ],
+            dtype=int,
+        ),
+    ],
+    "case_10.txt": [
+        np.array([[96, 256, 288, 256], [288, 256, 288, 96], [288, 96, 480, 96]], dtype=int),
+        np.array([[384, 384, 576, 384], [576, 384, 576, 512]], dtype=int),
+    ],
 }
 
 
@@ -39,72 +87,44 @@ def _parse_fixture(filepath: Path) -> np.ndarray:
     return np.array(wires, dtype=int)
 
 
-class TestGetWiresStartposEndpos(unittest.TestCase):
-    def test_all_fixture_cases(self) -> None:
-        for fixture_name, expected_result in sorted(_EXPECTED_RESULTS.items()):
-            fixture_path = _FIXTURE_DIRECTORY / fixture_name
-            wires = _parse_fixture(fixture_path)
-            self.assertTrue(len(wires) > 0, msg=f"{fixture_name} should contain valid WIRE entries.")
-            endpos = get_wires_endpos(wires)
-            np.testing.assert_array_equal(endpos, expected_result, err_msg=f"{fixture_name} unexpected end positions.")
+def _sort_groups(groups):
+    sortable = [tuple(map(tuple, group)) for group in groups]
+    sortable.sort(key=lambda g: (len(g), g[0] if len(g) else ()))
+    return [np.array(group, dtype=int) for group in sortable]
 
-    def test_single_horizontal_wire(self) -> None:
-        wires = np.array([[0, 0, 64, 0]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[0, 0], [64, 0]]))
+
+class TestGetWiresEndpos(unittest.TestCase):
+    def test_all_fixture_cases(self) -> None:
+        for fixture_name in sorted(_EXPECTED_GROUPS.keys()):
+            with self.subTest(fixture=fixture_name):
+                fixture_path = _FIXTURE_DIRECTORY / fixture_name
+                wires = _parse_fixture(fixture_path)
+                self.assertTrue(len(wires) > 0, msg=f"{fixture_name} should contain valid WIRE entries.")
+                groups = get_wires_endpos(wires)
+                self.assertEqual(len(groups), len(_EXPECTED_GROUPS[fixture_name]),
+                                 msg=f"{fixture_name} should produce {len(_EXPECTED_GROUPS[fixture_name])} groups.")
+                sorted_actual = _sort_groups(groups)
+                sorted_expected = _sort_groups(_EXPECTED_GROUPS[fixture_name])
+                for group_idx, (actual_group, expected_group) in enumerate(zip(sorted_actual, sorted_expected)):
+                    np.testing.assert_array_equal(actual_group, expected_group,
+                                                   err_msg=f"{fixture_name} group {group_idx} mismatch.")
+
+    def test_two_collinear_wires_connected_by_endpoint(self) -> None:
+        wires = np.array([[0, 0, 32, 0], [32, 0, 64, 0]])
+        groups = get_wires_endpos(wires)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups[0]), 2)
+
+    def test_two_collinear_wires_not_connected_without_shared_endpoint(self) -> None:
+        wires = np.array([[0, 0, 16, 0], [32, 0, 64, 0]])
+        groups = get_wires_endpos(wires)
+        self.assertEqual(len(groups), 2)
 
     def test_single_vertical_wire(self) -> None:
         wires = np.array([[32, 0, 32, 80]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[32, 0], [32, 80]]))
-
-    def test_l_shape_three_wires(self) -> None:
-        wires = np.array([[0, 32, 64, 32], [64, 32, 64, 96], [64, 96, 128, 96]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[0, 32], [128, 96]]))
-
-    def test_reversed_wire_order_yields_same_endpoints(self) -> None:
-        wires = np.array([[256, 384, 432, 384], [160, 192, 256, 192], [256, 192, 256, 384]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[160, 192], [432, 384]]))
-
-    def test_collinear_touching_wires(self) -> None:
-        wires = np.array([[0, 0, 32, 0], [32, 0, 64, 0], [64, 0, 96, 0]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[0, 0], [96, 0]]))
-
-    def test_collinear_overlapping_wires(self) -> None:
-        wires = np.array([[0, 0, 32, 0], [16, 0, 48, 0]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[0, 0], [48, 0]]))
-
-    def test_collinear_contained_wire(self) -> None:
-        wires = np.array([[0, 0, 48, 0], [16, 0, 32, 0]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[0, 0], [48, 0]]))
-
-    def test_t_junction_returns_three_endpoints(self) -> None:
-        wires = np.array([[128, 128, 128, 256], [128, 256, 256, 256], [128, 256, 384, 128], [128, 256, 512, 256]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[128, 128], [384, 128], [512, 256]]))
-
-    def test_interior_branch_point_not_an_endpoint(self) -> None:
-        wires = np.array([[96, 256, 288, 256], [288, 256, 288, 96], [288, 96, 480, 96], [288, 256, 384, 384]])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[96, 256], [384, 384], [480, 96]]))
-
-    def test_branch_on_interior_with_four_endpoints(self) -> None:
-        wires = np.array([
-            [768, 176, 320, 176],
-            [320, 176, 320, 400],
-            [320, 400, 720, 400],
-            [720, 400, 720, 560],
-            [720, 560, 400, 560],
-            [720, 480, 816, 480],
-            [320, 304, 240, 304],
-        ])
-        endpos = get_wires_endpos(wires)
-        np.testing.assert_array_equal(endpos, np.array([[240, 304], [400, 560], [768, 176], [816, 480]]))
+        groups = get_wires_endpos(wires)
+        self.assertEqual(len(groups), 1)
+        np.testing.assert_array_equal(groups[0], wires)
 
     def test_invalid_shape_raises_value_error(self) -> None:
         with self.assertRaises(ValueError):
@@ -114,11 +134,11 @@ class TestGetWiresStartposEndpos(unittest.TestCase):
         with self.assertRaises(ValueError):
             get_wires_endpos(np.array([0, 0, 10, 0]))
 
-    def test_open_chain_raises_value_error(self) -> None:
-        wires = np.array([[0, 0, 32, 0], [64, 0, 96, 0]])
-        with self.assertRaises(ValueError):
-            get_wires_endpos(wires)
+    def test_empty_array_returns_empty_list(self) -> None:
+        groups = get_wires_endpos(np.empty((0, 4), dtype=int))
+        self.assertEqual(groups, [])
 
-    def test_empty_array_raises_value_error(self) -> None:
-        with self.assertRaises(ValueError):
-            get_wires_endpos(np.empty((0, 4), dtype=int))
+    def test_crossing_wires_not_connected(self) -> None:
+        wires = np.array([[5, 0, 5, 10], [0, 5, 10, 5]])
+        groups = get_wires_endpos(wires)
+        self.assertEqual(len(groups), 2)

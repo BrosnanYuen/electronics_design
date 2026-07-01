@@ -33,7 +33,7 @@ ltspice_netlist_footer_cmp = _net.ltspice_netlist_footer_cmp  # Re-export the fo
 ltspice_netlist_structure_cmp = _net.ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
 gui_debug = _pathtracing.gui_debug  # Re-export the path tracing GUI helper.
 are_wires_intersecting_obstacles_detailed = _pathtracing.are_wires_intersecting_obstacles_detailed  # Re-export the detailed intersection helper.
-get_wires_endpos = _pathtracing.get_wires_endpos  # Re-export the start/end position helper.
+get_wires_endpos = _pathtracing.get_wires_endpos  # Re-export the wire-grouping helper.
 
 _classify_asc_line = _asc._classify_asc_line  # Re-export the ASC line classifier for focused tests.
 _extract_asc_text_directive = _asc._extract_asc_text_directive  # Re-export the ASC directive extractor for focused tests.

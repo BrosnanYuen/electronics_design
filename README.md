@@ -20,7 +20,7 @@ It currently exposes twenty-three public functions:
 - `are_wires_horizontal_or_vertical(wires)`
 - `are_wires_intersecting_obstacles_fast(wires, obstacles)`
 - `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
-- `get_wires_endpos(wires)`
+- `get_wires_endpos(wires)`  *groups of connected wires*
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -44,13 +44,16 @@ or:
 
 `ltspice_netlist_footer_cmp(filepath1, filepath2)`, `ltspice_netlist_structure_cmp(filepath1, filepath2)`, `are_wires_connected(wires)`, and `are_wires_intersecting_obstacles_fast(wires, obstacles)` return `True` or `False`.
 
-`get_wires_endpos(wires)` returns a numpy array of shape `(N, 2)` where `N >= 2`:
+`get_wires_endpos(wires)` returns a list of numpy arrays, each containing the wires of one connected group:
 
 ```python
-endpos = np.array([[x1, y1], [x2, y2], ...])
+groups = [
+    np.array([[x1, y1, x2, y2], ...]),
+    np.array([[x1, y1, x2, y2], ...]),
+]
 ```
 
-Each row is an endpoint sorted by ascending `x` then `y`. It raises `ValueError` when the wires do not form a single continuous graph with at least two endpoints or when the input shape is invalid.
+Two wires are connected when they share an exact endpoint coordinate. Wires that cross without sharing an endpoint are not grouped together. It raises `ValueError` when the input shape is invalid.
 
 `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` returns a conversion tuple:
 
@@ -399,16 +402,16 @@ Checks that:
 
 - `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
 - Each wire is an axis-aligned line segment
-- The wires form a single continuous graph with at least two endpoints
-- Wire endpoints that lie on the interior of another wire segment are treated as branch points, not endpoints
+- Two wires are considered connected only when the start or end point of one wire exactly matches the start or end point of another wire
+- Wires that intersect at interior points (without endpoint sharing) are not grouped together
 
 Returns:
 
-- A numpy array of shape `(N, 2)` where `N >= 2`, each row is `[x, y]` identifying a leaf endpoint, ordered by ascending `x` then `y`
+- A list of numpy arrays, each of shape `(G, 4)`, where each array contains all wires belonging to one connected group
 
 Raises:
 
-- `ValueError` when `wires` is not shape `(N, 4)`, is not a single continuous graph, or has fewer than two endpoints
+- `ValueError` when `wires` is not shape `(N, 4)`
 
 ### `is_valid_ltspice_netlist_format(filepath)`
 
@@ -626,7 +629,7 @@ obstacles_array = np.array([[48, 32, 0, 32], [0, 16, 0, 72]])
 intersects_obstacles = are_wires_intersecting_obstacles_fast(wires_array, obstacles_array)
 intersects_detailed, detailed_pairs = are_wires_intersecting_obstacles_detailed(wires_array, obstacles_array)
 path_wires = np.array([[160, 192, 256, 192], [256, 192, 256, 384], [256, 384, 432, 384]])
-endpos = get_wires_endpos(path_wires)
+groups = get_wires_endpos(path_wires)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
