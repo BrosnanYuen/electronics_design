@@ -55,7 +55,7 @@ def main() -> int:
         return 1
     exit_code = 0
     for asc_filepath in arguments.asc_filepaths:
-        output_path = arguments.out if arguments.out is not None else f"{asc_filepath}.json"
+        output_path = arguments.out if arguments.out is not None else str(Path(asc_filepath).with_suffix(".json"))
         try:
             symbol_info = get_ltspice_asc_symbol_info(asc_filepath, convert_settings)
         except ValueError as error:
