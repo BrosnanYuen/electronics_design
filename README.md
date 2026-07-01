@@ -569,6 +569,22 @@ PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net 
 
 This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)` API and exits with a non-zero status if validation or image generation fails.
 
+Convert one or more LTspice ASC schematics to netlists:
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_to_netlist.py input.asc
+```
+
+By default the generated netlist is written to the same path as the input but with a `.net` extension.  Pass `--out` to specify a custom output path when converting a single file.  This script only calls the public `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` API and exits with a non-zero status if conversion fails.
+
+Extract symbol information from one or more LTspice ASC schematics:
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_symbol_info.py input.asc
+```
+
+By default the extracted JSON is written to the same path as the input but with a `.json` extension.  Pass `--out` to specify a custom output path when extracting from a single file.  This script only calls the public `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)` API and exits with a non-zero status if extraction fails.
+
 ## Example Usage
 
 ```python
@@ -672,8 +688,10 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `valid_asy/` contains valid LTspice ASY symbol fixtures
 - `valid_convert/asc/` contains valid LTspice ASC conversion fixtures
 - `valid_convert/netlist/` contains the expected LTspice netlists for the conversion fixtures
-- `scripts/ltspice_asc_plot_schemdraw.py` renders one validated LTspice ASC schematic to a `.png`, `.svg`, or `.jpg` image file
-- `scripts/ltspice_net_to_networkxpng.py` renders one validated LTspice netlist to a `.png`, `.svg`, or `.jpg` image file
+- `scripts/ltspice_asc_plot_schemdraw.py` renders validated LTspice ASC schematics to `.png`, `.svg`, or `.jpg` image files
+- `scripts/ltspice_net_to_networkxpng.py` renders validated LTspice netlists to `.png`, `.svg`, or `.jpg` image files
+- `scripts/ltspice_asc_to_netlist.py` converts validated LTspice ASC schematics to LTspice netlists
+- `scripts/ltspice_asc_symbol_info.py` extracts LTspice ASC symbol information and saves it as JSON
 - `scripts/run_all_tests.py` runs unit tests first and integration tests second
 
 ## Package Layout

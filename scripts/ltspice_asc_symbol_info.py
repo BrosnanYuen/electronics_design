@@ -1,8 +1,9 @@
-"""Convert LTspice ASC schematic files to netlists via the public package API."""
+"""Extract symbol info from LTspice ASC files and save as JSON."""
 
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -12,22 +13,22 @@ _SOURCE_DIRECTORY = _ROOT_DIRECTORY / "src"
 if str(_SOURCE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_SOURCE_DIRECTORY))
 
-from electronics_design import ltspice_asc_to_netlist
+from electronics_design import get_ltspice_asc_symbol_info
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Convert LTspice ASC schematic files into LTspice netlists.",
+        description="Extract symbol information from LTspice ASC schematic files and save as JSON.",
     )
     parser.add_argument(
         "asc_filepaths",
         nargs="+",
-        help="One or more LTspice .asc files to convert.",
+        help="One or more LTspice .asc files to read.",
     )
     parser.add_argument(
         "--ltspice-windows-path",
         default="C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
-        help="Windows-style LTspice root path used when writing .lib lines into the generated netlist.",
+        help="Windows-style LTspice root path used for symbol lookup.",
     )
     parser.add_argument(
         "--ltspice-wine-path",
@@ -37,7 +38,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--out",
         default=None,
-        help="Optional single output .net path. Only valid with exactly one input ASC file.",
+        help="Optional single output JSON path. Only valid with exactly one input ASC file.",
     )
     return parser
 
@@ -54,10 +55,20 @@ def main() -> int:
         return 1
     exit_code = 0
     for asc_filepath in arguments.asc_filepaths:
-        output_path = arguments.out if arguments.out is not None else f"{asc_filepath}.net"
-        result = ltspice_asc_to_netlist(asc_filepath, output_path, convert_settings)
-        if not result[0]:
-            print(f"{asc_filepath}: {result[1]}", file=sys.stderr)
+        output_path = arguments.out if arguments.out is not None else f"{asc_filepath}.json"
+        try:
+            symbol_info = get_ltspice_asc_symbol_info(asc_filepath, convert_settings)
+        except ValueError as error:
+            print(f"{asc_filepath}: {error}", file=sys.stderr)
+            exit_code = 1
+            continue
+        try:
+            Path(output_path).write_text(
+                json.dumps(symbol_info, indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as error:
+            print(f"{output_path}: {error}", file=sys.stderr)
             exit_code = 1
             continue
     return exit_code
