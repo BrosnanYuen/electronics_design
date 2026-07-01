@@ -1,4 +1,4 @@
-"""Unit tests for group_wires_into_groups in pathtracing — groups of connected wires."""
+"""Unit tests for place_wires_into_groups in pathtracing — groups of connected wires."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 
-from electronics_design.pathtracing import group_wires_into_groups
+from electronics_design.pathtracing import place_wires_into_groups
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _FIXTURE_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "wire_start_end"
@@ -100,7 +100,7 @@ class TestGetWiresEndpos(unittest.TestCase):
                 fixture_path = _FIXTURE_DIRECTORY / fixture_name
                 wires = _parse_fixture(fixture_path)
                 self.assertTrue(len(wires) > 0, msg=f"{fixture_name} should contain valid WIRE entries.")
-                groups = group_wires_into_groups(wires)
+                groups = place_wires_into_groups(wires)
                 self.assertEqual(len(groups), len(_EXPECTED_GROUPS[fixture_name]),
                                  msg=f"{fixture_name} should produce {len(_EXPECTED_GROUPS[fixture_name])} groups.")
                 sorted_actual = _sort_groups(groups)
@@ -111,34 +111,34 @@ class TestGetWiresEndpos(unittest.TestCase):
 
     def test_two_collinear_wires_connected_by_endpoint(self) -> None:
         wires = np.array([[0, 0, 32, 0], [32, 0, 64, 0]])
-        groups = group_wires_into_groups(wires)
+        groups = place_wires_into_groups(wires)
         self.assertEqual(len(groups), 1)
         self.assertEqual(len(groups[0]), 2)
 
     def test_two_collinear_wires_not_connected_without_shared_endpoint(self) -> None:
         wires = np.array([[0, 0, 16, 0], [32, 0, 64, 0]])
-        groups = group_wires_into_groups(wires)
+        groups = place_wires_into_groups(wires)
         self.assertEqual(len(groups), 2)
 
     def test_single_vertical_wire(self) -> None:
         wires = np.array([[32, 0, 32, 80]])
-        groups = group_wires_into_groups(wires)
+        groups = place_wires_into_groups(wires)
         self.assertEqual(len(groups), 1)
         np.testing.assert_array_equal(groups[0], wires)
 
     def test_invalid_shape_raises_value_error(self) -> None:
         with self.assertRaises(ValueError):
-            group_wires_into_groups(np.array([[0, 0, 10]]))
+            place_wires_into_groups(np.array([[0, 0, 10]]))
 
     def test_1d_array_raises_value_error(self) -> None:
         with self.assertRaises(ValueError):
-            group_wires_into_groups(np.array([0, 0, 10, 0]))
+            place_wires_into_groups(np.array([0, 0, 10, 0]))
 
     def test_empty_array_returns_empty_list(self) -> None:
-        groups = group_wires_into_groups(np.empty((0, 4), dtype=int))
+        groups = place_wires_into_groups(np.empty((0, 4), dtype=int))
         self.assertEqual(groups, [])
 
     def test_crossing_wires_not_connected(self) -> None:
         wires = np.array([[5, 0, 5, 10], [0, 5, 10, 5]])
-        groups = group_wires_into_groups(wires)
+        groups = place_wires_into_groups(wires)
         self.assertEqual(len(groups), 2)
