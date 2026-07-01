@@ -36,6 +36,12 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Local LTspice root path used at runtime to browse .asy and library files.",
     )
     parser.add_argument(
+        "--custom-search-paths",
+        nargs="*",
+        default=["./valid_asy/"],
+        help="Optional additional search paths for LTspice .asy and library files.",
+    )
+    parser.add_argument(
         "--out",
         default=None,
         help="Optional single output JSON path. Only valid with exactly one input ASC file.",
@@ -47,6 +53,7 @@ def main() -> int:
     parser = _build_argument_parser()
     arguments = parser.parse_args()
     convert_settings = {
+        "custom_search_paths": arguments.custom_search_paths,
         "ltspice_windows_path": arguments.ltspice_windows_path,
         "ltspice_wine_path": arguments.ltspice_wine_path,
     }
