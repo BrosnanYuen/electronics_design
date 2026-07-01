@@ -219,7 +219,7 @@ def _validate_asy_record_tokens(raw_line: str) -> Tuple[bool, str]:
         return True, ""
     tokens = raw_line.split()
     if keyword == "VERSION":
-        if len(tokens) != 2 or not _is_integer_token(tokens[1]):
+        if len(tokens) != 2 or not _is_version_token(tokens[1]):
             return False, "invalid_version"
         return True, ""
     if keyword == "SYMBOLTYPE":
@@ -408,6 +408,10 @@ def _shape_coordinate_values(raw_line: str, keyword: str) -> Tuple[int, ...] | N
     if keyword == "ARC":
         return tuple(int(token) for token in tokens[2:10])
     return None
+
+
+def _is_version_token(token: str) -> bool:
+    return re.match(r"^-?\d+(\.\d+)?$", token) is not None
 
 
 def _is_integer_token(token: str) -> bool:

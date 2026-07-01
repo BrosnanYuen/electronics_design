@@ -316,7 +316,7 @@ def _validate_asc_record_tokens(raw_line: str) -> Tuple[bool, str]:  # Validate 
     if keyword == "VERSION":  # Validate the Version header record.
         if len(tokens) != 2:  # Require exactly a keyword and a version token.
             return False, "invalid_version_token_count"  # Signal that the Version record is malformed.
-        if not _is_integer_token(tokens[1]):  # Require the version value to be an integer token such as 4.
+        if not _is_version_token(tokens[1]):  # Require the version value to be an integer or dotted version token such as 4 or 4.1.
             return False, "invalid_version_value"  # Signal that the version value is malformed.
         return True, ""  # Return success when the Version record is well formed.
     if keyword == "SHEET":  # Validate the SHEET metadata record.
@@ -447,6 +447,10 @@ def _parse_directive_name(code_part: str) -> DirectiveResult:  # Parse and valid
     if directive_name not in _VALID_DOT_DIRECTIVES:  # Reject unsupported or merged directive spellings.
         return False, "", "unknown_directive"  # Signal directive validation failure.
     return True, directive_name, ""  # Return the validated directive name.
+
+
+def _is_version_token(token: str) -> bool:  # Decide whether one token is a valid version field such as 4 or 4.1.
+    return re.match(r"^-?\d+(\.\d+)?$", token) is not None  # Accept optional leading minus sign, digits, and optional dotted sub-version.
 
 
 def _is_integer_token(token: str) -> bool:  # Decide whether one token is a valid integer field for ASC coordinate-style records.
