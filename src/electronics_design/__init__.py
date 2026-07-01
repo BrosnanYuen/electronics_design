@@ -22,7 +22,7 @@ from .ltspice import ltspice_netlist_footer_cmp  # Re-export the footer comparis
 from .ltspice import ltspice_netlist_plot_networkx  # Re-export the graph plotting helper.
 from .ltspice import ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
 from .ltspice import gui_debug  # Re-export the path tracing GUI helper.
-from .ltspice import get_wires_endpos  # Re-export the wire-grouping helper.
+from .ltspice import group_wires_into_groups  # Re-export the wire-grouping helper.
 
 __all__ = [  # Define the supported public API surface.
     "auto_route_wires",  # Export the orthogonal autorouting helper name.
@@ -47,5 +47,5 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_netlist_structure_cmp",  # Export the structural comparison helper name.
     "gui_debug",  # Export the path tracing GUI helper name.
     "are_wires_intersecting_obstacles_detailed",  # Export the detailed intersection helper name.
-    "get_wires_endpos",  # Export the wire-grouping helper name.
+    "group_wires_into_groups",  # Export the wire-grouping helper name.
 ]  # Finish the public export list.
