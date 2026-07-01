@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import re
 from typing import Dict
 from typing import List
+from typing import Mapping
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
+import numpy as np
+
 from . import ltspice_asc as _asc
+from . import ltspice_asc_to_netlist as _asc_to_netlist
+from . import ltspice_asy as _asy
+from .ltspice_asc_to_netlist import get_ltspice_asc_symbol_info
+from .pathtracing import find_wire_group_index
+from .pathtracing import place_wires_into_groups
 
 ValidationResult = _asc.ValidationResult
 Point = _asc.Point
@@ -19,12 +28,48 @@ AscFlag = _asc.AscFlag
 AscSchematic = _asc.AscSchematic
 AscSymbol = _asc.AscSymbol
 AscWire = _asc.AscWire
+ConnectionKey = Tuple[str, object]
 
 _SUPPORTED_SCHEMDRAW_EXTENSIONS = {".png", ".svg", ".jpg", ".jpeg"}
 _SCHEMDRAW_POINT_SCALE = 64.0
 _SCHEMDRAW_MARGIN_UNITS = 1.0
 _SCHEMDRAW_DPI = 100.0
-_SCHEMDRAW_NEARBY_POINT_RADIUS = 192
+
+
+@dataclass(frozen=True)
+class AscRenderPin:
+    point: Point
+    pin_name: str
+    spice_order: int
+    wire_group_index: int
+    connection_key: ConnectionKey
+
+
+@dataclass(frozen=True)
+class AscRenderSymbol:
+    symbol: AscSymbol
+    instance_name: str
+    rectangle: Tuple[int, int, int, int]
+    pins: Tuple[AscRenderPin, ...]
+
+
+@dataclass(frozen=True)
+class AscConnection:
+    instance_name: str
+    pin_name: str
+    spice_order: int
+    point: Point
+
+
+@dataclass(frozen=True)
+class AscRenderableSchematic:
+    wires: Tuple[AscWire, ...]
+    flags: Tuple[AscFlag, ...]
+    symbols: Tuple[AscRenderSymbol, ...]
+    bounds: Tuple[int, int, int, int]
+    wire_groups: Tuple[np.ndarray, ...]
+    connections_by_key: Dict[ConnectionKey, Tuple[AscConnection, ...]]
+    flags_by_key: Dict[ConnectionKey, Tuple[str, ...]]
 
 
 def ltspice_asc_plot_schemdraw(
@@ -32,6 +77,7 @@ def ltspice_asc_plot_schemdraw(
     schemdraw_imagepath_out: str,
     width: int = 1920,
     height: int = 1080,
+    convert_settings: Optional[Mapping[str, object]] = None,
 ) -> ValidationResult:
     validation_result = _asc.is_valid_ltspice_asc_file(asc_filepath)
     if not validation_result[0]:
@@ -55,10 +101,15 @@ def ltspice_asc_plot_schemdraw(
     if not parse_result[0]:
         return False, "Unable to plot schematic drawing!"
     try:
-        _render_asc_schematic_with_schemdraw(parse_result[1], output_path_result[1], width, height)
+        renderable_schematic = _build_renderable_schematic(
+            asc_filepath,
+            parse_result[1],
+            {} if convert_settings is None else convert_settings,
+        )
+        _render_asc_schematic_with_schemdraw(renderable_schematic, output_path_result[1], width, height)
     except OSError:
         return False, "Unable to write image file!"
-    except (ImportError, RuntimeError, ValueError):
+    except (ImportError, RuntimeError, TypeError, ValueError):
         return False, "Unable to plot schematic drawing!"
     return True, ""
 
@@ -118,7 +169,202 @@ def _parse_asc_schematic(lines: Sequence[str]) -> Tuple[bool, AscSchematic]:
     return True, schematic
 
 
-def _render_asc_schematic_with_schemdraw(schematic: AscSchematic, output_path: str, width: int, height: int) -> None:
+def _build_renderable_schematic(
+    asc_filepath: str,
+    schematic: AscSchematic,
+    convert_settings: Mapping[str, object],
+) -> AscRenderableSchematic:
+    symbol_info = _load_symbol_info_for_plotting(asc_filepath, schematic, convert_settings)
+    wire_groups = _wire_groups_from_schematic(schematic)
+    connections_by_key: Dict[ConnectionKey, List[AscConnection]] = {}
+    render_symbols: List[AscRenderSymbol] = []
+    for symbol in schematic.symbols:
+        instance_name = symbol.attributes.get("InstName", "").strip()
+        if instance_name == "":
+            instance_name = _normalize_asc_symbol_name(symbol.symbol_name)
+        info = symbol_info.get(instance_name)
+        if info is None:
+            rectangle = (symbol.origin[0], symbol.origin[1], symbol.origin[0], symbol.origin[1])
+            pins = ()
+        else:
+            rectangle = _extract_symbol_rectangle(info.get("RECTANGLE"))
+            pins = tuple(
+                sorted(
+                    (_build_render_pin(pin_row, wire_groups) for pin_row in info.get("PINS", ())),
+                    key=lambda pin: pin.spice_order,
+                )
+            )
+        for pin in pins:
+            connections_by_key.setdefault(pin.connection_key, []).append(
+                AscConnection(
+                    instance_name=instance_name,
+                    pin_name=pin.pin_name,
+                    spice_order=pin.spice_order,
+                    point=pin.point,
+                )
+            )
+        render_symbols.append(
+            AscRenderSymbol(
+                symbol=symbol,
+                instance_name=instance_name,
+                rectangle=rectangle,
+                pins=pins,
+            )
+        )
+    flags_by_key: Dict[ConnectionKey, List[str]] = {}
+    for flag in schematic.flags:
+        connection_key = _connection_key_for_point(flag.point, wire_groups)
+        flag_name = flag.name.strip()
+        if flag_name == "":
+            continue
+        flags_by_key.setdefault(connection_key, [])
+        if flag_name not in flags_by_key[connection_key]:
+            flags_by_key[connection_key].append(flag_name)
+    return AscRenderableSchematic(
+        wires=tuple(schematic.wires),
+        flags=tuple(schematic.flags),
+        symbols=tuple(render_symbols),
+        bounds=_build_render_bounds(schematic, render_symbols),
+        wire_groups=wire_groups,
+        connections_by_key={key: tuple(value) for key, value in connections_by_key.items()},
+        flags_by_key={key: tuple(value) for key, value in flags_by_key.items()},
+    )
+
+
+def _load_symbol_info_for_plotting(
+    asc_filepath: str,
+    schematic: AscSchematic,
+    convert_settings: Mapping[str, object],
+) -> Dict[str, Dict[str, object]]:
+    try:
+        return get_ltspice_asc_symbol_info(asc_filepath, convert_settings)
+    except ValueError:
+        return _load_partial_symbol_info(asc_filepath, schematic, convert_settings)
+
+
+def _load_partial_symbol_info(
+    asc_filepath: str,
+    schematic: AscSchematic,
+    convert_settings: Mapping[str, object],
+) -> Dict[str, Dict[str, object]]:
+    search_roots = _asc_to_netlist._resolve_search_roots_for_asc(asc_filepath, convert_settings)
+    symbol_paths = _asc_to_netlist._build_symbol_filepath_lookup(search_roots)
+    symbol_info: Dict[str, Dict[str, object]] = {}
+    for symbol in schematic.symbols:
+        instance_name = symbol.attributes.get("InstName", "").strip()
+        if instance_name == "":
+            continue
+        symbol_filepath = _asc_to_netlist._resolve_symbol_filepath(symbol.symbol_name, symbol_paths)
+        if symbol_filepath is None:
+            continue
+        try:
+            pins = _asy.get_ltspice_asy_pins(symbol_filepath)
+            bounds = _asy.get_ltspice_asy_size(symbol_filepath)
+        except ValueError:
+            continue
+        transformed_pins = [
+            [
+                transformed_point[0],
+                transformed_point[1],
+                pin_name,
+                spice_order,
+            ]
+            for pin_x, pin_y, pin_name, spice_order in pins
+            for transformed_point in [
+                _asc_to_netlist._transform_pin_point(
+                    (int(pin_x), int(pin_y)),
+                    symbol.origin,
+                    symbol.orientation,
+                )
+            ]
+        ]
+        symbol_info[instance_name] = {
+            "SYMBOL": _asc_to_netlist._display_symbol_name(symbol.symbol_name),
+            "X": symbol.origin[0],
+            "Y": symbol.origin[1],
+            "ROTATION": _asc_to_netlist._orientation_angle(symbol.orientation),
+            "RECTANGLE": _asc_to_netlist._transform_symbol_rectangle(bounds, symbol.origin, symbol.orientation),
+            "PINS": transformed_pins,
+        }
+    return symbol_info
+
+
+def _extract_symbol_rectangle(raw_rectangle: object) -> Tuple[int, int, int, int]:
+    try:
+        first_point, second_point = raw_rectangle
+        min_x = int(first_point[0])
+        min_y = int(first_point[1])
+        max_x = int(second_point[0])
+        max_y = int(second_point[1])
+    except (TypeError, ValueError, IndexError) as error:
+        raise ValueError("Invalid symbol rectangle metadata.") from error
+    return min(min_x, max_x), min(min_y, max_y), max(min_x, max_x), max(min_y, max_y)
+
+
+def _build_render_pin(pin_row: object, wire_groups: Sequence[np.ndarray]) -> AscRenderPin:
+    try:
+        pin_x, pin_y, pin_name, spice_order = pin_row
+    except (TypeError, ValueError) as error:
+        raise ValueError("Invalid symbol pin metadata.") from error
+    pin_point = (int(pin_x), int(pin_y))
+    wire_group_index = find_wire_group_index(np.array([pin_point[0], pin_point[1]], dtype=int), list(wire_groups))
+    connection_key = ("wire_group", wire_group_index) if wire_group_index >= 0 else ("point", pin_point)
+    return AscRenderPin(
+        point=pin_point,
+        pin_name=str(pin_name),
+        spice_order=int(spice_order),
+        wire_group_index=wire_group_index,
+        connection_key=connection_key,
+    )
+
+
+def _connection_key_for_point(point: Point, wire_groups: Sequence[np.ndarray]) -> ConnectionKey:
+    wire_group_index = find_wire_group_index(np.array([point[0], point[1]], dtype=int), list(wire_groups))
+    if wire_group_index >= 0:
+        return "wire_group", wire_group_index
+    return "point", point
+
+
+def _wire_groups_from_schematic(schematic: AscSchematic) -> Tuple[np.ndarray, ...]:
+    if not schematic.wires:
+        return ()
+    wire_rows = np.array(
+        [[wire.start[0], wire.start[1], wire.end[0], wire.end[1]] for wire in schematic.wires],
+        dtype=int,
+    )
+    return tuple(place_wires_into_groups(wire_rows))
+
+
+def _build_render_bounds(
+    schematic: AscSchematic,
+    symbols: Sequence[AscRenderSymbol],
+) -> Tuple[int, int, int, int]:
+    all_points: List[Point] = []
+    for wire in schematic.wires:
+        all_points.extend([wire.start, wire.end])
+    for flag in schematic.flags:
+        all_points.append(flag.point)
+    for symbol in symbols:
+        all_points.extend(
+            [
+                (symbol.rectangle[0], symbol.rectangle[1]),
+                (symbol.rectangle[2], symbol.rectangle[3]),
+            ]
+        )
+        all_points.extend(pin.point for pin in symbol.pins)
+    if not all_points:
+        return schematic.bounds
+    x_values = [point[0] for point in all_points]
+    y_values = [point[1] for point in all_points]
+    return min(x_values), min(y_values), max(x_values), max(y_values)
+
+
+def _render_asc_schematic_with_schemdraw(
+    schematic: AscRenderableSchematic,
+    output_path: str,
+    width: int,
+    height: int,
+) -> None:
     _configure_matplotlib_cache_directory()
     import schemdraw
     import schemdraw.elements as elm
@@ -141,7 +387,6 @@ def _render_asc_schematic_with_schemdraw(schematic: AscSchematic, output_path: s
         lw=1.5,
         margin=0.05,
     )
-    electrical_points = _collect_asc_electrical_points(schematic)
     junction_points = _count_asc_junction_points(schematic)
     for wire in schematic.wires:
         drawing.add(elm.Line().at(transform(*wire.start)).to(transform(*wire.end)))
@@ -152,7 +397,7 @@ def _render_asc_schematic_with_schemdraw(schematic: AscSchematic, output_path: s
     for flag in schematic.flags:
         _draw_asc_flag(drawing, elm, flag, transform)
     for symbol in schematic.symbols:
-        _draw_asc_symbol_schemdraw(drawing, elm, symbol, electrical_points, transform)
+        _draw_asc_symbol_schemdraw(drawing, elm, schematic, symbol, transform)
     drawing.save(output_path, dpi=_SCHEMDRAW_DPI)
     if extension == ".svg":
         _rewrite_svg_dimensions(output_path, width, height)
@@ -179,15 +424,7 @@ def _make_schemdraw_point_transform(bounds: Tuple[int, int, int, int]):
     return _transform
 
 
-def _collect_asc_electrical_points(schematic: AscSchematic) -> List[Point]:
-    points = {flag.point for flag in schematic.flags}
-    for wire in schematic.wires:
-        points.add(wire.start)
-        points.add(wire.end)
-    return sorted(points)
-
-
-def _count_asc_junction_points(schematic: AscSchematic) -> Dict[Point, int]:
+def _count_asc_junction_points(schematic: AscRenderableSchematic) -> Dict[Point, int]:
     counts: Dict[Point, int] = {}
     for wire in schematic.wires:
         counts[wire.start] = counts.get(wire.start, 0) + 1
@@ -206,109 +443,106 @@ def _draw_asc_flag(drawing, elm, flag: AscFlag, transform) -> None:
     drawing.add(elm.Dot().at(transformed_point).label(normalized_name, loc="right"))
 
 
-def _draw_asc_symbol_schemdraw(drawing, elm, symbol: AscSymbol, electrical_points: Sequence[Point], transform) -> None:
-    normalized_name = _normalize_asc_symbol_name(symbol.symbol_name)
-    if normalized_name in {"res", "cap", "ind", "diode", "voltage", "current", "sw", "f"}:
-        _draw_asc_two_pin_symbol(drawing, elm, symbol, electrical_points, transform)
-        return
-    if normalized_name in {"npn", "pnp", "nmos", "pmos", "gain", "opamp", "lt1007", "lt1721"}:
-        _draw_asc_active_symbol(drawing, elm, symbol, electrical_points, transform)
-        return
-    _draw_asc_generic_symbol(drawing, elm, symbol, electrical_points, transform)
-
-
-def _draw_asc_two_pin_symbol(drawing, elm, symbol: AscSymbol, electrical_points: Sequence[Point], transform) -> None:
-    pin_pair = _find_two_pin_connection_points(symbol, electrical_points)
-    if pin_pair is None:
-        center_point = _estimate_symbol_center(symbol, electrical_points)
-        _draw_asc_generic_symbol(drawing, elm, symbol, electrical_points, transform, center_override=center_point)
-        return
-    start_point, end_point = _order_two_pin_points_for_orientation(pin_pair[0], pin_pair[1], symbol.orientation)
-    element = _make_two_pin_schemdraw_element(elm, symbol)
-    element = element.at(transform(*start_point)).to(transform(*end_point))
-    element = _apply_symbol_labels(element, symbol)
-    drawing.add(element)
-
-
-def _draw_asc_active_symbol(drawing, elm, symbol: AscSymbol, electrical_points: Sequence[Point], transform) -> None:
-    normalized_name = _normalize_asc_symbol_name(symbol.symbol_name)
-    center_point = transform(*_estimate_symbol_center(symbol, electrical_points))
-    if normalized_name == "npn":
-        element = elm.BjtNpn().at(center_point)
-    elif normalized_name == "pnp":
-        element = elm.BjtPnp().at(center_point)
-    elif normalized_name == "nmos":
-        element = elm.NFet().at(center_point)
-    elif normalized_name == "pmos":
-        element = elm.PFet().at(center_point)
-    else:
-        element = elm.Opamp().at(center_point)
-    element = _apply_orientation_to_schemdraw_element(element, symbol.orientation)
-    element = _apply_symbol_labels(element, symbol)
-    drawing.add(element)
-
-
-def _draw_asc_generic_symbol(
+def _draw_asc_symbol_schemdraw(
     drawing,
     elm,
-    symbol: AscSymbol,
-    electrical_points: Sequence[Point],
+    schematic: AscRenderableSchematic,
+    symbol: AscRenderSymbol,
     transform,
-    center_override: Optional[Point] = None,
 ) -> None:
-    center_source = center_override if center_override is not None else _estimate_symbol_center(symbol, electrical_points)
-    element = elm.Ic(size=(1.6, 1.0)).at(transform(*center_source))
-    generic_label = symbol.attributes.get("InstName", symbol.symbol_name)
-    element = element.label(generic_label, loc="top")
-    value_text = _clean_symbol_value(symbol)
-    if value_text != "":
-        element = element.label(value_text, loc="bottom")
+    normalized_name = _normalize_asc_symbol_name(symbol.symbol.symbol_name)
+    if normalized_name in {"res", "cap", "ind", "diode", "voltage", "current", "sw", "f"} and len(symbol.pins) >= 2:
+        _draw_asc_two_pin_symbol(drawing, elm, symbol, transform)
+        return
+    _draw_asc_block_symbol(drawing, elm, schematic, symbol, transform)
+
+
+def _draw_asc_two_pin_symbol(drawing, elm, symbol: AscRenderSymbol, transform) -> None:
+    ordered_pins = tuple(sorted(symbol.pins, key=lambda pin: pin.spice_order))
+    start_point = ordered_pins[0].point
+    end_point = ordered_pins[1].point
+    element = _make_two_pin_schemdraw_element(elm, symbol.symbol)
+    element = element.at(transform(*start_point)).to(transform(*end_point))
+    element = _apply_symbol_labels(element, symbol.symbol)
     drawing.add(element)
 
 
-def _find_two_pin_connection_points(symbol: AscSymbol, electrical_points: Sequence[Point]) -> Optional[Tuple[Point, Point]]:
-    origin_x, origin_y = symbol.origin
-    horizontal = _orientation_is_horizontal(symbol.orientation)
-    nearby_points = [
-        point
-        for point in electrical_points
-        if abs(point[0] - origin_x) <= _SCHEMDRAW_NEARBY_POINT_RADIUS and abs(point[1] - origin_y) <= _SCHEMDRAW_NEARBY_POINT_RADIUS
-    ]
-    if len(nearby_points) < 2:
-        return None
-    best_pair: Optional[Tuple[Point, Point]] = None
-    best_score: Optional[Tuple[int, int, int, int]] = None
-    for first_index, first_point in enumerate(nearby_points):
-        for second_point in nearby_points[first_index + 1 :]:
-            if horizontal:
-                alignment_penalty = abs(first_point[1] - second_point[1])
-                midpoint_penalty = abs(((first_point[1] + second_point[1]) // 2) - origin_y)
-                axis_distance = abs(first_point[0] - second_point[0])
-                straddle_penalty = 0 if min(first_point[0], second_point[0]) <= origin_x <= max(first_point[0], second_point[0]) else 1
-            else:
-                alignment_penalty = abs(first_point[0] - second_point[0])
-                midpoint_penalty = abs(((first_point[0] + second_point[0]) // 2) - origin_x)
-                axis_distance = abs(first_point[1] - second_point[1])
-                straddle_penalty = 0 if min(first_point[1], second_point[1]) <= origin_y <= max(first_point[1], second_point[1]) else 1
-            total_distance = _point_manhattan_distance(first_point, symbol.origin) + _point_manhattan_distance(second_point, symbol.origin)
-            score = (alignment_penalty, straddle_penalty, midpoint_penalty, total_distance - axis_distance)
-            if best_score is None or score < best_score:
-                best_score = score
-                best_pair = (first_point, second_point)
-    return best_pair
+def _draw_asc_block_symbol(
+    drawing,
+    elm,
+    schematic: AscRenderableSchematic,
+    symbol: AscRenderSymbol,
+    transform,
+) -> None:
+    if symbol.rectangle[0] == symbol.rectangle[2] and symbol.rectangle[1] == symbol.rectangle[3] and not symbol.pins:
+        label = elm.Label(symbol.instance_name).at(transform(*symbol.symbol.origin))
+        value_text = _clean_symbol_value(symbol.symbol)
+        if value_text != "":
+            label = label.label(value_text, loc="bottom")
+        drawing.add(label)
+        return
+    left, bottom, right, top = _transform_rectangle_bounds(symbol.rectangle, transform)
+    rectangle = elm.Rect(corner1=(left, bottom), corner2=(right, top))
+    rectangle = _apply_symbol_labels(rectangle, symbol.symbol)
+    drawing.add(rectangle)
+    for pin in symbol.pins:
+        _draw_symbol_pin(drawing, elm, schematic, pin, left, bottom, right, top, transform)
 
 
-def _estimate_symbol_center(symbol: AscSymbol, electrical_points: Sequence[Point]) -> Point:
-    nearby_points = [
-        point
-        for point in electrical_points
-        if abs(point[0] - symbol.origin[0]) <= _SCHEMDRAW_NEARBY_POINT_RADIUS and abs(point[1] - symbol.origin[1]) <= _SCHEMDRAW_NEARBY_POINT_RADIUS
-    ]
-    if not nearby_points:
-        return symbol.origin
-    x_total = sum(point[0] for point in nearby_points)
-    y_total = sum(point[1] for point in nearby_points)
-    return round(x_total / len(nearby_points)), round(y_total / len(nearby_points))
+def _transform_rectangle_bounds(rectangle: Tuple[int, int, int, int], transform) -> Tuple[float, float, float, float]:
+    first_corner = transform(rectangle[0], rectangle[1])
+    second_corner = transform(rectangle[2], rectangle[3])
+    left = min(first_corner[0], second_corner[0])
+    right = max(first_corner[0], second_corner[0])
+    bottom = min(first_corner[1], second_corner[1])
+    top = max(first_corner[1], second_corner[1])
+    return left, bottom, right, top
+
+
+def _draw_symbol_pin(
+    drawing,
+    elm,
+    schematic: AscRenderableSchematic,
+    pin: AscRenderPin,
+    left: float,
+    bottom: float,
+    right: float,
+    top: float,
+    transform,
+) -> None:
+    pin_point = transform(*pin.point)
+    anchor_point = _nearest_rectangle_edge_point(pin_point, left, bottom, right, top)
+    if abs(anchor_point[0] - pin_point[0]) > 1e-9 or abs(anchor_point[1] - pin_point[1]) > 1e-9:
+        drawing.add(elm.Line().at(anchor_point).to(pin_point))
+    if _pin_has_connection(schematic, pin):
+        drawing.add(elm.Dot().at(pin_point))
+
+
+def _nearest_rectangle_edge_point(
+    point: Tuple[float, float],
+    left: float,
+    bottom: float,
+    right: float,
+    top: float,
+) -> Tuple[float, float]:
+    point_x, point_y = point
+    if left <= point_x <= right and bottom <= point_y <= top:
+        return point
+    clamped_x = min(max(point_x, left), right)
+    clamped_y = min(max(point_y, bottom), top)
+    distances = {
+        (left, clamped_y): abs(point_x - left),
+        (right, clamped_y): abs(point_x - right),
+        (clamped_x, bottom): abs(point_y - bottom),
+        (clamped_x, top): abs(point_y - top),
+    }
+    return min(distances.items(), key=lambda item: item[1])[0]
+
+
+def _pin_has_connection(schematic: AscRenderableSchematic, pin: AscRenderPin) -> bool:
+    connection_count = len(schematic.connections_by_key.get(pin.connection_key, ()))
+    flag_count = len(schematic.flags_by_key.get(pin.connection_key, ()))
+    return pin.wire_group_index >= 0 or connection_count > 1 or flag_count > 0
 
 
 def _make_two_pin_schemdraw_element(elm, symbol: AscSymbol):
@@ -347,43 +581,8 @@ def _clean_symbol_value(symbol: AscSymbol) -> str:
     return raw_value
 
 
-def _orientation_is_horizontal(orientation: str) -> bool:
-    return _orientation_angle(orientation) in {90, 270}
-
-
-def _orientation_angle(orientation: str) -> int:
-    angle_match = re.search(r"(\d+)$", orientation)
-    if angle_match is None:
-        return 0
-    return int(angle_match.group(1)) % 360
-
-
-def _apply_orientation_to_schemdraw_element(element, orientation: str):
-    if orientation.upper().startswith("M"):
-        element = element.flip()
-    angle = _orientation_angle(orientation)
-    if angle != 0:
-        element = element.theta(angle)
-    return element
-
-
-def _order_two_pin_points_for_orientation(first_point: Point, second_point: Point, orientation: str) -> Tuple[Point, Point]:
-    angle = _orientation_angle(orientation)
-    if angle == 90:
-        return (first_point, second_point) if first_point[0] <= second_point[0] else (second_point, first_point)
-    if angle == 270:
-        return (first_point, second_point) if first_point[0] >= second_point[0] else (second_point, first_point)
-    if angle == 180:
-        return (first_point, second_point) if first_point[1] >= second_point[1] else (second_point, first_point)
-    return (first_point, second_point) if first_point[1] <= second_point[1] else (second_point, first_point)
-
-
 def _normalize_asc_symbol_name(symbol_name: str) -> str:
-    return symbol_name.split("\\")[-1].lower()
-
-
-def _point_manhattan_distance(first_point: Point, second_point: Point) -> int:
-    return abs(first_point[0] - second_point[0]) + abs(first_point[1] - second_point[1])
+    return symbol_name.replace("\\", "/").split("/")[-1].lower()
 
 
 def _rewrite_svg_dimensions(output_path: str, width: int, height: int) -> None:
