@@ -1,0 +1,138 @@
+{
+  "U1": {
+    "SYMBOL": "AD823A",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "U2": {
+    "SYMBOL": "AD823A",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "U3": {
+    "SYMBOL": "AD823A",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "e": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R9": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "U4": {
+    "SYMBOL": "AD823A",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}

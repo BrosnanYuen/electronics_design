@@ -1,0 +1,26 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "B1": {
+    "SYMBOL": "bv",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "B2": {
+    "SYMBOL": "bv",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}

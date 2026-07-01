@@ -1,0 +1,66 @@
+{
+  "R1": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "U2": {
+    "SYMBOL": "LT1007",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}

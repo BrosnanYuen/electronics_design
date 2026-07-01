@@ -1,0 +1,42 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "U2": {
+    "SYMBOL": "LT1721",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}

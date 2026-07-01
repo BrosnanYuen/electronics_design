@@ -1,0 +1,258 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L1": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L2": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "I1": {
+    "SYMBOL": "current",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L3": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C3": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L4": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C4": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "I2": {
+    "SYMBOL": "current",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L5": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C5": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L6": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C6": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "I3": {
+    "SYMBOL": "current",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V4": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L7": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C7": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L8": {
+    "SYMBOL": "ind",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C8": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "I4": {
+    "SYMBOL": "current",
+    "X": 0,
+    "Y": 0,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}
