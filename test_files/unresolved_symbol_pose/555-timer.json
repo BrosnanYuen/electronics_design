@@ -1,0 +1,46 @@
+{
+  "U1": {
+    "SYMBOL": "NE555",
+    "X": 320,
+    "Y": 176,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": -64,
+    "Y": -32,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": -64,
+    "Y": 160,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": -64,
+    "Y": 304,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1\u00b5"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -224,
+    "Y": 224,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5"
+  }
+}

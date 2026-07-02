@@ -1,0 +1,335 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -352,
+    "Y": -608,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -256,
+    "Y": -608,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "-12"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 208,
+    "Y": 16,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "Q2": {
+    "SYMBOL": "pnp",
+    "X": 208,
+    "Y": 528,
+    "ROTATION": 180,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3906"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 64,
+    "Y": -80,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "11.3k"
+  },
+  "D1": {
+    "SYMBOL": "diode",
+    "X": 64,
+    "Y": 144,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  },
+  "D2": {
+    "SYMBOL": "diode",
+    "X": 64,
+    "Y": 336,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 64,
+    "Y": 496,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "11.3k"
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": -128,
+    "Y": -608,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 1 100k)"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 416,
+    "Y": 352,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": -32,
+    "Y": 256,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "22\u00b5"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 368,
+    "Y": 256,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "22\u00b5"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 560,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "Q3": {
+    "SYMBOL": "npn",
+    "X": 1360,
+    "Y": -16,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "Q4": {
+    "SYMBOL": "pnp",
+    "X": 1360,
+    "Y": 496,
+    "ROTATION": 180,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3906"
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 1216,
+    "Y": -112,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5.35k"
+  },
+  "D3": {
+    "SYMBOL": "diode",
+    "X": 1216,
+    "Y": 112,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  },
+  "D4": {
+    "SYMBOL": "diode",
+    "X": 1216,
+    "Y": 304,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 1216,
+    "Y": 464,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5.35k"
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": 1568,
+    "Y": 320,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C3": {
+    "SYMBOL": "cap",
+    "X": 1520,
+    "Y": 224,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "22\u00b5"
+  },
+  "R10": {
+    "SYMBOL": "res",
+    "X": 1408,
+    "Y": 528,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C4": {
+    "SYMBOL": "cap",
+    "X": 1120,
+    "Y": 240,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "22\u00b5"
+  },
+  "Q5": {
+    "SYMBOL": "npn",
+    "X": 2496,
+    "Y": -16,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "Q6": {
+    "SYMBOL": "pnp",
+    "X": 2496,
+    "Y": 496,
+    "ROTATION": 180,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3906"
+  },
+  "R11": {
+    "SYMBOL": "res",
+    "X": 2352,
+    "Y": -112,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5.35k"
+  },
+  "D5": {
+    "SYMBOL": "diode",
+    "X": 2352,
+    "Y": 112,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  },
+  "D6": {
+    "SYMBOL": "diode",
+    "X": 2352,
+    "Y": 304,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  },
+  "R12": {
+    "SYMBOL": "res",
+    "X": 2352,
+    "Y": 464,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5.35k"
+  },
+  "R13": {
+    "SYMBOL": "res",
+    "X": 2704,
+    "Y": 320,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C5": {
+    "SYMBOL": "cap",
+    "X": 2656,
+    "Y": 224,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "22\u00b5"
+  },
+  "R14": {
+    "SYMBOL": "res",
+    "X": 2544,
+    "Y": -192,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R15": {
+    "SYMBOL": "res",
+    "X": 2544,
+    "Y": 528,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C6": {
+    "SYMBOL": "cap",
+    "X": 2240,
+    "Y": 16,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "22\u00b5"
+  },
+  "C7": {
+    "SYMBOL": "cap",
+    "X": 2272,
+    "Y": 432,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "22\u00b5"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": -160,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R9": {
+    "SYMBOL": "res",
+    "X": 1408,
+    "Y": -192,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  }
+}

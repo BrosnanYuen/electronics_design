@@ -1,0 +1,91 @@
+{
+  "U1": {
+    "SYMBOL": "LT1018",
+    "X": 320,
+    "Y": 64,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -400,
+    "Y": -432,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  },
+  "Rx1": {
+    "SYMBOL": "res",
+    "X": 192,
+    "Y": 208,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "Ry1": {
+    "SYMBOL": "res",
+    "X": 224,
+    "Y": 240,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "15k"
+  },
+  "Rh1": {
+    "SYMBOL": "res",
+    "X": 448,
+    "Y": 208,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30k"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 752,
+    "Y": 48,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 768,
+    "Y": 16,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 816,
+    "Y": -128,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 1104,
+    "Y": 240,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "0.01m"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 1248,
+    "Y": 224,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "9k"
+  }
+}

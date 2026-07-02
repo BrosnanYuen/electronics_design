@@ -1,0 +1,231 @@
+{
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 304,
+    "Y": 976,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 288,
+    "Y": 944,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 576,
+    "Y": 976,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 560,
+    "Y": 944,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C3": {
+    "SYMBOL": "cap",
+    "X": 800,
+    "Y": 976,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 784,
+    "Y": 944,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -160,
+    "Y": 992,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2.5"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 1488,
+    "Y": 272,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": -144,
+    "Y": 928,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "55.2k"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 32,
+    "Y": 800,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1.5Meg"
+  },
+  "U1": {
+    "SYMBOL": "LT1880",
+    "X": -32,
+    "Y": 960,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C4": {
+    "SYMBOL": "cap",
+    "X": 272,
+    "Y": 320,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 288,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C5": {
+    "SYMBOL": "cap",
+    "X": 672,
+    "Y": 304,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 656,
+    "Y": 272,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "U3": {
+    "SYMBOL": "LT1880",
+    "X": 432,
+    "Y": 288,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C6": {
+    "SYMBOL": "cap",
+    "X": 1056,
+    "Y": 288,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": 1040,
+    "Y": 256,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "U4": {
+    "SYMBOL": "LT1880",
+    "X": 816,
+    "Y": 272,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": -128,
+    "Y": 336,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2.5"
+  },
+  "R9": {
+    "SYMBOL": "res",
+    "X": -112,
+    "Y": 272,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "180k"
+  },
+  "R10": {
+    "SYMBOL": "res",
+    "X": 64,
+    "Y": 144,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1.5Meg"
+  },
+  "U5": {
+    "SYMBOL": "LT1880",
+    "X": 0,
+    "Y": 304,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R11": {
+    "SYMBOL": "res",
+    "X": 1888,
+    "Y": 256,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C7": {
+    "SYMBOL": "cap",
+    "X": 1904,
+    "Y": 288,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "V4": {
+    "SYMBOL": "voltage",
+    "X": 1680,
+    "Y": 272,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}

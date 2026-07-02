@@ -1,0 +1,64 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -176,
+    "Y": 128,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "380"
+  },
+  "D1": {
+    "SYMBOL": "diode",
+    "X": 320,
+    "Y": 112,
+    "ROTATION": 270,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "L1": {
+    "SYMBOL": "ind",
+    "X": -96,
+    "Y": 112,
+    "ROTATION": 270,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10m"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 480,
+    "Y": 144,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10\u00b5"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 608,
+    "Y": 128,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100"
+  },
+  "S1": {
+    "SYMBOL": "sw",
+    "X": 64,
+    "Y": 224,
+    "ROTATION": 180,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "MOSFET"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 224,
+    "Y": 112,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "PULSE(0 100 0 1n 1n 0.052m 0.0625m 1Meg)"
+  }
+}

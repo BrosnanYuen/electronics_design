@@ -1,0 +1,56 @@
+{
+  "R1": {
+    "SYMBOL": "res",
+    "X": 144,
+    "Y": 160,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "54k"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 304,
+    "Y": 448,
+    "ROTATION": 180,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 224,
+    "Y": 128,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "Q2": {
+    "SYMBOL": "npn",
+    "X": 224,
+    "Y": 256,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -128,
+    "Y": -64,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 272,
+    "Y": -32,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "{R_load}"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "U1": {
+    "SYMBOL": "NE555",
+    "X": 272,
+    "Y": 128,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 896,
+    "Y": -336,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 704,
+    "Y": -80,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 704,
+    "Y": 128,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10\u00b5"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": -32,
+    "Y": -96,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": -80,
+    "Y": 112,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -528,
+    "Y": 160,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "PULSE(0 12 10m 1n 1n 1m 1m 1)"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": -176,
+    "Y": 144,
+    "ROTATION": 90,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 80,
+    "Y": 288,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  }
+}

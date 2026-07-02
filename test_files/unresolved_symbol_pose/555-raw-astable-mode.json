@@ -1,0 +1,106 @@
+{
+  "A1": {
+    "SYMBOL": "srflop",
+    "X": 416,
+    "Y": 32,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": -128,
+    "Y": -144,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5k"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": -128,
+    "Y": 48,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5k"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": -128,
+    "Y": 320,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5k"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": -528,
+    "Y": -384,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": -528,
+    "Y": 48,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": -528,
+    "Y": 304,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100n"
+  },
+  "U1": {
+    "SYMBOL": "LT1018",
+    "X": 80,
+    "Y": 16,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "U2": {
+    "SYMBOL": "LT1018",
+    "X": 80,
+    "Y": 240,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -768,
+    "Y": -368,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 880,
+    "Y": -96,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "E1": {
+    "SYMBOL": "e",
+    "X": 640,
+    "Y": -80,
+    "ROTATION": 0,
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5"
+  }
+}
