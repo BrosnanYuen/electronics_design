@@ -201,7 +201,7 @@ def get_ltspice_asc_symbol_info(
             for pin_x, pin_y, pin_name, spice_order in pins
             for transformed_point in [_transform_pin_point((int(pin_x), int(pin_y)), symbol_instance.origin, symbol_instance.orientation)]
         ]
-        symbol_info[instance_name] = {
+        symbol_entry: Dict[str, object] = {
             "SYMBOL": _display_symbol_name(symbol_instance.symbol_name),
             "X": symbol_instance.origin[0],
             "Y": symbol_instance.origin[1],
@@ -209,6 +209,10 @@ def get_ltspice_asc_symbol_info(
             "RECTANGLE": _transform_symbol_rectangle(bounds, symbol_instance.origin, symbol_instance.orientation),
             "PINS": transformed_pins,
         }
+        _add_symbol_info_text_field(symbol_entry, "VALUE", symbol_instance.attributes.get("Value", ""))
+        _add_symbol_info_text_field(symbol_entry, "SPICELINE", symbol_instance.attributes.get("SpiceLine", ""))
+        _add_symbol_info_text_field(symbol_entry, "TYPE", symbol_instance.attributes.get("Type", ""))
+        symbol_info[instance_name] = symbol_entry
     return symbol_info
 
 
@@ -952,6 +956,12 @@ def _clean_optional_text(value: str) -> str:
     if cleaned_value in {"", '""'}:
         return ""
     return cleaned_value
+
+
+def _add_symbol_info_text_field(symbol_entry: Dict[str, object], key: str, raw_value: str) -> None:
+    clean_value = _clean_optional_text(raw_value)
+    if clean_value != "":
+        symbol_entry[key] = clean_value
 
 
 def _resolve_symbol_definition(symbol_name: str, symbol_definitions: Mapping[str, SymbolDefinition]) -> Optional[SymbolDefinition]:

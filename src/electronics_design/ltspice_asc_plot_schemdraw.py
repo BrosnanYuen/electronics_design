@@ -278,7 +278,7 @@ def _load_partial_symbol_info(
                 )
             ]
         ]
-        symbol_info[instance_name] = {
+        symbol_entry: Dict[str, object] = {
             "SYMBOL": _asc_to_netlist._display_symbol_name(symbol.symbol_name),
             "X": symbol.origin[0],
             "Y": symbol.origin[1],
@@ -286,6 +286,10 @@ def _load_partial_symbol_info(
             "RECTANGLE": _asc_to_netlist._transform_symbol_rectangle(bounds, symbol.origin, symbol.orientation),
             "PINS": transformed_pins,
         }
+        _asc_to_netlist._add_symbol_info_text_field(symbol_entry, "VALUE", symbol.attributes.get("Value", ""))
+        _asc_to_netlist._add_symbol_info_text_field(symbol_entry, "SPICELINE", symbol.attributes.get("SpiceLine", ""))
+        _asc_to_netlist._add_symbol_info_text_field(symbol_entry, "TYPE", symbol.attributes.get("Type", ""))
+        symbol_info[instance_name] = symbol_entry
     return symbol_info
 
 

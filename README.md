@@ -333,6 +333,7 @@ Returns:
 
 - A dictionary keyed by `InstName`
 - Each entry contains `SYMBOL`, `X`, `Y`, `ROTATION`, `RECTANGLE`, and `PINS`
+- If the ASC symbol instance defines them, the entry also includes `VALUE`, `SPICELINE`, and `TYPE`
 
 Raises:
 
@@ -626,6 +627,7 @@ schemdraw_ok, schemdraw_message = ltspice_asc_plot_schemdraw("example.asc", "exa
 convert_settings = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+    "custom_search_paths": ["./valid_asy/"],
 }
 convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
     "example.asc",
