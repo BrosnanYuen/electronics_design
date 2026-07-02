@@ -9,6 +9,7 @@ from . import ltspice_asc_plot_schemdraw as _asc_plot_schemdraw  # Import the de
 from . import ltspice_asc_to_netlist as _asc_to_netlist  # Import the ASC-to-netlist conversion module.
 from . import ltspice_asy as _asy  # Import the ASY-specific implementation module.
 from . import ltspice_net as _net  # Import the netlist-specific implementation module.
+from . import ltspice_netlist_to_symbol_initial as _netlist_to_symbol_initial  # Import the netlist-to-symbol-initial conversion module.
 from . import pathtracing as _pathtracing  # Import the path tracing GUI module.
 
 is_valid_ltspice_asc_header = _asc.is_valid_ltspice_asc_header  # Re-export the ASC header validator.
@@ -19,6 +20,7 @@ ltspice_asc_plot_schemdraw = _asc_plot_schemdraw.ltspice_asc_plot_schemdraw  # R
 ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
 get_ltspice_asc_symbol_info = _asc_to_netlist.get_ltspice_asc_symbol_info  # Re-export the ASC symbol-info helper.
+ltspice_netlist_to_symbol_initial = _netlist_to_symbol_initial.ltspice_netlist_to_symbol_initial  # Re-export the netlist-to-symbol-initial conversion helper.
 is_valid_ltspice_asy = _asy.is_valid_ltspice_asy  # Re-export the ASY validator.
 get_ltspice_asy_size = _asy.get_ltspice_asy_size  # Re-export the ASY size helper.
 get_ltspice_asy_pins = _asy.get_ltspice_asy_pins  # Re-export the ASY pin extraction helper.
@@ -52,6 +54,7 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper.
     "get_ltspice_asc_symbol_info",  # Export the ASC symbol-info helper.
+    "ltspice_netlist_to_symbol_initial",  # Export the netlist-to-symbol-initial conversion helper.
     "is_valid_ltspice_asy",  # Export the ASY validator.
     "get_ltspice_asy_size",  # Export the ASY size helper.
     "get_ltspice_asy_pins",  # Export the ASY pin extraction helper.
