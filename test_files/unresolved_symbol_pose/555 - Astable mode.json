@@ -48,8 +48,8 @@
     "X": -528,
     "Y": 48,
     "ROTATION": 0,
-    "RECTANGLE": [],
-    "PINS": [],
+    "RECTANGLE": [[0, 0], [0, 0]],
+    "PINS": [[0, 0, "", 1]],
     "VALUE": "10k"
   },
   "C1": {
@@ -90,9 +90,7 @@
     "SYMBOL": "npn",
     "X": 880,
     "Y": -96,
-    "ROTATION": 0,
-    "RECTANGLE": [],
-    "PINS": []
+    "ROTATION": 0
   },
   "E1": {
     "SYMBOL": "e",
