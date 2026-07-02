@@ -5,7 +5,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10",
+    "SPICELINE": "Rser=1m"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -13,7 +15,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "3.3",
+    "SPICELINE": "Rser=1m"
   },
   "R1": {
     "SYMBOL": "res",
@@ -21,7 +25,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "R2": {
     "SYMBOL": "res",
@@ -29,7 +34,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100"
   },
   "Q1": {
     "SYMBOL": "npn",
@@ -37,7 +43,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "Q2": {
     "SYMBOL": "npn",
@@ -45,6 +52,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   }
 }

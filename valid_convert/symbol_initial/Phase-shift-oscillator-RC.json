@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "65"
   },
   "R2": {
     "SYMBOL": "res",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "65"
   },
   "R3": {
     "SYMBOL": "res",
@@ -21,7 +23,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "65"
   },
   "C1": {
     "SYMBOL": "cap",
@@ -29,7 +32,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1\u00b5"
   },
   "C2": {
     "SYMBOL": "cap",
@@ -37,7 +41,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1\u00b5"
   },
   "C3": {
     "SYMBOL": "cap",
@@ -45,7 +50,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1\u00b5"
   },
   "R5": {
     "SYMBOL": "res",
@@ -53,7 +59,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1k"
   },
   "U1": {
     "SYMBOL": "LT1002A",
@@ -69,7 +76,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "32k"
   },
   "V1": {
     "SYMBOL": "voltage",
@@ -77,7 +85,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "15"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -85,6 +94,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "-15"
   }
 }

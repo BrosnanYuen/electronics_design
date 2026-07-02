@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "Si7336ADP"
   },
   "M2": {
     "SYMBOL": "nmos",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "Si7336ADP"
   },
   "C1": {
     "SYMBOL": "cap",
@@ -21,7 +23,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10\u00b5"
   },
   "V1": {
     "SYMBOL": "voltage",
@@ -29,7 +32,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10"
   },
   "R1": {
     "SYMBOL": "res",
@@ -37,7 +41,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100"
   },
   "L1": {
     "SYMBOL": "ind",
@@ -45,7 +50,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -53,7 +59,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 5 0 1u 1u 0.5 1 10)"
   },
   "V3": {
     "SYMBOL": "voltage",
@@ -61,7 +68,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 5 0.500 1u 1u 0.5 1 10)"
   },
   "M3": {
     "SYMBOL": "nmos",
@@ -69,7 +77,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "Si7336ADP"
   },
   "M4": {
     "SYMBOL": "nmos",
@@ -77,7 +86,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "Si7336ADP"
   },
   "R2": {
     "SYMBOL": "res",
@@ -85,7 +95,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100"
   },
   "L2": {
     "SYMBOL": "ind",
@@ -93,7 +104,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m"
   },
   "V4": {
     "SYMBOL": "voltage",
@@ -101,7 +113,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 5 0.3333 1u 1u 0.5 1 10)"
   },
   "V5": {
     "SYMBOL": "voltage",
@@ -109,7 +122,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 5 0.8333 1u 1u 0.5 1 10)"
   },
   "M5": {
     "SYMBOL": "nmos",
@@ -117,7 +131,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "Si7336ADP"
   },
   "M6": {
     "SYMBOL": "nmos",
@@ -125,7 +140,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "Si7336ADP"
   },
   "R3": {
     "SYMBOL": "res",
@@ -133,7 +149,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100"
   },
   "L3": {
     "SYMBOL": "ind",
@@ -141,7 +158,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m"
   },
   "V6": {
     "SYMBOL": "voltage",
@@ -149,7 +167,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 5 0.6666 1u 1u 0.5 1 10)"
   },
   "V7": {
     "SYMBOL": "voltage",
@@ -157,7 +176,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 5 1.1666 1u 1u 0.5 1 10)"
   },
   "R4": {
     "SYMBOL": "res",
@@ -165,6 +185,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100"
   }
 }

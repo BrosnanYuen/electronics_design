@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1k"
   },
   "R2": {
     "SYMBOL": "res",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "C1": {
     "SYMBOL": "cap",
@@ -21,7 +23,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100n"
   },
   "Q1": {
     "SYMBOL": "pnp",
@@ -29,7 +32,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BC640"
   },
   "R3": {
     "SYMBOL": "res",
@@ -37,7 +41,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "V1": {
     "SYMBOL": "voltage",
@@ -45,7 +50,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "9"
   },
   "Q2": {
     "SYMBOL": "npn",
@@ -53,7 +59,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BC337-40"
   },
   "Q3": {
     "SYMBOL": "pnp",
@@ -61,7 +68,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BC640"
   },
   "R4": {
     "SYMBOL": "res",
@@ -69,7 +77,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "R5": {
     "SYMBOL": "res",
@@ -77,6 +86,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   }
 }

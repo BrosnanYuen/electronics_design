@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 -141 50 0 0 0)"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 -141 50 0 0 120)"
   },
   "V3": {
     "SYMBOL": "voltage",
@@ -21,7 +23,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 -141 50 0 0 240)"
   },
   "D1": {
     "SYMBOL": "diode",
@@ -77,6 +80,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "200"
   }
 }

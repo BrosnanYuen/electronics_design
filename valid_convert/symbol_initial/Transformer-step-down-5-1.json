@@ -5,7 +5,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100\u00b5",
+    "TYPE": "ind"
   },
   "Ls": {
     "SYMBOL": "ind2",
@@ -13,7 +15,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "4\u00b5",
+    "TYPE": "ind"
   },
   "Vs": {
     "SYMBOL": "voltage",
@@ -21,7 +25,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 100 60)",
+    "SPICELINE": "Rser=0.0001"
   },
   "RL": {
     "SYMBOL": "res",
@@ -29,6 +35,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1kOhms"
   }
 }

@@ -13,7 +13,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "V1": {
     "SYMBOL": "voltage",
@@ -21,7 +22,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "5"
   },
   "S1": {
     "SYMBOL": "sw",
@@ -29,7 +31,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SW1"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -37,7 +40,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 10 1.1 1n 1n 0.1 0.5 2)"
   },
   "R2": {
     "SYMBOL": "res",
@@ -45,7 +49,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "S2": {
     "SYMBOL": "sw",
@@ -53,7 +58,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SW2"
   },
   "V3": {
     "SYMBOL": "voltage",
@@ -61,7 +67,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 10 0.1 1n 1n 0.1 0.5 2)"
   },
   "R3": {
     "SYMBOL": "res",
@@ -69,6 +76,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   }
 }

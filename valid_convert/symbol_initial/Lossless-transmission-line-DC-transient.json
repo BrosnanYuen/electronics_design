@@ -13,7 +13,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 1 1p 1p 1p 10s)"
   },
   "RS": {
     "SYMBOL": "res",
@@ -21,7 +22,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1k"
   },
   "RL": {
     "SYMBOL": "res",
@@ -29,6 +31,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1k"
   }
 }

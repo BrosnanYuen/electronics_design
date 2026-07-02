@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "12"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 12 0 1n 1n 1 2 1)"
   },
   "V3": {
     "SYMBOL": "voltage",
@@ -21,7 +23,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(0 12 0.5 1n 1n 1 2 1)"
   },
   "Q1": {
     "SYMBOL": "npn",
@@ -29,7 +32,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "Q2": {
     "SYMBOL": "npn",
@@ -37,7 +41,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "R1": {
     "SYMBOL": "res",
@@ -45,7 +50,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "4.7k"
   },
   "R2": {
     "SYMBOL": "res",
@@ -53,7 +59,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "R3": {
     "SYMBOL": "res",
@@ -61,7 +68,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "Q3": {
     "SYMBOL": "npn",
@@ -69,7 +77,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "Q4": {
     "SYMBOL": "npn",
@@ -77,7 +86,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "R4": {
     "SYMBOL": "res",
@@ -85,7 +95,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "4.7k"
   },
   "R5": {
     "SYMBOL": "res",
@@ -93,7 +104,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "R6": {
     "SYMBOL": "res",
@@ -101,7 +113,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "Q5": {
     "SYMBOL": "npn",
@@ -109,7 +122,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "Q6": {
     "SYMBOL": "npn",
@@ -117,7 +131,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "R7": {
     "SYMBOL": "res",
@@ -125,7 +140,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "4.7k"
   },
   "R8": {
     "SYMBOL": "res",
@@ -133,7 +149,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "R9": {
     "SYMBOL": "res",
@@ -141,7 +158,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "R10": {
     "SYMBOL": "res",
@@ -149,7 +167,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "R11": {
     "SYMBOL": "res",
@@ -157,7 +176,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "Q7": {
     "SYMBOL": "npn",
@@ -165,7 +185,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2N3904"
   },
   "R12": {
     "SYMBOL": "res",
@@ -173,6 +194,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "4.7k"
   }
 }

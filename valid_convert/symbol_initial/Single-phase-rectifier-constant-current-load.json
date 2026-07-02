@@ -37,7 +37,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 325 50)"
   },
   "I1": {
     "SYMBOL": "current",
@@ -45,7 +46,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10"
   },
   "L1": {
     "SYMBOL": "ind",
@@ -53,6 +55,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100\u00b5"
   }
 }

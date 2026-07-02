@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(10 10 1)"
   },
   "B1": {
     "SYMBOL": "bv",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V=sin(V(modulating_signal)*3.14158*2*time)"
   },
   "B2": {
     "SYMBOL": "bv",
@@ -21,6 +23,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V=V(modulating_signal)*sin(50*3.14158*2*time)"
   }
 }

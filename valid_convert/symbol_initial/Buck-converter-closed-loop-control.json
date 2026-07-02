@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "20"
   },
   "L1": {
     "SYMBOL": "ind",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "47\u00b5"
   },
   "D1": {
     "SYMBOL": "schottky",
@@ -21,7 +23,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1N5819",
+    "TYPE": "diode"
   },
   "C1": {
     "SYMBOL": "cap",
@@ -29,7 +33,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100\u00b5"
   },
   "R1": {
     "SYMBOL": "res",
@@ -37,7 +42,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "R=IF(time < 5m, 1, 2)"
   },
   "M1": {
     "SYMBOL": "nmos",
@@ -45,7 +51,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BSB012N03LX3"
   },
   "Vb1": {
     "SYMBOL": "bv",
@@ -53,7 +60,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V= {y_ref}-V(Vout)"
   },
   "PI_regulator": {
     "SYMBOL": "bv",
@@ -61,7 +69,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V= 5*V(error) + 500*idt(V(error))"
   },
   "PI_regulator1": {
     "SYMBOL": "bv",
@@ -69,7 +78,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V= IF(V(PI_out) > 0, min(V(PI_out), 1), 0)"
   },
   "B1": {
     "SYMBOL": "bv",
@@ -77,6 +87,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V=IF(time - floor(time/Ts)*Ts < V(PI_sat)*Ts, 20, 0)"
   }
 }

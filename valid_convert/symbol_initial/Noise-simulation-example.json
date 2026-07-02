@@ -13,7 +13,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2.5"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -21,7 +22,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "-2.5"
   },
   "R1": {
     "SYMBOL": "res",
@@ -29,7 +31,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "900"
   },
   "R2": {
     "SYMBOL": "res",
@@ -37,7 +40,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100"
   },
   "V3": {
     "SYMBOL": "voltage",

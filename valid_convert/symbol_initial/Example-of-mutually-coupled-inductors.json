@@ -5,7 +5,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "4m",
+    "TYPE": "ind"
   },
   "L2": {
     "SYMBOL": "ind2",
@@ -13,7 +15,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "TYPE": "ind"
   },
   "R1": {
     "SYMBOL": "res",
@@ -21,7 +25,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "5"
   },
   "R2": {
     "SYMBOL": "res",
@@ -29,7 +34,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2"
   },
   "I1": {
     "SYMBOL": "current",
@@ -37,7 +43,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 10 159.15)"
   },
   "I2": {
     "SYMBOL": "current",
@@ -45,7 +52,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "2"
   },
   "R3": {
     "SYMBOL": "res",
@@ -53,6 +61,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   }
 }

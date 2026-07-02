@@ -5,7 +5,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "TYPE": "ind"
   },
   "L2": {
     "SYMBOL": "ind2",
@@ -13,7 +15,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "TYPE": "ind"
   },
   "L3": {
     "SYMBOL": "ind2",
@@ -21,7 +25,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "TYPE": "ind"
   },
   "L4": {
     "SYMBOL": "ind2",
@@ -29,7 +35,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "TYPE": "ind"
   },
   "L5": {
     "SYMBOL": "ind2",
@@ -37,7 +45,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "TYPE": "ind"
   },
   "L6": {
     "SYMBOL": "ind2",
@@ -45,7 +55,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "TYPE": "ind"
   },
   "LO": {
     "SYMBOL": "voltage",
@@ -53,7 +65,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 10 7Meg)",
+    "SPICELINE": "Rser=1m"
   },
   "Vrf": {
     "SYMBOL": "voltage",
@@ -61,7 +75,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 10 10Meg)",
+    "SPICELINE": "Rser=1m"
   },
   "R1": {
     "SYMBOL": "res",
@@ -69,7 +85,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "5k"
   },
   "D2": {
     "SYMBOL": "schottky",
@@ -77,7 +94,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1N5819",
+    "TYPE": "diode"
   },
   "D3": {
     "SYMBOL": "schottky",
@@ -85,7 +104,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1N5819",
+    "TYPE": "diode"
   },
   "D1": {
     "SYMBOL": "schottky",
@@ -93,7 +114,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1N5819",
+    "TYPE": "diode"
   },
   "D4": {
     "SYMBOL": "schottky",
@@ -101,6 +124,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1N5819",
+    "TYPE": "diode"
   }
 }

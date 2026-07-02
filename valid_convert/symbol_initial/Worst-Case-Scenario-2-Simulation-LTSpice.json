@@ -13,7 +13,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "{wc(10u, tolb,0)}"
   },
   "R1": {
     "SYMBOL": "res",
@@ -21,7 +22,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "{wc(10k, tola,1)}"
   },
   "R2": {
     "SYMBOL": "res",
@@ -29,7 +31,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "{wc(10k, tola,2)}"
   },
   "C2": {
     "SYMBOL": "cap",
@@ -37,6 +40,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "{wc(1u, tolb,3)}"
   }
 }

@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 324.3 50 0 0 {phi_pos})"
   },
   "L1": {
     "SYMBOL": "ind",
@@ -13,7 +14,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100m"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -21,7 +23,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
   },
   "R1": {
     "SYMBOL": "res",
@@ -29,7 +32,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "V3": {
     "SYMBOL": "voltage",
@@ -37,7 +41,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(-509 509 {phi_pos/(3.1415*2*50)} 1n 1n 10m 20m)"
   },
   "L2": {
     "SYMBOL": "ind",
@@ -45,7 +50,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100m"
   },
   "V4": {
     "SYMBOL": "voltage",
@@ -53,7 +59,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
   },
   "R2": {
     "SYMBOL": "res",
@@ -61,7 +68,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "V5": {
     "SYMBOL": "voltage",
@@ -69,7 +77,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(-1 1 0 1m 1m 0 2m)"
   },
   "V6": {
     "SYMBOL": "voltage",
@@ -77,7 +86,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 0.8 50 {phi_pos/(3.1415*2*50)})"
   },
   "B1": {
     "SYMBOL": "bv",
@@ -85,7 +95,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V=if(V(Vsw) < V(Vcarrier), 509, -509)"
   },
   "L3": {
     "SYMBOL": "ind",
@@ -93,7 +104,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100m"
   },
   "V7": {
     "SYMBOL": "voltage",
@@ -101,7 +113,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
   },
   "R3": {
     "SYMBOL": "res",
@@ -109,7 +122,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "V8": {
     "SYMBOL": "voltage",
@@ -117,7 +131,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 324.3 50 0 0 {phi_neg})"
   },
   "L4": {
     "SYMBOL": "ind",
@@ -125,7 +140,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100m"
   },
   "V9": {
     "SYMBOL": "voltage",
@@ -133,7 +149,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
   },
   "R4": {
     "SYMBOL": "res",
@@ -141,7 +158,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "B2": {
     "SYMBOL": "bv",
@@ -149,7 +167,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "V=if(V(Vsw) < V(Vcarrier2), 509, -509)"
   },
   "L5": {
     "SYMBOL": "ind",
@@ -157,7 +176,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100m"
   },
   "V10": {
     "SYMBOL": "voltage",
@@ -165,7 +185,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
   },
   "R5": {
     "SYMBOL": "res",
@@ -173,7 +194,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "V11": {
     "SYMBOL": "voltage",
@@ -181,6 +203,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 0.8 50 {phi_neg/(3.1415*2*50)})"
   }
 }

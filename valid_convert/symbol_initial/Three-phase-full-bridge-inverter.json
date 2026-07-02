@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "380"
   },
   "C1": {
     "SYMBOL": "cap",
@@ -13,7 +14,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "SPICELINE": "Rser=1m Rpar=1Meg"
   },
   "C2": {
     "SYMBOL": "cap",
@@ -21,7 +24,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1m",
+    "SPICELINE": "Rser=1m Rpar=1Meg"
   },
   "R1": {
     "SYMBOL": "res",
@@ -29,7 +34,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "L1": {
     "SYMBOL": "ind",
@@ -37,7 +43,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10m"
   },
   "S1": {
     "SYMBOL": "sw",
@@ -77,7 +84,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 8 160)"
   },
   "U1": {
     "SYMBOL": "LT1721",
@@ -93,7 +101,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10"
   },
   "V5": {
     "SYMBOL": "voltage",
@@ -101,7 +110,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "-10"
   },
   "U2": {
     "SYMBOL": "Gain",
@@ -117,7 +127,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(-10 10 0 0.03124m 0.03124m 0.00002m 0.0625m)"
   },
   "U3": {
     "SYMBOL": "Gain",
@@ -125,7 +136,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "SPICELINE": "G=100"
   },
   "R2": {
     "SYMBOL": "res",
@@ -133,7 +145,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "R3": {
     "SYMBOL": "res",
@@ -141,7 +154,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "S3": {
     "SYMBOL": "sw",
@@ -213,7 +227,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 8 160 0 0 120)"
   },
   "U4": {
     "SYMBOL": "LT1721",
@@ -237,7 +252,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "SPICELINE": "G=100"
   },
   "Vc3": {
     "SYMBOL": "voltage",
@@ -245,7 +261,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "SINE(0 8 160 0 0 240)"
   },
   "U7": {
     "SYMBOL": "LT1721",
@@ -269,7 +286,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "SPICELINE": "G=100"
   },
   "R4": {
     "SYMBOL": "res",
@@ -277,7 +295,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "L2": {
     "SYMBOL": "ind",
@@ -285,7 +304,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10m"
   },
   "R5": {
     "SYMBOL": "res",
@@ -293,7 +313,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "L3": {
     "SYMBOL": "ind",
@@ -301,7 +322,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10m"
   },
   "R6": {
     "SYMBOL": "res",
@@ -309,7 +331,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "L4": {
     "SYMBOL": "ind",
@@ -317,7 +340,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10m"
   },
   "R7": {
     "SYMBOL": "res",
@@ -325,7 +349,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "L5": {
     "SYMBOL": "ind",
@@ -333,7 +358,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10m"
   },
   "R8": {
     "SYMBOL": "res",
@@ -341,7 +367,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "1"
   },
   "L6": {
     "SYMBOL": "ind",
@@ -349,6 +376,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10m"
   }
 }

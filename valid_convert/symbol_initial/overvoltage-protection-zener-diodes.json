@@ -5,7 +5,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(12 40 0.5 1u 1u 0.1 1 2)"
   },
   "D1": {
     "SYMBOL": "zener",
@@ -13,7 +14,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BZX84C12VL",
+    "TYPE": "diode"
   },
   "R1": {
     "SYMBOL": "res",
@@ -21,7 +24,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "D2": {
     "SYMBOL": "zener",
@@ -29,7 +33,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BZX84C12VL",
+    "TYPE": "diode"
   },
   "R2": {
     "SYMBOL": "res",
@@ -37,7 +43,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10"
   },
   "V2": {
     "SYMBOL": "voltage",
@@ -45,7 +52,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(-12 40 0.5 1u 1u 0.1 1 2)"
   },
   "D3": {
     "SYMBOL": "zener",
@@ -53,7 +61,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BZX84C12VL",
+    "TYPE": "diode"
   },
   "R3": {
     "SYMBOL": "res",
@@ -61,7 +71,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10k"
   },
   "D4": {
     "SYMBOL": "zener",
@@ -69,7 +80,9 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "BZX84C12VL",
+    "TYPE": "diode"
   },
   "R4": {
     "SYMBOL": "res",
@@ -77,6 +90,7 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10"
   }
 }

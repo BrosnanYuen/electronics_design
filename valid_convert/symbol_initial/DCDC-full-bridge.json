@@ -21,7 +21,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "380"
   },
   "D1": {
     "SYMBOL": "diode",
@@ -85,7 +86,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10"
   },
   "L1": {
     "SYMBOL": "ind",
@@ -93,7 +95,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "100m"
   },
   "V_t": {
     "SYMBOL": "voltage",
@@ -101,7 +104,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "PULSE(-10 10 0 0.03124m 0.03124m 0.00002m 0.0625m)"
   },
   "vc": {
     "SYMBOL": "voltage",
@@ -109,7 +113,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "8"
   },
   "U2": {
     "SYMBOL": "LT1721",
@@ -125,7 +130,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "10"
   },
   "Vee": {
     "SYMBOL": "voltage",
@@ -133,7 +139,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "VALUE": "-10"
   },
   "U3": {
     "SYMBOL": "Gain",
@@ -141,7 +148,8 @@
     "Y": 0,
     "ROTATION": 0,
     "RECTANGLE": [],
-    "PINS": []
+    "PINS": [],
+    "SPICELINE": "G=100"
   },
   "U4": {
     "SYMBOL": "Gain",
