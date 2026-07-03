@@ -23,6 +23,7 @@ ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-expo
 get_ltspice_asc_symbol_info = _asc_to_netlist.get_ltspice_asc_symbol_info  # Re-export the ASC symbol-info helper.
 ltspice_netlist_to_symbol_initial = _netlist_to_symbol_initial.ltspice_netlist_to_symbol_initial  # Re-export the netlist-to-symbol-initial conversion helper.
 ltspice_resolve_symbol_pose = _resolve_symbol_pose.ltspice_resolve_symbol_pose  # Re-export the symbol-pose resolution helper.
+ltspice_check_symbol_pose = _resolve_symbol_pose.ltspice_check_symbol_pose  # Re-export the symbol-pose collision helper.
 is_valid_ltspice_asy = _asy.is_valid_ltspice_asy  # Re-export the ASY validator.
 get_ltspice_asy_size = _asy.get_ltspice_asy_size  # Re-export the ASY size helper.
 get_ltspice_asy_pins = _asy.get_ltspice_asy_pins  # Re-export the ASY pin extraction helper.
@@ -58,6 +59,7 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "get_ltspice_asc_symbol_info",  # Export the ASC symbol-info helper.
     "ltspice_netlist_to_symbol_initial",  # Export the netlist-to-symbol-initial conversion helper.
     "ltspice_resolve_symbol_pose",  # Export the symbol-pose resolution helper.
+    "ltspice_check_symbol_pose",  # Export the symbol-pose collision helper.
     "is_valid_ltspice_asy",  # Export the ASY validator.
     "get_ltspice_asy_size",  # Export the ASY size helper.
     "get_ltspice_asy_pins",  # Export the ASY pin extraction helper.

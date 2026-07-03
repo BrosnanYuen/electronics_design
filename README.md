@@ -1,8 +1,8 @@
 # electronics_design
 
-`electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, converting LTspice netlists to initial symbol JSON, resolving symbol pose data inside symbol JSON files, and for comparing and plotting validated netlists.
+`electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, converting LTspice netlists to initial symbol JSON, resolving symbol pose data inside symbol JSON files, checking symbol-pose collisions, and for comparing and plotting validated netlists.
 
-It currently exposes twenty-five public functions:
+It currently exposes twenty-six public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -18,6 +18,7 @@ It currently exposes twenty-five public functions:
 - `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
 - `ltspice_netlist_to_symbol_initial(netlist_filepath, symbol_json_filepath_out, convert_settings)`
 - `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)`
+- `ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)`
 - `are_wires_connected(wires)`
 - `are_wires_horizontal_or_vertical(wires)`
 - `are_wires_intersecting_obstacles_fast(wires, obstacles)`
@@ -91,6 +92,18 @@ or:
 
 ```python
 (False, "<error code>", <line number>)
+```
+
+`ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)` returns:
+
+```python
+(False, None)
+```
+
+or:
+
+```python
+(True, np.array([[symbol_index_a, symbol_index_b], ...]))
 ```
 
 `ltspice_asc_structure_cmp(filepath1, filepath2)` returns a structure-comparison tuple:
@@ -389,6 +402,33 @@ Possible returns:
 - `False, "SYMBOL_POSE_RESOLUTION_ERROR", <line>`
 - `False, "WRITE_ERROR", 0`
 - `True, "OK", 0`
+
+### `ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)`
+
+Checks that:
+
+- `convert_settings` is a mapping and may provide `minimum_dist` for symbol spacing expansion
+- The source JSON file exists, is readable, and contains a dictionary keyed by symbol instance name
+- Each symbol entry contains a `RECTANGLE` with two corner points
+- Each rectangle is expanded by `minimum_dist` in all four directions before collision checking
+- `rectangle_points_to_lines(points)` is used to convert each expanded rectangle to four line segments
+- Each symbol is compared against every later symbol with `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
+
+Example `convert_settings`:
+
+```python
+convert_settings = {
+    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+    "custom_search_paths": ["./valid_asy/"],
+    "minimum_dist": 32,
+}
+```
+
+Returns:
+
+- `False, None` when no symbol pair collides after buffering
+- `True, np.array([[symbol_index_a, symbol_index_b], ...])` when one or more symbol pairs collide
 
 ### `ltspice_asc_structure_cmp(filepath1, filepath2)`
 
@@ -695,6 +735,7 @@ from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import get_ltspice_asc_symbol_info
 from electronics_design import ltspice_netlist_to_symbol_initial
 from electronics_design import ltspice_resolve_symbol_pose
+from electronics_design import ltspice_check_symbol_pose
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
@@ -721,6 +762,7 @@ convert_settings = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
+    "minimum_dist": 32,
 }
 convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
     "example.asc",
@@ -739,6 +781,10 @@ symbol_initial_ok, symbol_initial_error_code, symbol_initial_line = ltspice_netl
     convert_settings,
 )
 symbol_pose_ok, symbol_pose_error_code, symbol_pose_line = ltspice_resolve_symbol_pose(
+    "example_symbol_initial.json",
+    convert_settings,
+)
+symbols_collide, colliding_symbol_pairs = ltspice_check_symbol_pose(
     "example_symbol_initial.json",
     convert_settings,
 )
@@ -768,6 +814,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `tests/unit/test_asc_to_netlist.py` converts every fixture in `valid_convert/asc/` and compares the generated netlist against the matching ground-truth file in `valid_convert/netlist/`
 - `tests/unit/test_netlist_to_symbol_initial.py` converts every fixture in `valid_convert/netlist/` and compares the generated symbol JSON against the matching ground-truth file in `valid_convert/symbol_initial/`
 - `tests/unit/test_resolve_symbol_pose.py` resolves every fixture in `test_files/unresolved_symbol_pose/` and compares the updated JSON against the matching ground-truth file in `test_files/resolved_symbol_pose/`
+- `tests/unit/test_check_symbol_pose.py` checks buffered symbol-pose collisions against the JSON fixtures in `test_files/symbol_colliding/` and `test_files/symbol_not_colliding/`
 - `tests/unit/test_asy_validation.py` validates every symbol file in `valid_asy/`
 - `tests/unit/test_asy_size.py` covers `.asy` bounding-rectangle extraction
 - `test_files/asy_size/` contains 20 `.asy` symbol-size fixtures
@@ -793,6 +840,8 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
 - `test_files/unresolved_symbol_pose/` contains unresolved symbol JSON fixtures used for pose resolution
 - `test_files/resolved_symbol_pose/` contains the expected resolved symbol JSON files for the pose-resolution fixtures
+- `test_files/symbol_colliding/` contains 10 symbol JSON fixtures that should report colliding symbol-index pairs
+- `test_files/symbol_not_colliding/` contains 10 symbol JSON fixtures that should return `False, None`
 - `valid_asy/` contains valid LTspice ASY symbol fixtures
 - `valid_convert/asc/` contains valid LTspice ASC conversion fixtures
 - `valid_convert/netlist/` contains the expected LTspice netlists for the conversion fixtures
