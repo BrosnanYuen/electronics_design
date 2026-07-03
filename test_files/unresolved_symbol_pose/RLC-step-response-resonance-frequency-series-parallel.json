@@ -1,0 +1,290 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -144,
+    "Y": 160,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "L1": {
+    "SYMBOL": "ind",
+    "X": 80,
+    "Y": 128,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": -80,
+    "Y": 128,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "34.64"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 272,
+    "Y": 176,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "L2": {
+    "SYMBOL": "ind",
+    "X": 736,
+    "Y": 144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 592,
+    "Y": 144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "8.66"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 896,
+    "Y": 176,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "I1": {
+    "SYMBOL": "current",
+    "X": 480,
+    "Y": 240,
+    "ORIENTATION": "R180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -128,
+    "Y": 800,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "L3": {
+    "SYMBOL": "ind",
+    "X": 96,
+    "Y": 768,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": -64,
+    "Y": 768,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100"
+  },
+  "C3": {
+    "SYMBOL": "cap",
+    "X": 288,
+    "Y": 816,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "L4": {
+    "SYMBOL": "ind",
+    "X": 752,
+    "Y": 784,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 608,
+    "Y": 784,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "8"
+  },
+  "C4": {
+    "SYMBOL": "cap",
+    "X": 912,
+    "Y": 816,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "I2": {
+    "SYMBOL": "current",
+    "X": 496,
+    "Y": 880,
+    "ORIENTATION": "R180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": -128,
+    "Y": 1488,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "L5": {
+    "SYMBOL": "ind",
+    "X": 96,
+    "Y": 1456,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": -64,
+    "Y": 1456,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5"
+  },
+  "C5": {
+    "SYMBOL": "cap",
+    "X": 288,
+    "Y": 1504,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "L6": {
+    "SYMBOL": "ind",
+    "X": 752,
+    "Y": 1472,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 608,
+    "Y": 1472,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "50"
+  },
+  "C6": {
+    "SYMBOL": "cap",
+    "X": 912,
+    "Y": 1504,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "I3": {
+    "SYMBOL": "current",
+    "X": 496,
+    "Y": 1568,
+    "ORIENTATION": "R180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "V4": {
+    "SYMBOL": "voltage",
+    "X": 1920,
+    "Y": 144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 1 91.93)"
+  },
+  "L7": {
+    "SYMBOL": "ind",
+    "X": 2144,
+    "Y": 112,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 1984,
+    "Y": 112,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "50"
+  },
+  "C7": {
+    "SYMBOL": "cap",
+    "X": 2336,
+    "Y": 160,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "L8": {
+    "SYMBOL": "ind",
+    "X": 2192,
+    "Y": 560,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "30m"
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": 2048,
+    "Y": 560,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "8.66"
+  },
+  "C8": {
+    "SYMBOL": "cap",
+    "X": 2352,
+    "Y": 592,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  },
+  "I4": {
+    "SYMBOL": "current",
+    "X": 1936,
+    "Y": 656,
+    "ORIENTATION": "R180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 1 91.93)"
+  }
+}

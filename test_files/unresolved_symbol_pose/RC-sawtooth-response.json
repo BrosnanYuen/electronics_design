@@ -1,0 +1,29 @@
+{
+  "R1": {
+    "SYMBOL": "res",
+    "X": 224,
+    "Y": 80,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 224,
+    "Y": 160,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10m"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 64,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "PULSE(-200 200 0 500m 0.001u 0.001u 500m 10)"
+  }
+}

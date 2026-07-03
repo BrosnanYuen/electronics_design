@@ -1,0 +1,56 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 16,
+    "Y": 112,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 48,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 384,
+    "Y": 48,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "20k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 304,
+    "Y": 208,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "0.01"
+  },
+  "L1": {
+    "SYMBOL": "ind",
+    "X": 416,
+    "Y": 176,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "0.06",
+    "SPICELINE": "Rser=1m"
+  },
+  "D1": {
+    "SYMBOL": "diode",
+    "X": 368,
+    "Y": 320,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}

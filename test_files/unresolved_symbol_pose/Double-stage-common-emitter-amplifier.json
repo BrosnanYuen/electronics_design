@@ -1,0 +1,154 @@
+{
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 0,
+    "Y": 96,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1\u00b5"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 32,
+    "Y": -144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "4.7k"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 32,
+    "Y": 192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 160,
+    "Y": -144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "4.7k"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 160,
+    "Y": 192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 240,
+    "Y": 224,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "20\u00b5"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 112,
+    "Y": 64,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "V_signal": {
+    "SYMBOL": "voltage",
+    "X": -336,
+    "Y": 144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -368,
+    "Y": -400,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "9"
+  },
+  "C3": {
+    "SYMBOL": "cap",
+    "X": 528,
+    "Y": 16,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1\u00b5"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 576,
+    "Y": -144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "4.7k"
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 576,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 720,
+    "Y": -144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "4.7k"
+  },
+  "Q2": {
+    "SYMBOL": "npn",
+    "X": 672,
+    "Y": -16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": 720,
+    "Y": 176,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R9": {
+    "SYMBOL": "res",
+    "X": 848,
+    "Y": 208,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "50"
+  },
+  "C4": {
+    "SYMBOL": "cap",
+    "X": 848,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "20\u00b5"
+  }
+}

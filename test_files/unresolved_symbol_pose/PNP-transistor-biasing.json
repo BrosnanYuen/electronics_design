@@ -1,0 +1,38 @@
+{
+  "Q1": {
+    "SYMBOL": "pnp",
+    "X": 256,
+    "Y": 112,
+    "ORIENTATION": "R180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N2907"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 176,
+    "Y": 112,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 80,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "11.2k"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -16,
+    "Y": -48,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  }
+}

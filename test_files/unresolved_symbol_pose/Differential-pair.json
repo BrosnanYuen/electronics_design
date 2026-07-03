@@ -1,0 +1,146 @@
+{
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 64,
+    "Y": 144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "Q2": {
+    "SYMBOL": "npn",
+    "X": 384,
+    "Y": 144,
+    "ORIENTATION": "M0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 112,
+    "Y": -32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "180"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 304,
+    "Y": -32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "180"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -192,
+    "Y": -32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": -80,
+    "Y": -32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "20k"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": -80,
+    "Y": 304,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 48,
+    "Y": 176,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "9.9k"
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 48,
+    "Y": 96,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "9.9k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": -176,
+    "Y": 176,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": ".1\u00b5"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 512,
+    "Y": 176,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": ".1\u00b5"
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 560,
+    "Y": 192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "50"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 672,
+    "Y": 192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 10m 100k)"
+  },
+  "Q3": {
+    "SYMBOL": "npn",
+    "X": 256,
+    "Y": 416,
+    "ORIENTATION": "M0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": 176,
+    "Y": 528,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100"
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": 384,
+    "Y": 464,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "3"
+  }
+}

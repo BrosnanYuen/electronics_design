@@ -1,0 +1,29 @@
+{
+  "Vin": {
+    "SYMBOL": "voltage",
+    "X": 80,
+    "Y": 96,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(1 1 25000)"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 304,
+    "Y": 32,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 384,
+    "Y": 112,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100\u00b5"
+  }
+}

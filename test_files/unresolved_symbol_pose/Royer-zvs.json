@@ -1,0 +1,110 @@
+{
+  "R1": {
+    "SYMBOL": "res",
+    "X": -16,
+    "Y": 16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "240"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 544,
+    "Y": 16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "240"
+  },
+  "L1": {
+    "SYMBOL": "ind2",
+    "X": 128,
+    "Y": 256,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1\u00b5",
+    "TYPE": "ind"
+  },
+  "L2": {
+    "SYMBOL": "ind2",
+    "X": 432,
+    "Y": 368,
+    "ORIENTATION": "R180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1\u00b5",
+    "TYPE": "ind"
+  },
+  "L3": {
+    "SYMBOL": "ind",
+    "X": 256,
+    "Y": 144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10m"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 320,
+    "Y": 480,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "330n"
+  },
+  "D1": {
+    "SYMBOL": "diode",
+    "X": -16,
+    "Y": 256,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "D2": {
+    "SYMBOL": "diode",
+    "X": 544,
+    "Y": 256,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "M1": {
+    "SYMBOL": "nmos",
+    "X": 96,
+    "Y": 576,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "IRFZ44N"
+  },
+  "M2": {
+    "SYMBOL": "nmos",
+    "X": 464,
+    "Y": 576,
+    "ORIENTATION": "M0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "IRFZ44N"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 752,
+    "Y": 80,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "15"
+  }
+}

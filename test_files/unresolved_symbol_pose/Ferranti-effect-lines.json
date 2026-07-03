@@ -1,0 +1,128 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 112,
+    "Y": 64,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 100 50)"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 400,
+    "Y": 32,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "7.54"
+  },
+  "L1": {
+    "SYMBOL": "ind",
+    "X": 528,
+    "Y": 32,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "48m"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 576,
+    "Y": 96,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "120\u00b5"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 96,
+    "Y": -336,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 100 50)"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 384,
+    "Y": -368,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "7.54"
+  },
+  "L2": {
+    "SYMBOL": "ind",
+    "X": 528,
+    "Y": -368,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "48m"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 560,
+    "Y": -320,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12\u00b5"
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": 112,
+    "Y": 432,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 100 50)"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 480,
+    "Y": 384,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "7.54"
+  },
+  "L3": {
+    "SYMBOL": "ind",
+    "X": 592,
+    "Y": 384,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "48m"
+  },
+  "C3": {
+    "SYMBOL": "cap",
+    "X": 592,
+    "Y": 448,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "60\u00b5"
+  },
+  "L4": {
+    "SYMBOL": "ind",
+    "X": 272,
+    "Y": 384,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "3m"
+  },
+  "C4": {
+    "SYMBOL": "cap",
+    "X": 320,
+    "Y": 448,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "60\u00b5"
+  }
+}

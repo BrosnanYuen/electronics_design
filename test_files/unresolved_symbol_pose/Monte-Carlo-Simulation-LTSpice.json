@@ -1,0 +1,46 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 0,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 112,
+    "Y": 32,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "{mc(10u, tolb)}"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 48,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "{mc(10k, tola)}"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 160,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "{mc(10k, tola)}"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 560,
+    "Y": 176,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "{mc(1u, tolb)}"
+  }
+}

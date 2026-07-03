@@ -1,0 +1,28 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 80,
+    "Y": 96,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 256,
+    "Y": 64,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "D1": {
+    "SYMBOL": "diode",
+    "X": 256,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  }
+}

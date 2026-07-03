@@ -1,0 +1,38 @@
+{
+  "D1": {
+    "SYMBOL": "zener",
+    "X": 128,
+    "Y": 336,
+    "ORIENTATION": "R180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N750"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 96,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "242"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -16,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 208,
+    "Y": 272,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "470"
+  }
+}

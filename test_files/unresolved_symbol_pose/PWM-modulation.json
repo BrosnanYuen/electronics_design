@@ -1,0 +1,100 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 128,
+    "Y": 96,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "PULSE(-1 1 0 5u 5u 0 10u)"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -96,
+    "Y": -32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 1 1k)"
+  },
+  "U1": {
+    "SYMBOL": "LT1720",
+    "X": 240,
+    "Y": -96,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": -288,
+    "Y": -352,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "5"
+  },
+  "V4": {
+    "SYMBOL": "voltage",
+    "X": -192,
+    "Y": -352,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "-5"
+  },
+  "L1": {
+    "SYMBOL": "ind",
+    "X": 1264,
+    "Y": -48,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "25.3\u00b5"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 1280,
+    "Y": -16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10\u00b5"
+  },
+  "C2": {
+    "SYMBOL": "cap",
+    "X": 1440,
+    "Y": -48,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1.591\u00b5"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 1472,
+    "Y": -32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 736,
+    "Y": -16,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 864,
+    "Y": -16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "20k"
+  }
+}

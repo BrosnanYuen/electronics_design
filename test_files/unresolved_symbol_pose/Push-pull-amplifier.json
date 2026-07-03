@@ -1,0 +1,126 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": 32,
+    "Y": 0,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "15"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 112,
+    "Y": 0,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "-15"
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": -256,
+    "Y": 192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 1 5 0 0 0 0)"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 368,
+    "Y": 64,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "Q2": {
+    "SYMBOL": "pnp",
+    "X": 368,
+    "Y": 304,
+    "ORIENTATION": "M180",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3906"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 688,
+    "Y": 176,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2.5"
+  },
+  "U1": {
+    "SYMBOL": "LT1007",
+    "X": 256,
+    "Y": 96,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V4": {
+    "SYMBOL": "voltage",
+    "X": -224,
+    "Y": 0,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1.5"
+  },
+  "V5": {
+    "SYMBOL": "voltage",
+    "X": -128,
+    "Y": 0,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "-1.5"
+  },
+  "M1": {
+    "SYMBOL": "nmos",
+    "X": 304,
+    "Y": 880,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "AO6408"
+  },
+  "M2": {
+    "SYMBOL": "pmos",
+    "X": 304,
+    "Y": 1056,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "AO6407"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 560,
+    "Y": 1008,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "V8": {
+    "SYMBOL": "voltage",
+    "X": -192,
+    "Y": 1040,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 1 5)"
+  },
+  "U2": {
+    "SYMBOL": "LT1007",
+    "X": 64,
+    "Y": 944,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}

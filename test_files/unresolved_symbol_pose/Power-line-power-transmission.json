@@ -1,0 +1,209 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -464,
+    "Y": -192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 324.3 50 0 0 {phi_pos})"
+  },
+  "L1": {
+    "SYMBOL": "ind",
+    "X": 208,
+    "Y": -224,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100m"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": 304,
+    "Y": -192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 80,
+    "Y": -224,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": -464,
+    "Y": 416,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "PULSE(-509 509 {phi_pos/(3.1415*2*50)} 1n 1n 10m 20m)"
+  },
+  "L2": {
+    "SYMBOL": "ind",
+    "X": 240,
+    "Y": 368,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100m"
+  },
+  "V4": {
+    "SYMBOL": "voltage",
+    "X": 336,
+    "Y": 400,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 112,
+    "Y": 368,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  },
+  "V5": {
+    "SYMBOL": "voltage",
+    "X": 704,
+    "Y": 592,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "PULSE(-1 1 0 1m 1m 0 2m)"
+  },
+  "V6": {
+    "SYMBOL": "voltage",
+    "X": 704,
+    "Y": 880,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 0.8 50 {phi_pos/(3.1415*2*50)})"
+  },
+  "B1": {
+    "SYMBOL": "bv",
+    "X": -464,
+    "Y": 784,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "V=if(V(Vsw) < V(Vcarrier), 509, -509)"
+  },
+  "L3": {
+    "SYMBOL": "ind",
+    "X": 240,
+    "Y": 736,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100m"
+  },
+  "V7": {
+    "SYMBOL": "voltage",
+    "X": 336,
+    "Y": 768,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 112,
+    "Y": 736,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  },
+  "V8": {
+    "SYMBOL": "voltage",
+    "X": -464,
+    "Y": 64,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 324.3 50 0 0 {phi_neg})"
+  },
+  "L4": {
+    "SYMBOL": "ind",
+    "X": 192,
+    "Y": 32,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100m"
+  },
+  "V9": {
+    "SYMBOL": "voltage",
+    "X": 288,
+    "Y": 64,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 64,
+    "Y": 32,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  },
+  "B2": {
+    "SYMBOL": "bv",
+    "X": -464,
+    "Y": 1040,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "V=if(V(Vsw) < V(Vcarrier2), 509, -509)"
+  },
+  "L5": {
+    "SYMBOL": "ind",
+    "X": 240,
+    "Y": 992,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100m"
+  },
+  "V10": {
+    "SYMBOL": "voltage",
+    "X": 336,
+    "Y": 1024,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 300 50 0)"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 112,
+    "Y": 992,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  },
+  "V11": {
+    "SYMBOL": "voltage",
+    "X": 704,
+    "Y": 1184,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "SINE(0 0.8 50 {phi_neg/(3.1415*2*50)})"
+  }
+}

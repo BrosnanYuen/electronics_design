@@ -1,0 +1,135 @@
+{
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -16,
+    "Y": 128,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "PULSE(0 5 1 1n 1n 100m 2)"
+  },
+  "Q1": {
+    "SYMBOL": "npn",
+    "X": 320,
+    "Y": 48,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": 544,
+    "Y": 192,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100k"
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 640,
+    "Y": 208,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10\u00b5"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -80,
+    "Y": -16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "12"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 960,
+    "Y": 128,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "Q2": {
+    "SYMBOL": "npn",
+    "X": 992,
+    "Y": 96,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2N3904"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 1040,
+    "Y": -32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "D1": {
+    "SYMBOL": "diode",
+    "X": 1040,
+    "Y": -112,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1N4148"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 560,
+    "Y": 144,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1k"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 336,
+    "Y": 80,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "100"
+  },
+  "U3": {
+    "SYMBOL": "LT1720",
+    "X": 128,
+    "Y": 32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V3": {
+    "SYMBOL": "voltage",
+    "X": -192,
+    "Y": -16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "-12"
+  },
+  "U1": {
+    "SYMBOL": "LT1720",
+    "X": 768,
+    "Y": 80,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "V4": {
+    "SYMBOL": "voltage",
+    "X": -320,
+    "Y": -16,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "1"
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "U1": {
+    "SYMBOL": "AD823A",
+    "X": 208,
+    "Y": 32,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "U2": {
+    "SYMBOL": "AD823A",
+    "X": 208,
+    "Y": 288,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R8": {
+    "SYMBOL": "res",
+    "X": -48,
+    "Y": 96,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R2": {
+    "SYMBOL": "res",
+    "X": 160,
+    "Y": 224,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "250k"
+  },
+  "R3": {
+    "SYMBOL": "res",
+    "X": 144,
+    "Y": -32,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "3.8k"
+  },
+  "R4": {
+    "SYMBOL": "res",
+    "X": 592,
+    "Y": 112,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R5": {
+    "SYMBOL": "res",
+    "X": 592,
+    "Y": 368,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R6": {
+    "SYMBOL": "res",
+    "X": 752,
+    "Y": -32,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "U3": {
+    "SYMBOL": "AD823A",
+    "X": 800,
+    "Y": 48,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "C1": {
+    "SYMBOL": "cap",
+    "X": 112,
+    "Y": 320,
+    "ORIENTATION": "R90",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "2\u00b5"
+  },
+  "V1": {
+    "SYMBOL": "voltage",
+    "X": -368,
+    "Y": -288,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "24"
+  },
+  "V2": {
+    "SYMBOL": "voltage",
+    "X": -256,
+    "Y": -288,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "-24"
+  },
+  "e": {
+    "SYMBOL": "voltage",
+    "X": -256,
+    "Y": 144,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  },
+  "R1": {
+    "SYMBOL": "res",
+    "X": -80,
+    "Y": 352,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R7": {
+    "SYMBOL": "res",
+    "X": 1072,
+    "Y": 128,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "R9": {
+    "SYMBOL": "res",
+    "X": 1232,
+    "Y": -16,
+    "ORIENTATION": "R270",
+    "RECTANGLE": [],
+    "PINS": [],
+    "VALUE": "10k"
+  },
+  "U4": {
+    "SYMBOL": "AD823A",
+    "X": 1280,
+    "Y": 64,
+    "ORIENTATION": "R0",
+    "RECTANGLE": [],
+    "PINS": []
+  }
+}
