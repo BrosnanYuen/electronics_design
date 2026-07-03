@@ -1,8 +1,8 @@
 # electronics_design
 
-`electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, converting LTspice netlists to initial symbol JSON, and for comparing and plotting validated netlists.
+`electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, converting LTspice netlists to initial symbol JSON, resolving symbol pose data inside symbol JSON files, and for comparing and plotting validated netlists.
 
-It currently exposes twenty-four public functions:
+It currently exposes twenty-five public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -17,6 +17,7 @@ It currently exposes twenty-four public functions:
 - `ltspice_asc_structure_cmp(filepath1, filepath2)`
 - `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
 - `ltspice_netlist_to_symbol_initial(netlist_filepath, symbol_json_filepath_out, convert_settings)`
+- `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)`
 - `are_wires_connected(wires)`
 - `are_wires_horizontal_or_vertical(wires)`
 - `are_wires_intersecting_obstacles_fast(wires, obstacles)`
@@ -69,6 +70,18 @@ or:
 ```
 
 `ltspice_netlist_to_symbol_initial(netlist_filepath, symbol_json_filepath_out, convert_settings)` returns the same conversion tuple:
+
+```python
+(True, "OK", 0)
+```
+
+or:
+
+```python
+(False, "<error code>", <line number>)
+```
+
+`ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)` returns the same conversion tuple:
 
 ```python
 (True, "OK", 0)
@@ -343,6 +356,37 @@ Possible returns:
 - `False, "INVALID_OUTPUT_PATH", 0`
 - `False, "INVALID_NETLIST_FILE", <line>`
 - `False, "NETLIST_READ_ERROR", 0`
+- `False, "WRITE_ERROR", 0`
+- `True, "OK", 0`
+
+### `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)`
+
+Checks that:
+
+- `convert_settings` is a mapping so LTspice symbol lookup paths stay configurable
+- The source JSON file exists, is readable, and contains a dictionary keyed by symbol instance name
+- Each symbol entry provides `SYMBOL`, `X`, `Y`, and `ORIENTATION`, which are treated the same way as LTspice ASC `SYMBOL` placement data
+- A temporary ASC is built from the JSON entries and resolved only through `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
+- Only `RECTANGLE` and `PINS` are updated in the source JSON file; all other existing attributes and values are preserved
+- The input JSON file is updated in place
+
+Example `convert_settings`:
+
+```python
+convert_settings = {
+    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+    "custom_search_paths": ["./valid_asy/"],
+}
+```
+
+Possible returns:
+
+- `False, "INVALID_CONVERT_SETTINGS", 0`
+- `False, "INVALID_SYMBOL_JSON_PATH", 0`
+- `False, "SYMBOL_JSON_READ_ERROR", 0`
+- `False, "SYMBOL_JSON_PARSE_ERROR", <line>`
+- `False, "SYMBOL_POSE_RESOLUTION_ERROR", <line>`
 - `False, "WRITE_ERROR", 0`
 - `True, "OK", 0`
 
@@ -650,6 +694,7 @@ from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import get_ltspice_asc_symbol_info
 from electronics_design import ltspice_netlist_to_symbol_initial
+from electronics_design import ltspice_resolve_symbol_pose
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
@@ -693,6 +738,10 @@ symbol_initial_ok, symbol_initial_error_code, symbol_initial_line = ltspice_netl
     "example_symbol_initial.json",
     convert_settings,
 )
+symbol_pose_ok, symbol_pose_error_code, symbol_pose_line = ltspice_resolve_symbol_pose(
+    "example_symbol_initial.json",
+    convert_settings,
+)
 wires_array = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
 wires_connected = are_wires_connected(wires_array)
 all_axis_aligned = are_wires_horizontal_or_vertical(wires_array)
@@ -718,6 +767,7 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `tests/integration/` contains integration tests against repository netlists and schematic samples
 - `tests/unit/test_asc_to_netlist.py` converts every fixture in `valid_convert/asc/` and compares the generated netlist against the matching ground-truth file in `valid_convert/netlist/`
 - `tests/unit/test_netlist_to_symbol_initial.py` converts every fixture in `valid_convert/netlist/` and compares the generated symbol JSON against the matching ground-truth file in `valid_convert/symbol_initial/`
+- `tests/unit/test_resolve_symbol_pose.py` resolves every fixture in `test_files/unresolved_symbol_pose/` and compares the updated JSON against the matching ground-truth file in `test_files/resolved_symbol_pose/`
 - `tests/unit/test_asy_validation.py` validates every symbol file in `valid_asy/`
 - `tests/unit/test_asy_size.py` covers `.asy` bounding-rectangle extraction
 - `test_files/asy_size/` contains 20 `.asy` symbol-size fixtures
@@ -741,6 +791,8 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
 - `test_files/netlist_validation/` contains 10 valid and 10 invalid whole-file validation fixtures
 - `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
+- `test_files/unresolved_symbol_pose/` contains unresolved symbol JSON fixtures used for pose resolution
+- `test_files/resolved_symbol_pose/` contains the expected resolved symbol JSON files for the pose-resolution fixtures
 - `valid_asy/` contains valid LTspice ASY symbol fixtures
 - `valid_convert/asc/` contains valid LTspice ASC conversion fixtures
 - `valid_convert/netlist/` contains the expected LTspice netlists for the conversion fixtures
@@ -763,6 +815,7 @@ src/electronics_design/
     ltspice_asy.py
     ltspice_net.py
     ltspice_netlist_to_symbol_initial.py
+    ltspice_resolve_symbol_pose.py
     ltspice_netlist_plot_networkx.py
     pathtracing.py
 tests/
