@@ -3,7 +3,7 @@
     "SYMBOL": "NE555",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -11,7 +11,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "12"
@@ -20,7 +20,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "1k"
@@ -29,7 +29,7 @@
     "SYMBOL": "cap",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "10\u00b5"
@@ -38,7 +38,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "10k"
@@ -47,7 +47,7 @@
     "SYMBOL": "npn",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "2N3904"
@@ -56,7 +56,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "PULSE(0 12 10m 1n 1n 1m 1m 1)"
@@ -65,7 +65,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "10k"
@@ -74,7 +74,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "10k"

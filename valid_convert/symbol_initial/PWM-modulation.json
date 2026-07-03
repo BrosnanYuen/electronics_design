@@ -3,7 +3,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "PULSE(-1 1 0 5u 5u 0 10u)"
@@ -12,7 +12,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "SINE(0 1 1k)"
@@ -21,7 +21,7 @@
     "SYMBOL": "LT1720",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -29,7 +29,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "5"
@@ -38,7 +38,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "-5"
@@ -47,7 +47,7 @@
     "SYMBOL": "ind",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "25.3\u00b5"
@@ -56,7 +56,7 @@
     "SYMBOL": "cap",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "10\u00b5"
@@ -65,7 +65,7 @@
     "SYMBOL": "cap",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "1.591\u00b5"
@@ -74,7 +74,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "1k"
@@ -83,7 +83,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "1k"
@@ -92,7 +92,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "20k"

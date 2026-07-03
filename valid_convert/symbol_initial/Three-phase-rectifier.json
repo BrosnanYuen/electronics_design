@@ -3,7 +3,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "SINE(0 -141 50 0 0 0)"
@@ -12,7 +12,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "SINE(0 -141 50 0 0 120)"
@@ -21,7 +21,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "SINE(0 -141 50 0 0 240)"
@@ -30,7 +30,7 @@
     "SYMBOL": "diode",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -38,7 +38,7 @@
     "SYMBOL": "diode",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -46,7 +46,7 @@
     "SYMBOL": "diode",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -54,7 +54,7 @@
     "SYMBOL": "diode",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -62,7 +62,7 @@
     "SYMBOL": "diode",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -70,7 +70,7 @@
     "SYMBOL": "diode",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": []
   },
@@ -78,7 +78,7 @@
     "SYMBOL": "current",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "200"

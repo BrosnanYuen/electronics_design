@@ -3,7 +3,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "5"
@@ -12,7 +12,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "47"
@@ -21,7 +21,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "4.2k"
@@ -30,7 +30,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "{10k*(1-x)}"
@@ -39,7 +39,7 @@
     "SYMBOL": "npn",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "2N3904"
@@ -48,7 +48,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "{10k*x}"

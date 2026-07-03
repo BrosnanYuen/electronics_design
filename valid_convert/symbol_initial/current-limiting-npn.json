@@ -3,7 +3,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "54k"
@@ -12,7 +12,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "30"
@@ -21,7 +21,7 @@
     "SYMBOL": "npn",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "2N3904"
@@ -30,7 +30,7 @@
     "SYMBOL": "npn",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "2N3904"
@@ -39,7 +39,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "12"
@@ -48,7 +48,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "{R_load}"

@@ -322,7 +322,8 @@ Checks that:
 - The converter resolves LTspice library and symbol lookup paths from `convert_settings` rather than hard-coding installation paths
 - Library files with suffixes `.bjt`, `.dio`, `.jft`, `.lib`, `.mos`, and `.sub` are read to resolve model metadata used for the output `SYMBOL`
 - The generated initial symbol JSON is written to `symbol_json_filepath_out`
-- Each output entry contains `SYMBOL`, `X`, `Y`, `ROTATION`, `RECTANGLE`, and `PINS`
+- Each output entry contains `SYMBOL`, `X`, `Y`, `ORIENTATION`, `RECTANGLE`, and `PINS`
+- `ORIENTATION` is currently emitted as an empty string for each generated symbol-initial record
 - When present in the source netlist or inferred from the source symbol, entries may also include `VALUE`, `SPICELINE`, and `TYPE`
 - `convert_settings` is a mapping so additional conversion options can be added later without changing the API shape
 
@@ -377,7 +378,8 @@ Checks that:
 Returns:
 
 - A dictionary keyed by `InstName`
-- Each entry contains `SYMBOL`, `X`, `Y`, `ROTATION`, `RECTANGLE`, and `PINS`
+- Each entry contains `SYMBOL`, `X`, `Y`, `ORIENTATION`, `RECTANGLE`, and `PINS`
+- `ORIENTATION` is the LTspice ASC symbol orientation token such as `R0`, `R90`, `R180`, `R270`, `M0`, `M90`, `M180`, or `M270`
 - If the ASC symbol instance defines them, the entry also includes `VALUE`, `SPICELINE`, and `TYPE`
 
 Raises:

@@ -34,3 +34,7 @@ class TestNetlistToSymbolInitial(unittest.TestCase):  # Group netlist-to-symbol-
                     generated_symbol_initial = json.loads(generated_symbol_initial_path.read_text(encoding="utf-8"))  # Load the generated symbol JSON into a comparable Python structure.
                     expected_symbol_initial = json.loads(expected_symbol_initial_path.read_text(encoding="utf-8"))  # Load the paired ground-truth symbol JSON into a comparable Python structure.
                     self.assertEqual(generated_symbol_initial, expected_symbol_initial, msg=f"{netlist_fixture_path.name} should match the paired ground-truth symbol JSON exactly.")  # Assert that the generated JSON matches the expected symbol-initial payload.
+                    for symbol_entry in generated_symbol_initial.values():
+                        self.assertIn("ORIENTATION", symbol_entry, msg=f"{netlist_fixture_path.name} should expose ORIENTATION in symbol-initial JSON.")
+                        self.assertEqual(symbol_entry["ORIENTATION"], "", msg=f"{netlist_fixture_path.name} should emit an empty ORIENTATION value.")
+                        self.assertNotIn("ROTATION", symbol_entry, msg=f"{netlist_fixture_path.name} should no longer expose ROTATION in symbol-initial JSON.")

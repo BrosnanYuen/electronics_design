@@ -282,7 +282,7 @@ def _load_partial_symbol_info(
             "SYMBOL": _asc_to_netlist._display_symbol_name(symbol.symbol_name),
             "X": symbol.origin[0],
             "Y": symbol.origin[1],
-            "ROTATION": _asc_to_netlist._orientation_angle(symbol.orientation),
+            "ORIENTATION": _asc_to_netlist._normalized_orientation(symbol.orientation),
             "RECTANGLE": _asc_to_netlist._transform_symbol_rectangle(bounds, symbol.origin, symbol.orientation),
             "PINS": transformed_pins,
         }

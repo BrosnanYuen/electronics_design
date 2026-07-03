@@ -411,7 +411,7 @@ def _build_symbol_initial_records(
             ),
             "X": 0,
             "Y": 0,
-            "ROTATION": 0,
+            "ORIENTATION": "",
             "RECTANGLE": [],
             "PINS": [],
         }

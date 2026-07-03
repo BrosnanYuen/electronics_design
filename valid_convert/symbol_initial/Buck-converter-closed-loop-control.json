@@ -3,7 +3,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "20"
@@ -12,7 +12,7 @@
     "SYMBOL": "ind",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "47\u00b5"
@@ -21,7 +21,7 @@
     "SYMBOL": "schottky",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "1N5819",
@@ -31,7 +31,7 @@
     "SYMBOL": "cap",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "100\u00b5"
@@ -40,7 +40,7 @@
     "SYMBOL": "res",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "R=IF(time < 5m, 1, 2)"
@@ -49,7 +49,7 @@
     "SYMBOL": "nmos",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "BSB012N03LX3"
@@ -58,7 +58,7 @@
     "SYMBOL": "bv",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "V= {y_ref}-V(Vout)"
@@ -67,7 +67,7 @@
     "SYMBOL": "bv",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "V= 5*V(error) + 500*idt(V(error))"
@@ -76,7 +76,7 @@
     "SYMBOL": "bv",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "V= IF(V(PI_out) > 0, min(V(PI_out), 1), 0)"
@@ -85,7 +85,7 @@
     "SYMBOL": "bv",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "V=IF(time - floor(time/Ts)*Ts < V(PI_sat)*Ts, 20, 0)"

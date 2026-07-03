@@ -205,7 +205,7 @@ def get_ltspice_asc_symbol_info(
             "SYMBOL": _display_symbol_name(symbol_instance.symbol_name),
             "X": symbol_instance.origin[0],
             "Y": symbol_instance.origin[1],
-            "ROTATION": _orientation_angle(symbol_instance.orientation),
+            "ORIENTATION": _normalized_orientation(symbol_instance.orientation),
             "RECTANGLE": _transform_symbol_rectangle(bounds, symbol_instance.origin, symbol_instance.orientation),
             "PINS": transformed_pins,
         }
@@ -1027,6 +1027,10 @@ def _orientation_angle(orientation: str) -> int:
     if angle_match is None:
         return 0
     return int(angle_match.group(1)) % 360
+
+
+def _normalized_orientation(orientation: str) -> str:
+    return orientation.strip().upper()
 
 
 def _infer_symbol_library_reference(symbol_instance: SymbolInstance, symbol_definition: SymbolDefinition) -> Optional[str]:

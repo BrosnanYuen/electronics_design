@@ -3,7 +3,7 @@
     "SYMBOL": "voltage",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "SINE(10 10 1)"
@@ -12,7 +12,7 @@
     "SYMBOL": "bv",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "V=sin(V(modulating_signal)*3.14158*2*time)"
@@ -21,7 +21,7 @@
     "SYMBOL": "bv",
     "X": 0,
     "Y": 0,
-    "ROTATION": 0,
+    "ORIENTATION": "",
     "RECTANGLE": [],
     "PINS": [],
     "VALUE": "V=V(modulating_signal)*sin(50*3.14158*2*time)"

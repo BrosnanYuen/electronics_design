@@ -364,7 +364,7 @@ def _build_expected_symbol_entry(spec: dict[str, object]) -> dict[str, object]:
         "SYMBOL": _display_symbol_name(str(spec["symbol"])),
         "X": origin[0],
         "Y": origin[1],
-        "ROTATION": _orientation_angle(orientation),
+        "ORIENTATION": orientation,
         "RECTANGLE": _transform_rectangle(bounds, origin, orientation),
         "PINS": transformed_pins,
     }
@@ -391,3 +391,6 @@ class TestGetLtspiceAscSymbolInfo(unittest.TestCase):
                 }
                 result = get_ltspice_asc_symbol_info(str(fixture_path), convert_settings)
                 self.assertEqual(result, expected_symbols, msg=f"{fixture_path.name} returned unexpected symbol info.")
+                for symbol_entry in result.values():
+                    self.assertIn("ORIENTATION", symbol_entry, msg=f"{fixture_path.name} should expose ORIENTATION in symbol info.")
+                    self.assertNotIn("ROTATION", symbol_entry, msg=f"{fixture_path.name} should no longer expose ROTATION in symbol info.")
