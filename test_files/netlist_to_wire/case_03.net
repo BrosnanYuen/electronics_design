@@ -1,0 +1,7 @@
+V1 N201 0 9
+D1 N201 N202 D
+R1 N202 0 3.3k
+.model D D
+.op
+.backanno
+.end

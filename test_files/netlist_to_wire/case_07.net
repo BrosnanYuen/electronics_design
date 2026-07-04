@@ -1,0 +1,7 @@
+V1 N601 0 7
+R1 N601 0 1k
+R2 N601 0 2k
+C1 N601 0 33n
+.op
+.backanno
+.end

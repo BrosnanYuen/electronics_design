@@ -1,0 +1,8 @@
+V1 N1401 0 10
+R1 N1401 N1402 1k
+C1 N1402 0 10n
+L1 N1402 N1403 2m
+R2 N1403 0 5k
+.op
+.backanno
+.end

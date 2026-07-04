@@ -1,0 +1,7 @@
+V1 N1201 0 5
+V2 N1201 0 9
+R1 N1201 N1202 1k
+C1 N1202 0 47n
+.op
+.backanno
+.end

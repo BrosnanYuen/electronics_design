@@ -1,0 +1,7 @@
+V1 N301 0 12
+R1 N301 N302 1k
+R2 N302 N303 2k
+C1 N303 0 47n
+.op
+.backanno
+.end

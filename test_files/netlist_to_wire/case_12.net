@@ -1,0 +1,9 @@
+V1 N1101 0 8
+R1 N1101 N1102 2.2k
+R2 N1102 0 3.3k
+C1 N1102 0 68n
+D1 N1102 0 D
+.model D D
+.op
+.backanno
+.end

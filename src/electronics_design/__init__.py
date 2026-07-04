@@ -16,6 +16,7 @@ from .ltspice import ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conv
 from .ltspice import ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
 from .ltspice import get_ltspice_asc_symbol_info  # Re-export the ASC symbol-info helper.
 from .ltspice import ltspice_netlist_to_symbol_initial  # Re-export the netlist-to-symbol-initial conversion helper.
+from .ltspice import ltspice_netlist_to_wiring  # Re-export the netlist-to-wiring conversion helper.
 from .ltspice import ltspice_resolve_symbol_pose  # Re-export the symbol-pose resolution helper.
 from .ltspice import ltspice_check_symbol_pose  # Re-export the symbol-pose collision helper.
 from .ltspice import is_ltspice_netlist_structure_connected  # Re-export the connectivity validator.
@@ -46,6 +47,7 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper name.
     "get_ltspice_asc_symbol_info",  # Export the ASC symbol-info helper name.
     "ltspice_netlist_to_symbol_initial",  # Export the netlist-to-symbol-initial conversion helper name.
+    "ltspice_netlist_to_wiring",  # Export the netlist-to-wiring conversion helper name.
     "ltspice_resolve_symbol_pose",  # Export the symbol-pose resolution helper name.
     "ltspice_check_symbol_pose",  # Export the symbol-pose collision helper name.
     "is_valid_ltspice_netlist_format",  # Export the format validator name.

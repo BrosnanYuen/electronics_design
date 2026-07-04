@@ -1,0 +1,6 @@
+I1 N101 0 2m
+L1 N101 N102 3m
+R1 N102 0 2k
+.op
+.backanno
+.end

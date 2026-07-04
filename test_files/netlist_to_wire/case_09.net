@@ -1,0 +1,8 @@
+I1 N801 0 500u
+C1 N801 N802 100n
+R1 N802 0 6.8k
+D1 N802 0 D
+.model D D
+.op
+.backanno
+.end

@@ -1,0 +1,8 @@
+I1 N401 0 1m
+R1 N401 N402 4.7k
+L1 N402 N403 5m
+D1 N403 0 D
+.model D D
+.op
+.backanno
+.end

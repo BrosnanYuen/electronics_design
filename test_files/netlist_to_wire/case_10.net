@@ -1,0 +1,7 @@
+V1 N901 0 3.3
+L1 N901 N902 1m
+C1 N902 N903 1u
+R1 N903 0 470
+.op
+.backanno
+.end

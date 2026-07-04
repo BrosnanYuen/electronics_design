@@ -1,0 +1,8 @@
+V1 N701 0 5
+R1 N701 N702 1k
+D1 N702 0 D
+L1 N702 0 2m
+.model D D
+.op
+.backanno
+.end

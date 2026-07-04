@@ -1,0 +1,8 @@
+I1 N1301 0 1m
+D1 N1301 N1302 D
+R1 N1302 0 1k
+R2 N1302 0 2k
+.model D D
+.op
+.backanno
+.end

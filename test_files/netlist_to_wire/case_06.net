@@ -1,0 +1,6 @@
+V1 N501 0 6
+R1 N501 0 10k
+C1 N501 0 22n
+.op
+.backanno
+.end
