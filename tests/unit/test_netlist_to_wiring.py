@@ -253,3 +253,124 @@ class TestNetlistToWiring(unittest.TestCase):
                 ltspice_netlist_to_wiring(str(fixture_path), str(symbol_pose_path), str(output_path), {"minimum_dist": -1, "wire_pin_out_dist": 16}),
                 (False, "INVALID_CONVERT_SETTINGS", 0),
             )
+
+    def test_routed_net_endpoints_do_not_land_on_other_net_groups(self) -> None:
+        netlist_text = """* multi-net routing isolation regression
+V1 N001 0 6
+C1 N002 N004 0.01
+L1 N001 N003 0.2 Rser=1m
+R1 N004 0 10k
+D1 N003 0 D
+V2 N002 0 9
+R2 N003 0 5k
+.model D D
+.lib C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\cmp\\standard.dio
+.tran 0 1 0.1
+.backanno
+.end
+"""
+        symbol_pose = {
+            "V1": {
+                "SYMBOL": "voltage",
+                "X": 96,
+                "Y": 80,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[64, 96], [128, 176]],
+                "PINS": [[96, 96, "+", 1], [96, 176, "-", 2]],
+                "VALUE": "6",
+            },
+            "C1": {
+                "SYMBOL": "cap",
+                "X": 176,
+                "Y": 96,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[176, 96], [208, 160]],
+                "PINS": [[192, 96, "A", 1], [192, 160, "B", 2]],
+                "VALUE": "0.01",
+            },
+            "L1": {
+                "SYMBOL": "ind",
+                "X": 272,
+                "Y": 80,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[272, 96], [304, 176]],
+                "PINS": [[288, 96, "A", 1], [288, 176, "B", 2]],
+                "VALUE": "0.2",
+                "SPICELINE": "Rser=1m",
+            },
+            "R1": {
+                "SYMBOL": "res",
+                "X": 272,
+                "Y": 224,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[272, 240], [304, 320]],
+                "PINS": [[288, 240, "A", 1], [288, 320, "B", 2]],
+                "VALUE": "10k",
+            },
+            "D1": {
+                "SYMBOL": "diode",
+                "X": 176,
+                "Y": 240,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[176, 240], [208, 304]],
+                "PINS": [[192, 240, "+", 1], [192, 304, "-", 2]],
+            },
+            "V2": {
+                "SYMBOL": "voltage",
+                "X": 384,
+                "Y": 80,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[352, 96], [416, 176]],
+                "PINS": [[384, 96, "+", 1], [384, 176, "-", 2]],
+                "VALUE": "9",
+            },
+            "R2": {
+                "SYMBOL": "res",
+                "X": 96,
+                "Y": 224,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[96, 240], [128, 320]],
+                "PINS": [[112, 240, "A", 1], [112, 320, "B", 2]],
+                "VALUE": "5k",
+            },
+        }
+        expected_net_names = {"N001", "N002", "N003", "N004", "0"}
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            netlist_path = temporary_path / "isolation_case.net"
+            symbol_pose_path = temporary_path / "isolation_case_symbols.json"
+            output_path = temporary_path / "isolation_case_wires.json"
+            netlist_path.write_text(netlist_text, encoding="utf-8")
+            symbol_pose_path.write_text(json.dumps(symbol_pose, indent=2) + "\n", encoding="utf-8")
+
+            result = ltspice_netlist_to_wiring(
+                str(netlist_path),
+                str(symbol_pose_path),
+                str(output_path),
+                _CONVERT_SETTINGS,
+            )
+
+            self.assertEqual(result, (True, "OK", 0))
+            generated_wires = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(set(generated_wires.keys()), expected_net_names)
+
+            all_wire_arrays = {
+                net_name: np.asarray(wire_rows, dtype=int)
+                for net_name, wire_rows in generated_wires.items()
+            }
+            for net_name, wires in all_wire_arrays.items():
+                self.assertTrue(are_wires_connected(wires), msg=f"{net_name} should remain internally connected.")
+                other_net_rows = [
+                    wire_row
+                    for other_net_name, other_wires in generated_wires.items()
+                    if other_net_name != net_name
+                    for wire_row in other_wires
+                ]
+                self.assertTrue(other_net_rows, msg=f"{net_name} should be checked against the other routed nets.")
+                other_groups = place_wires_into_groups(np.asarray(other_net_rows, dtype=int))
+                for point_row in get_wire_pos(wires):
+                    self.assertEqual(
+                        find_wire_group_index(np.asarray(point_row, dtype=int), other_groups),
+                        -1,
+                        msg=f"{net_name} endpoints must not start or end on another net's wire group.",
+                    )
