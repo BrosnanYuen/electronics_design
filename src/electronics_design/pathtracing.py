@@ -13,6 +13,15 @@ from typing import Tuple
 import numpy as np
 
 
+def get_wire_pos(wires: np.ndarray) -> np.ndarray:
+    wires = np.asarray(wires)
+    if wires.ndim != 2 or wires.shape[1] != 4:
+        raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
+    if len(wires) == 0:
+        return np.empty((0, 2), dtype=int)
+    return np.column_stack((wires[:, 0:2], wires[:, 2:4])).reshape(-1, 2)
+
+
 def are_wires_horizontal_or_vertical(wires: np.ndarray) -> bool:
     wires = np.asarray(wires)
     if wires.ndim != 2 or wires.shape[1] != 4:

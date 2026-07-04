@@ -2,7 +2,7 @@
 
 `electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, converting LTspice netlists to initial symbol JSON, resolving symbol pose data inside symbol JSON files, checking symbol-pose collisions, and for comparing and plotting validated netlists.
 
-It currently exposes twenty-six public functions:
+It currently exposes twenty-seven public functions:
 
 - `is_valid_ltspice_asc_header(filepath)`
 - `is_valid_ltspice_asc_spacing(filepath)`
@@ -24,6 +24,7 @@ It currently exposes twenty-six public functions:
 - `are_wires_intersecting_obstacles_fast(wires, obstacles)`
 - `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
 - `place_wires_into_groups(wires)`  *groups of connected wires*
+- `get_wire_pos(wires)`  *extract start and end points from wires*
 
 - `is_valid_ltspice_netlist_format(filepath)`
 - `is_valid_ltspice_netlist_footer(filepath)`
@@ -57,6 +58,18 @@ groups = [
 ```
 
 Two wires are connected when they share an exact endpoint coordinate. Wires that cross without sharing an endpoint are not grouped together. It raises `ValueError` when the input shape is invalid.
+
+`get_wire_pos(wires)` returns a numpy array of start and end points extracted from a wire array:
+
+```python
+np.array([
+    [x1, y1],
+    [x2, y2],
+    ...
+])
+```
+
+Each wire row `[X1, Y1, X2, Y2]` produces two consecutive point rows `[X1, Y1]` and `[X2, Y2]` in the returned array. The output shape is `(2N, 2)` for an input of shape `(N, 4)`. It raises `ValueError` when the input shape is invalid.
 
 `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` returns a conversion tuple:
 
@@ -545,6 +558,21 @@ Raises:
 
 - `ValueError` when `wires` is not shape `(N, 4)`
 
+### `get_wire_pos(wires)`
+
+Checks that:
+
+- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
+- The output is a numpy array of shape `(2N, 2)` where consecutive rows are the start and end point of each wire
+
+Returns:
+
+- `np.array([[x1, y1], [x2, y2], ...])` for a valid wire array
+
+Raises:
+
+- `ValueError` when `wires` is not shape `(N, 4)`
+
 ### `is_valid_ltspice_netlist_format(filepath)`
 
 Checks that:
@@ -736,6 +764,8 @@ from electronics_design import get_ltspice_asc_symbol_info
 from electronics_design import ltspice_netlist_to_symbol_initial
 from electronics_design import ltspice_resolve_symbol_pose
 from electronics_design import ltspice_check_symbol_pose
+import numpy as np
+from electronics_design import get_wire_pos
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
@@ -796,6 +826,7 @@ intersects_obstacles = are_wires_intersecting_obstacles_fast(wires_array, obstac
 intersects_detailed, detailed_pairs = are_wires_intersecting_obstacles_detailed(wires_array, obstacles_array)
 path_wires = np.array([[160, 192, 256, 192], [256, 192, 256, 384], [256, 384, 432, 384]])
 groups = place_wires_into_groups(path_wires)
+flat_points = get_wire_pos(path_wires)
 format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
 footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
 connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
@@ -833,6 +864,8 @@ same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
 - `test_files/wires_intersect_obstacles_detailed/` contains 10 valid and 10 invalid detailed wire-obstacle intersection fixtures
 - `tests/unit/test_wires_start_end.py` covers the wire start/end position API
 - `test_files/wire_start_end/` contains 10 connected wire chain fixtures with expected start and end positions
+- `tests/unit/test_get_wire_position.py` covers the wire-position extraction API
+- `test_files/get_wire_position/` contains 10 wire fixtures used by the wire-position extraction tests
 - `test_files/netlist_format/` contains 10 valid and 10 invalid format fixtures
 - `test_files/netlist_footer/` contains 10 valid and 10 invalid footer fixtures
 - `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures

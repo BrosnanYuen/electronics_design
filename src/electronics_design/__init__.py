@@ -1,6 +1,7 @@
 """Public package exports for the electronics_design library."""  # Describe the package entry point.
 
 from .autoroute import auto_route_wires  # Re-export the orthogonal autorouting helper.
+from .ltspice import get_wire_pos  # Re-export the wire-position extraction helper.
 from .ltspice import is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
 from .pathtracing import are_wires_intersecting_obstacles_detailed  # Re-export the detailed intersection helper.
 from .ltspice import is_valid_ltspice_asc_footer  # Re-export the ASC footer validator.
@@ -30,6 +31,7 @@ from .ltspice import place_wires_into_groups  # Re-export the wire-grouping help
 
 __all__ = [  # Define the supported public API surface.
     "auto_route_wires",  # Export the orthogonal autorouting helper name.
+    "get_wire_pos",  # Export the wire-position extraction helper name.
     "find_wire_group_index",  # Export the wire-group-index helper name.
     "is_valid_ltspice_asc_header",  # Export the ASC header validator name.
     "is_valid_ltspice_asc_spacing",  # Export the ASC spacing validator name.
