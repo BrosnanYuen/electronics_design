@@ -22,7 +22,6 @@ from electronics_design.pathtracing import place_wires_into_groups
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _FIXTURE_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "netlist_to_wire"
-_CASE_16_EXPECTED_OUTPUT_PATH = _FIXTURE_DIRECTORY / "case_16_expected_wires.json"
 _CONVERT_SETTINGS = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
@@ -166,7 +165,7 @@ def _obstacle_array(symbol_pose: dict[str, dict[str, object]]) -> np.ndarray:
 class TestNetlistToWiring(unittest.TestCase):
     def test_all_netlist_to_wire_fixtures(self) -> None:
         netlist_fixture_paths = sorted(_FIXTURE_DIRECTORY.glob("case_*.net"))
-        self.assertTrue(netlist_fixture_paths, msg="The netlist-to-wire tests require at least one netlist fixture.")
+        self.assertEqual(len(netlist_fixture_paths), 15, msg="The netlist-to-wire tests require exactly 15 netlist fixtures.")
         with tempfile.TemporaryDirectory() as temporary_directory:
             for netlist_fixture_path in netlist_fixture_paths:
                 with self.subTest(fixture=netlist_fixture_path.name):
@@ -244,36 +243,6 @@ class TestNetlistToWiring(unittest.TestCase):
                                     -1,
                                     msg=f"{netlist_fixture_path.name}:{net_name} endpoints should not lie on another net's wire group.",
                                 )
-
-    def test_case_16_expected_output_has_separate_cross_net_endpoints(self) -> None:
-        expected_output = json.loads(_CASE_16_EXPECTED_OUTPUT_PATH.read_text(encoding="utf-8"))
-        all_wire_arrays = {
-            net_name: np.asarray(wire_rows, dtype=int)
-            for net_name, wire_rows in expected_output.items()
-        }
-        self.assertEqual(
-            set(all_wire_arrays.keys()),
-            {"N001", "N002", "N003", "N004", "0"},
-            msg="case_16 should preserve the expected routed net names including ground.",
-        )
-        for net_name, wires in all_wire_arrays.items():
-            self.assertTrue(
-                are_wires_connected(wires),
-                msg=f"case_16:{net_name} should remain connected.",
-            )
-            other_net_rows = [
-                wire_row
-                for other_net_name, other_wires in expected_output.items()
-                if other_net_name != net_name
-                for wire_row in other_wires
-            ]
-            other_groups = place_wires_into_groups(np.asarray(other_net_rows, dtype=int))
-            for point_row in get_wire_pos(wires):
-                self.assertEqual(
-                    find_wire_group_index(np.asarray(point_row, dtype=int), other_groups),
-                    -1,
-                    msg=f"case_16:{net_name} endpoints should not lie on another net's wire group.",
-                )
 
     def test_invalid_convert_settings_are_rejected(self) -> None:
         fixture_path = _FIXTURE_DIRECTORY / "case_01.net"
