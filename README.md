@@ -1,851 +1,241 @@
 # electronics_design
 
-`electronics_design` is a small Python API library for validating LTspice simulation netlists, LTspice schematic files, and LTspice symbol files, converting LTspice schematics to netlists, converting LTspice netlists to initial symbol JSON, converting LTspice netlists plus symbol pose JSON to routed wiring JSON, resolving symbol pose data inside symbol JSON files, checking symbol-pose collisions, and for comparing and plotting validated netlists.
-
-It currently exposes twenty-eight public functions:
-
-- `is_valid_ltspice_asc_header(filepath)`
-- `is_valid_ltspice_asc_spacing(filepath)`
-- `is_valid_ltspice_asc_footer(filepath)`
-- `is_valid_ltspice_asc_file(filepath)`
-- `is_valid_ltspice_asy(filepath)`
-- `get_ltspice_asy_size(filepath)`
-- `get_ltspice_asy_pins(filepath)`
-- `rectangle_points_to_lines(points)`
-- `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
-- `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
-- `ltspice_asc_structure_cmp(filepath1, filepath2)`
-- `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
-- `ltspice_netlist_to_symbol_initial(netlist_filepath, symbol_json_filepath_out, convert_settings)`
-- `ltspice_netlist_to_wiring(netlist_filepath, symbol_pose_filepath, wire_filepath_out, convert_settings)`
-- `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)`
-- `ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)`
-- `are_wires_connected(wires)`
-- `are_wires_horizontal_or_vertical(wires)`
-- `are_wires_intersecting_obstacles_fast(wires, obstacles)`
-- `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
-- `place_wires_into_groups(wires)`  *groups of connected wires*
-- `get_wire_pos(wires)`  *extract start and end points from wires*
+Python library for validating, converting, plotting, and comparing LTspice schematic (`.asc`), symbol (`.asy`), and netlist (`.net`) files.  Also supports symbol-pose resolution, automatic symbol placement, and orthogonal wire routing from netlists.
 
-- `is_valid_ltspice_netlist_format(filepath)`
-- `is_valid_ltspice_netlist_footer(filepath)`
-- `is_ltspice_netlist_structure_connected(filepath)`
-- `is_valid_ltspice_netlist_file(filepath)`
-- `ltspice_netlist_footer_cmp(filepath1, filepath2)`
-- `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)`
-- `ltspice_netlist_structure_cmp(filepath1, filepath2)`
+## API Reference
 
-Most validation and plotting functions return a tuple:
+### ASC Validation
 
-```python
-(True, "")
-```
+| Function | Returns |
+|---|---|
+| `is_valid_ltspice_asc_header(filepath)` | `(bool, str)` |
+| `is_valid_ltspice_asc_spacing(filepath)` | `(bool, str)` |
+| `is_valid_ltspice_asc_footer(filepath)` | `(bool, str)` |
+| `is_valid_ltspice_asc_file(filepath)` | `(bool, str)` |
 
-or:
+- **Header** requires first nonblank line to be `Version` / `VERSION` and second to be `SHEET`.
+- **Spacing** validates keyword support and token structure of every ASC record.
+- **Footer** ensures at least one simulation analysis directive (`.tran`, `.ac`, `.dc`, `.op`, `.tf`, `.noise`, `.fra`) is present in a `TEXT !...` record.
+- **Whole-file** composes header, spacing, and footer validators.
 
-```python
-(False, "<error message>")
-```
+Error messages: `"File not found!"`, `"No permission to read file!"`, or `"<type> information is invalid! Line <n>"`.
 
-`ltspice_netlist_footer_cmp(filepath1, filepath2)`, `ltspice_netlist_structure_cmp(filepath1, filepath2)`, `are_wires_connected(wires)`, and `are_wires_intersecting_obstacles_fast(wires, obstacles)` return `True` or `False`.
+### Netlist Validation
 
-`place_wires_into_groups(wires)` returns a list of numpy arrays, each containing the wires of one connected group:
+| Function | Returns |
+|---|---|
+| `is_valid_ltspice_netlist_format(filepath)` | `(bool, str)` |
+| `is_valid_ltspice_netlist_footer(filepath)` | `(bool, str)` |
+| `is_ltspice_netlist_structure_connected(filepath)` | `(bool, str)` |
+| `is_valid_ltspice_netlist_file(filepath)` | `(bool, str)` |
 
-```python
-groups = [
-    np.array([[x1, y1, x2, y2], ...]),
-    np.array([[x1, y1, x2, y2], ...]),
-]
-```
+- **Format** checks line classification (device prefixes, dot directives, continuations, comments) and minimum token counts.
+- **Footer** requires at least one analysis directive, final line `.end`, penultimate line `.backanno`.
+- **Connected** ensures every non-ground, non-`NC*` node appears on at least two device ports.
+- **Whole-file** composes the three validators above.
 
-Two wires are connected when they share an exact endpoint coordinate. Wires that cross without sharing an endpoint are not grouped together. It raises `ValueError` when the input shape is invalid.
+### ASY Validation & Info
 
-`get_wire_pos(wires)` returns a numpy array of start and end points extracted from a wire array:
+| Function | Returns |
+|---|---|
+| `is_valid_ltspice_asy(filepath)` | `(bool, str)` |
+| `get_ltspice_asy_size(filepath)` | `np.ndarray([[min_x, min_y], [max_x, max_y]])` |
+| `get_ltspice_asy_pins(filepath)` | `[[x, y, "PinName", spice_order], ...]` |
 
-```python
-np.array([
-    [x1, y1],
-    [x2, y2],
-    ...
-])
-```
+`get_ltspice_asy_size` and `get_ltspice_asy_pins` raise `ValueError` on invalid inputs.
 
-Each wire row `[X1, Y1, X2, Y2]` produces two consecutive point rows `[X1, Y1]` and `[X2, Y2]` in the returned array. The output shape is `(2N, 2)` for an input of shape `(N, 4)`. It raises `ValueError` when the input shape is invalid.
+### Netlist Comparison
 
-`ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` returns a conversion tuple:
+| Function | Returns |
+|---|---|
+| `ltspice_netlist_footer_cmp(filepath1, filepath2)` | `bool` |
+| `ltspice_netlist_structure_cmp(filepath1, filepath2)` | `bool` |
 
-```python
-(True, "OK", 0)
-```
+- **Footer comparison** normalizes the post-device footer region and checks equivalence.
+- **Structure comparison** builds isomorphic component-to-net graphs; ignores instance names, net names, and footer directives.
 
-or:
+### Schematic Comparison
 
-```python
-(False, "<error code>", <line number>)
-```
+| Function | Returns |
+|---|---|
+| `ltspice_asc_structure_cmp(filepath1, filepath2, convert_settings)` | `(bool, str, int)` |
 
-`ltspice_netlist_to_symbol_initial(netlist_filepath, symbol_json_filepath_out, convert_settings)` returns the same conversion tuple:
+Converts both ASC files to netlists and compares their structure.  Returns `(True, "", 0)` on match or `(False, "ASC structures are different!", <line>)` on mismatch.
 
-```python
-(True, "OK", 0)
-```
+### Schematic Conversion
 
-or:
+| Function | Returns |
+|---|---|
+| `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` | `(bool, str, int)` |
+| `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)` | `{instance_name: {SYMBOL, X, Y, ORIENTATION, RECTANGLE, PINS, ...}, ...}` |
 
-```python
-(False, "<error code>", <line number>)
-```
+- `ltspice_asc_to_netlist` resolves symbols and library files from `convert_settings`, generates a validated netlist. Error codes include `UNKNOWN_SYMBOL`, `UNCONNECTED_SYMBOL_PIN`, `INVALID_GENERATED_NETLIST`, etc.
+- `get_ltspice_asc_symbol_info` returns absolute-coordinate symbol pin and rectangle data keyed by instance name. Raises `ValueError` on failure.
 
-`ltspice_netlist_to_wiring(netlist_filepath, symbol_pose_filepath, wire_filepath_out, convert_settings)` returns the same conversion tuple:
+### Schematic Plotting
 
-```python
-(True, "OK", 0)
-```
+| Function | Returns |
+|---|---|
+| `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080, convert_settings=None)` | `(bool, str)` |
+| `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)` | `(bool, str)` |
 
-or:
+Uses schemdraw (ASC) and networkx (netlist) to render images. Supports `.png`, `.svg`, `.jpg`, `.jpeg` output.
 
-```python
-(False, "<error code>", <line number>)
-```
+### Symbol Pose Pipeline
 
-`ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)` returns the same conversion tuple:
+| Function | Returns |
+|---|---|
+| `ltspice_netlist_to_symbol_initial(netlist_filepath, symbol_json_filepath_out, convert_settings)` | `(bool, str, int)` |
+| `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)` | `(bool, str, int)` |
+| `ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)` | `(bool, np.ndarray | None)` |
+| `ltspice_netlist_to_wiring(netlist_filepath, symbol_pose_filepath, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
+| `ltspice_autoplace_symbol_pose(netlist_filepath, symbol_pose_filepath_out, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
 
-```python
-(True, "OK", 0)
-```
+Typical pipeline:
 
-or:
+1. **netlist → symbol_initial** — generates JSON with `SYMBOL`, `X=0`, `Y=0`, `ORIENTATION=""`, empty `RECTANGLE` and `PINS`.
+2. **resolve_symbol_pose** — populates `RECTANGLE` and `PINS` from `.asy` files using `X`, `Y`, and `ORIENTATION`.
+3. **check_symbol_pose** — detects symbol-rectangle collisions after buffering by `minimum_dist`. Returns `(False, None)` or `(True, collisions_array)`.
+4. **netlist_to_wiring** — routes axis-aligned wires between symbol pins while avoiding obstacles.
+5. **autoplace_symbol_pose** — automatically places symbols using a spring-layout-like algorithm, resolves poses, avoids collisions, and generates wiring.
 
-```python
-(False, "<error code>", <line number>)
-```
+### Wire / Path Utilities
 
-`ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)` returns:
+| Function | Returns |
+|---|---|
+| `are_wires_connected(wires)` | `bool` |
+| `are_wires_horizontal_or_vertical(wires)` | `bool` |
+| `are_wires_intersecting_obstacles_fast(wires, obstacles)` | `bool` |
+| `are_wires_intersecting_obstacles_detailed(wires, obstacles)` | `(bool, np.ndarray \| None)` |
+| `place_wires_into_groups(wires)` | `list[np.ndarray]` |
+| `get_wire_pos(wires)` | `np.ndarray shape (2N, 2)` |
+| `find_wire_group_index(point, wire_groups)` | `int` |
+| `rectangle_points_to_lines(points)` | `np.ndarray shape (4, 4)` |
 
-```python
-(False, None)
-```
+All wire/obstacle arrays are numpy arrays of shape `(N, 4)` with rows `[X1, Y1, X2, Y2]`.  Many raise `ValueError` on invalid input shapes.
 
-or:
+- `place_wires_into_groups` groups wires that share an exact endpoint.
+- `find_wire_group_index` returns the group index containing a point, or -1 if not found.
+- `rectangle_points_to_lines` converts two opposite corner points into four edge segments: top, right, left, bottom.
 
-```python
-(True, np.array([[symbol_index_a, symbol_index_b], ...]))
-```
+### Autorouting
 
-`ltspice_asc_structure_cmp(filepath1, filepath2)` returns a structure-comparison tuple:
+| Function | Returns |
+|---|---|
+| `auto_route_wires(start_x, start_y, end_x, end_y, obstacles, grid_x, grid_y)` | `np.ndarray shape (M, 4)` |
 
-```python
-(True, "", 0)
-```
+Routes an orthogonal, connected wire path between two points on a grid while avoiding obstacle lines. Raises `ValueError` if no valid route exists.
 
-or:
+### GUI Debug
 
-```python
-(False, "<error message>", <line number>)
-```
+| Function | Returns |
+|---|---|
+| `gui_debug()` | `None` |
 
-`get_ltspice_asy_size(filepath)` returns a numpy array containing the bounding rectangle of the drawable symbol geometry:
+Launches a Tkinter path-tracing GUI for interactive wire, obstacle, and flag placement with autorouting preview.
 
-```python
-np.array([
-    [x1, y1],
-    [x2, y2],
-])
-```
+## Return Conventions
 
-It raises `ValueError` when the input `.asy` file is invalid or when the file contains no drawable `LINE`, `RECTANGLE`, `CIRCLE`, or `ARC` geometry.
+Validation and plotting functions return `(True, "")` or `(False, "<error message>")`.
 
-`get_ltspice_asy_pins(filepath)` returns a Python list of pin rows:
+Conversion functions return `(True, "OK", 0)` or `(False, "<error code>", <line number>)`.
 
-```python
-[
-    [x, y, "PinName", spice_order],
-]
-```
+Comparison functions return `True` / `False` (netlist) or `(bool, str, int)` (ASC).
 
-It raises `ValueError` when the input `.asy` file is invalid or when a declared pin is missing a `PinName` or `SpiceOrder`.
+## `convert_settings`
 
-`rectangle_points_to_lines(points)` returns a numpy array containing the four rectangle edges implied by two opposite corner points:
-
-```python
-np.array([
-    [x1, y1, x2, y1],
-    [x2, y1, x2, y2],
-    [x1, y1, x1, y2],
-    [x1, y2, x2, y2],
-])
-```
-
-## What The Library Checks
-
-### `is_valid_ltspice_asc_header(filepath)`
-
-Checks that:
-
-- The file exists and is readable
-- The first nonblank structural line is `Version` or `VERSION`
-- The second nonblank structural line is `SHEET`
-- Both header lines have the required whitespace token structure
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Header information is invalid! Line <n>"`
-- `True, ""`
-
-### `is_valid_ltspice_asc_spacing(filepath)`
-
-Checks that:
-
-- The file exists and is readable
-- Each nonblank line starts with a supported LTspice `.asc` keyword
-- Supported records such as `WIRE`, `FLAG`, `SYMBOL`, `WINDOW`, `SYMATTR`, `TEXT`, `LINE`, `RECTANGLE`, `CIRCLE`, `ARC`, `IOPIN`, `BUSTAP`, and `DATAFLAG` have valid token structure
-- Spacing mistakes such as merged keywords or malformed `TEXT`/`SYMBOL`/`WIRE` records are rejected
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Line format/spacing is invalid! Line <n>"`
-- `True, ""`
-
-### `is_valid_ltspice_asc_footer(filepath)`
-
-Checks that:
-
-- The file exists and is readable
-- The file already passes `.asc` spacing validation
-- The schematic contains at least one valid simulation directive carried by `TEXT ... !.<directive>`
-- Analysis directives such as `.tran`, `.ac`, `.dc`, `.op`, `.tf`, `.noise`, or `.fra` are accepted
-- Disabled directive text such as `!;tran ...` is treated as annotation, not as an active directive
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Footer information is invalid! Line <n>"`
-- `True, ""`
-
-### `is_valid_ltspice_asc_file(filepath)`
-
-Checks that:
-
-- The file passes `is_valid_ltspice_asc_header(filepath)`
-- The file passes `is_valid_ltspice_asc_spacing(filepath)`
-- The file passes `is_valid_ltspice_asc_footer(filepath)`
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "<propagated validator message>"`
-- `True, ""`
-
-### `is_valid_ltspice_asy(filepath)`
-
-Checks that:
-
-- The file exists and is readable
-- The first nonblank structural line is `Version`
-- The second nonblank structural line is `SymbolType`
-- Each nonblank line starts with a supported LTspice `.asy` keyword
-- Supported records such as `LINE`, `RECTANGLE`, `CIRCLE`, `ARC`, `WINDOW`, `SYMATTR`, `TEXT`, `PIN`, and `PINATTR` have valid token structure
-- `PINATTR` records only appear immediately after a `PIN` record
-- UTF-8, Latin-1, and UTF-16 encoded `.asy` files are accepted
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "LTspice ASY file is invalid! Line <n>"`
-- `True, ""`
-
-### `get_ltspice_asy_size(filepath)`
-
-Checks that:
-
-- The source LTspice symbol passes `is_valid_ltspice_asy(filepath)`
-- Only the `LINE`, `RECTANGLE`, `CIRCLE`, and `ARC` records are used to determine the drawable bounds
-- The minimum `x`, minimum `y`, maximum `x`, and maximum `y` across those records are returned as the symbol bounding rectangle
-- All non-geometry records such as `WINDOW`, `SYMATTR`, `PIN`, `PINATTR`, and `TEXT` are ignored for sizing
-
-Returns:
-
-- `np.array([[min_x, min_y], [max_x, max_y]])` for a valid symbol with drawable geometry
-
-Raises:
-
-- `ValueError` when the `.asy` file is invalid
-- `ValueError` when the `.asy` file contains no drawable `LINE`, `RECTANGLE`, `CIRCLE`, or `ARC` geometry
-
-### `get_ltspice_asy_pins(filepath)`
-
-Checks that:
-
-- The source LTspice symbol passes `is_valid_ltspice_asy(filepath)`
-- Every declared `PIN` block includes both a `PINATTR PinName ...` and a `PINATTR SpiceOrder ...`
-- Returned pins are sorted by ascending `SpiceOrder`
-
-Returns:
-
-- `[[x, y, "PinName", spice_order], ...]` for a valid symbol
-
-Raises:
-
-- `ValueError` when the `.asy` file is invalid
-- `ValueError` when a declared pin is missing a `PinName` or `SpiceOrder`
-
-### `rectangle_points_to_lines(points)`
-
-Checks that:
-
-- `points` is a numpy array of shape `(2, 2)` containing integer coordinates
-- The two rows describe opposite rectangle corners
-- The returned line order is top, right, left, bottom
-
-Returns:
-
-- `np.array([[x1, y1, x2, y1], [x2, y1, x2, y2], [x1, y1, x1, y2], [x1, y2, x2, y2]])`
-
-Raises:
-
-- `ValueError` when `points` is not shape `(2, 2)` or contains non-integer coordinates
-
-### `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)`
-
-Checks that:
-
-- The source LTspice schematic passes `is_valid_ltspice_asc_file(filepath)`
-- The function builds a `schemdraw` rendering from the schematic symbols, flags, and wire geometry
-- The image is written to `schemdraw_imagepath_out`
-- Supported output extensions are `.png`, `.svg`, `.jpg`, and `.jpeg`
-- `width` optionally sets the output width in pixels and defaults to `1920`
-- `height` optionally sets the output height in pixels and defaults to `1080`
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Unable to plot schematic drawing!"`
-- `False, "Unable to write image file!"`
-- `True, ""`
-
-### `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)`
-
-Checks that:
-
-- The source LTspice schematic is acceptable for conversion and is first validated with `is_valid_ltspice_asc_file(filepath)`
-- The converter resolves LTspice symbols and library files by browsing the LTspice root supplied in `convert_settings`
-- The generated netlist is written to `net_filepath_out`
-- The generated netlist is validated with `is_valid_ltspice_netlist_file(filepath)`
-- ASC comments are ignored during conversion and no comments are emitted into the generated netlist
-- `convert_settings` is a mapping so additional conversion options can be added later without changing the API shape
-
-Example `convert_settings`:
+A `Mapping` of configuration values used by conversion and pose functions.  Common keys:
 
 ```python
 convert_settings = {
+    # LTspice library search paths (required for ASC/netlist conversion)
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
-    "grid_size": 16,
-}
-```
 
-Possible returns:
-
-- `False, "INVALID_CONVERT_SETTINGS", 0`
-- `False, "INVALID_OUTPUT_PATH", 0`
-- `False, "INVALID_ASC_FILE", <line>`
-- `False, "ASC_READ_ERROR", 0`
-- `False, "ASC_PARSE_ERROR", <line>`
-- `False, "UNKNOWN_SYMBOL", <line>`
-- `False, "UNCONNECTED_SYMBOL_PIN", <line>`
-- `False, "MISSING_COMPONENT_PAYLOAD", <line>`
-- `False, "WRITE_ERROR", 0`
-- `False, "INVALID_GENERATED_NETLIST", <line>`
-- `True, "OK", 0`
-
-### `ltspice_netlist_to_symbol_initial(netlist_filepath, symbol_json_filepath_out, convert_settings)`
-
-Checks that:
-
-- The source LTspice netlist is checked with `is_valid_ltspice_netlist_file(filepath)` before conversion
-- The converter resolves LTspice library and symbol lookup paths from `convert_settings` rather than hard-coding installation paths
-- Library files with suffixes `.bjt`, `.dio`, `.jft`, `.lib`, `.mos`, and `.sub` are read to resolve model metadata used for the output `SYMBOL`
-- The generated initial symbol JSON is written to `symbol_json_filepath_out`
-- Each output entry contains `SYMBOL`, `X`, `Y`, `ORIENTATION`, `RECTANGLE`, and `PINS`
-- `ORIENTATION` is currently emitted as an empty string for each generated symbol-initial record
-- When present in the source netlist or inferred from the source symbol, entries may also include `VALUE`, `SPICELINE`, and `TYPE`
-- `convert_settings` is a mapping so additional conversion options can be added later without changing the API shape
-
-Example `convert_settings`:
-
-```python
-convert_settings = {
-    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
-    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
-    "custom_search_paths": ["./valid_asy/"],
-    "grid_size": 16,
-}
-```
-
-Possible returns:
-
-- `False, "INVALID_CONVERT_SETTINGS", 0`
-- `False, "INVALID_OUTPUT_PATH", 0`
-- `False, "INVALID_NETLIST_FILE", <line>`
-- `False, "NETLIST_READ_ERROR", 0`
-- `False, "WRITE_ERROR", 0`
-- `True, "OK", 0`
-
-### `ltspice_netlist_to_wiring(netlist_filepath, symbol_pose_filepath, wire_filepath_out, convert_settings)`
-
-Checks that:
-
-- The source LTspice netlist is checked with `is_valid_ltspice_netlist_format(filepath)` before wiring generation
-- The source symbol-pose JSON exists, is readable, and contains `RECTANGLE` and `PINS` data keyed by symbol instance name
-- Each symbol `RECTANGLE` is expanded by `minimum_dist` and converted to obstacle lines through `rectangle_points_to_lines(points)`
-- Each routed pin first exits the symbol by `minimum_dist + wire_pin_out_dist` away from the symbol center before global routing begins
-- All inter-symbol routing is performed only through `auto_route_wires()`
-- Routed inter-symbol wire segments do not intersect the buffered symbol rectangles
-- All wires within one net name are connected and can be checked with `are_wires_connected(wires)`
-- Wires from one net name do not start or end on the wire groups of a different net name
-- The generated wiring JSON is written to `wire_filepath_out`
-
-Example `convert_settings`:
-
-```python
-convert_settings = {
-    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
-    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
-    "custom_search_paths": ["./valid_asy/"],
+    # Wiring and pose layout parameters
     "minimum_dist": 32,
     "wire_pin_out_dist": 16,
     "grid_size": 16,
+    "autoplace_iter": 12,
 }
 ```
 
-Possible returns:
-
-- `False, "INVALID_CONVERT_SETTINGS", 0`
-- `False, "INVALID_OUTPUT_PATH", 0`
-- `False, "INVALID_NETLIST_FILE", <line>`
-- `False, "NETLIST_READ_ERROR", 0`
-- `False, "INVALID_SYMBOL_POSE_PATH", 0`
-- `False, "SYMBOL_POSE_READ_ERROR", 0`
-- `False, "SYMBOL_POSE_PARSE_ERROR", <line>`
-- `False, "WIRING_GENERATION_ERROR", <line>`
-- `False, "WRITE_ERROR", 0`
-- `True, "OK", 0`
-
-### `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)`
-
-Checks that:
-
-- `convert_settings` is a mapping so LTspice symbol lookup paths stay configurable
-- The source JSON file exists, is readable, and contains a dictionary keyed by symbol instance name
-- Each symbol entry provides `SYMBOL`, `X`, `Y`, and `ORIENTATION`, which are treated the same way as LTspice ASC `SYMBOL` placement data
-- A temporary ASC is built from the JSON entries and resolved only through `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
-- Only `RECTANGLE` and `PINS` are updated in the source JSON file; all other existing attributes and values are preserved
-- The input JSON file is updated in place
-
-Example `convert_settings`:
-
-```python
-convert_settings = {
-    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
-    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
-    "custom_search_paths": ["./valid_asy/"],
-    "grid_size": 16,
-}
-```
-
-Possible returns:
-
-- `False, "INVALID_CONVERT_SETTINGS", 0`
-- `False, "INVALID_SYMBOL_JSON_PATH", 0`
-- `False, "SYMBOL_JSON_READ_ERROR", 0`
-- `False, "SYMBOL_JSON_PARSE_ERROR", <line>`
-- `False, "SYMBOL_POSE_RESOLUTION_ERROR", <line>`
-- `False, "WRITE_ERROR", 0`
-- `True, "OK", 0`
-
-### `ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)`
-
-Checks that:
-
-- `convert_settings` is a mapping and may provide `minimum_dist` for symbol spacing expansion
-- The source JSON file exists, is readable, and contains a dictionary keyed by symbol instance name
-- Each symbol entry contains a `RECTANGLE` with two corner points
-- Each rectangle is expanded by `minimum_dist` in all four directions before collision checking
-- `rectangle_points_to_lines(points)` is used to convert each expanded rectangle to four line segments
-- Each symbol is compared against every later symbol with `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
-
-Example `convert_settings`:
-
-```python
-convert_settings = {
-    "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
-    "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
-    "custom_search_paths": ["./valid_asy/"],
-    "minimum_dist": 32,
-    "grid_size": 16,
-}
-```
-
-Returns:
-
-- `False, None` when no symbol pair collides after buffering
-- `True, np.array([[symbol_index_a, symbol_index_b], ...])` when one or more symbol pairs collide
-
-### `ltspice_asc_structure_cmp(filepath1, filepath2)`
-
-Checks that:
-
-- Both input ASC files pass `is_valid_ltspice_asc_file(filepath)`
-- Both ASC files can be converted to temporary LTspice netlists through `ltspice_asc_to_netlist(...)`
-- ASC comments are ignored because comparison is performed on the converted netlist structure
-- The converted netlists compare equal through `ltspice_netlist_structure_cmp(filepath1, filepath2)`
-
-Possible returns:
-
-- `False, "File not found!", 0`
-- `False, "No permission to read file!", 0`
-- `False, "<validator message>", <line>`
-- `False, "<conversion error code>", <line>`
-- `False, "ASC structures are different!", <line>`
-- `True, "", 0`
-
-### `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)`
-
-Checks that:
-
-- The source LTspice schematic can be read and parsed for `SYMBOL` and `SYMATTR InstName` records
-- The LTspice symbol library root is resolved from `convert_settings`
-- Each ASC symbol is matched to its corresponding `.asy` file by searching the configured LTspice library
-- `get_ltspice_asy_pins(filepath)` is used to read the symbol pin names, local pin coordinates, and `SpiceOrder`
-- `get_ltspice_asy_size(filepath)` is used to read the symbol drawable bounding rectangle
-- Local `.asy` pin and rectangle coordinates are transformed into absolute ASC coordinates using the symbol origin and orientation
-
-Returns:
-
-- A dictionary keyed by `InstName`
-- Each entry contains `SYMBOL`, `X`, `Y`, `ORIENTATION`, `RECTANGLE`, and `PINS`
-- `ORIENTATION` is the LTspice ASC symbol orientation token such as `R0`, `R90`, `R180`, `R270`, `M0`, `M90`, `M180`, or `M270`
-- If the ASC symbol instance defines them, the entry also includes `VALUE`, `SPICELINE`, and `TYPE`
-
-Raises:
-
-- `ValueError` when the ASC file cannot be read
-- `ValueError` when a symbol is missing `InstName`
-- `ValueError` when a symbol `.asy` file cannot be found through `convert_settings`
-
-### `are_wires_connected(wires)`
-
-Checks that:
-
-- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
-- Each wire is an axis-aligned line segment
-- Two wires are connected if they share an endpoint, or if they are collinear and their ranges overlap
-- Orthogonal wires that cross at a non-endpoint are not counted as connected
-
-Returns:
-
-- `True` when all wires belong to a single connected component
-- `False` when at least one wire is disconnected from the rest
-
-### `are_wires_horizontal_or_vertical(wires)`
-
-Checks that:
-
-- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
-- Each wire is checked for axis alignment: horizontal means `Y1 == Y2`, vertical means `X1 == X2`
-
-Returns:
-
-- `True` when every wire in the array is either horizontal or vertical
-- `False` when at least one wire moves diagonally (both `X1 != X2` and `Y1 != Y2`)
-
-### `are_wires_intersecting_obstacles_fast(wires, obstacles)`
-
-Checks that:
-
-- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
-- `obstacles` is a numpy array of shape `(M, 4)` where each row is `[X1, Y1, X2, Y2]`
-- Each wire and obstacle is an axis-aligned line segment
-- Two lines intersect if they cross at a shared interior point or touch at a shared endpoint
-- Collinear lines intersect if their ranges overlap
-
-Returns:
-
-- `True` when at least one wire line intersects at least one obstacle line
-- `False` when no wire line intersects any obstacle line
-
-### `are_wires_intersecting_obstacles_detailed(wires, obstacles)`
-
-Checks that:
-
-- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
-- `obstacles` is a numpy array of shape `(M, 4)` where each row is `[X1, Y1, X2, Y2]`
-- Each wire and obstacle is an axis-aligned line segment
-- Two lines intersect if they cross at a shared interior point or touch at a shared endpoint
-- Collinear lines intersect if their ranges overlap
-
-Returns:
-
-- `True, intersections` when at least one wire line intersects at least one obstacle line, where `intersections` is a numpy array of shape `(K, 2)` listing all `[wire_index, obstacle_index]` pairs
-- `False, None` when no wire line intersects any obstacle line
-
-### `place_wires_into_groups(wires)`
-
-Checks that:
-
-- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
-- Each wire is an axis-aligned line segment
-- Two wires are considered connected only when the start or end point of one wire exactly matches the start or end point of another wire
-- Wires that intersect at interior points (without endpoint sharing) are not grouped together
-
-Returns:
-
-- A list of numpy arrays, each of shape `(G, 4)`, where each array contains all wires belonging to one connected group
-
-Raises:
-
-- `ValueError` when `wires` is not shape `(N, 4)`
-
-### `get_wire_pos(wires)`
-
-Checks that:
-
-- `wires` is a numpy array of shape `(N, 4)` where each row is `[X1, Y1, X2, Y2]`
-- The output is a numpy array of shape `(2N, 2)` where consecutive rows are the start and end point of each wire
-
-Returns:
-
-- `np.array([[x1, y1], [x2, y2], ...])` for a valid wire array
-
-Raises:
-
-- `ValueError` when `wires` is not shape `(N, 4)`
-
-### `is_valid_ltspice_netlist_format(filepath)`
-
-Checks that:
-
-- The file exists and is readable
-- Each line starts with a valid LTspice line class
-- Dot directives are spelled correctly and separated correctly
-- Device lines have the required whitespace token structure
-- Spacing mistakes like `R1Vcc N001 1` or `.stepPARAM ...` are rejected
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Line format/spacing is invalid! Line <n>"`
-- `True, ""`
-
-### `is_valid_ltspice_netlist_footer(filepath)`
-
-Checks that:
-
-- The file format is already valid
-- The final nonblank line is `.end`
-- The penultimate nonblank line is `.backanno`
-- The file contains at least one LTspice analysis directive such as `.tran`, `.ac`, `.dc`, `.op`, `.tf`, `.noise`, or `.fra`
-- Footer directives are structurally valid
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Footer information is invalid! Line <n>"`
-- `True, ""`
-
-### `is_ltspice_netlist_structure_connected(filepath)`
-
-Checks that:
-
-- The file exists and is readable
-- The line format is parseable
-- Every non-ground, non-`NC_*` node appears on at least two device ports
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Node is not connected correctly! Line <n>"`
-- `True, ""`
-
-### `is_valid_ltspice_netlist_file(filepath)`
-
-Checks that:
-
-- The file passes `is_valid_ltspice_netlist_format(filepath)`
-- The file passes `is_valid_ltspice_netlist_footer(filepath)`
-- The file passes `is_ltspice_netlist_structure_connected(filepath)`
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "<propagated validator message>"`
-- `True, ""`
-
-### `ltspice_netlist_footer_cmp(filepath1, filepath2)`
-
-Checks that:
-
-- Both input files pass `is_valid_ltspice_netlist_file(filepath)`
-- The normalized footer regions of both netlists match
-- Directive order and content in the footer remain equivalent after normalization
-
-Possible returns:
-
-- `True`
-- `False`
-
-### `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)`
-
-Checks that:
-
-- The source LTspice netlist passes `is_valid_ltspice_netlist_file(filepath)`
-- The function builds a `networkx` component-to-net graph
-- The graph is rendered to an image file at `networkx_imagepath_out`
-- Supported output extensions are `.png`, `.svg`, `.jpg`, and `.jpeg`
-- `width` optionally sets the PNG width in pixels and defaults to `1920`
-- `height` optionally sets the PNG height in pixels and defaults to `1080`
-
-Possible returns:
-
-- `False, "File not found!"`
-- `False, "No permission to read file!"`
-- `False, "Unable to plot network graph!"`
-- `False, "Unable to write PNG file!"`
-- `True, ""`
-
-### `ltspice_netlist_structure_cmp(filepath1, filepath2)`
-
-Checks that:
-
-- Both input files can be parsed as LTspice netlists
-- The electrical structure matches even if device order differs
-- Component instance names may differ
-- Ordinary net names may differ
-- Footer directives are ignored
-- Component values, device types, and pin-to-net structure must still match
-
-Possible returns:
-
-- `False` when either file cannot be parsed or when the structures differ
-- `True` when the two netlists are structurally equivalent
+No hard-coded paths are permitted in `src/`; all search paths must be supplied through this mapping.
 
 ## Install For Local Development
 
-Create the virtual environment:
-
 ```bash
 python3 -m venv .venv
+.venv/bin/python -m pip install "networkx>=3.6.1" "schemdraw>=0.23" "matplotlib>=3.11.0"
 ```
 
-Run tests with the project environment:
+Run tests:
 
 ```bash
 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
 ```
 
-Run the sequential test runner:
+Or the sequential runner:
 
 ```bash
 PYTHONPATH=src .venv/bin/python scripts/run_all_tests.py
 ```
 
-Install the runtime dependencies used by the plotting and comparison APIs:
-
-```bash
-.venv/bin/python -m pip install "networkx>=3.6.1" "schemdraw>=0.23" "matplotlib>=3.11.0"
-```
-
 ## CLI Usage
 
-Render a validated LTspice schematic directly to an image file:
-
 ```bash
+# Render an ASC schematic to an image
 PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_plot_schemdraw.py input.asc output.svg --width 1600 --height 900
-```
 
-This script only calls the public `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080)` API and exits with a non-zero status if validation or image generation fails.
-
-Render a validated LTspice netlist directly to an image file:
-
-```bash
+# Render a netlist to a network graph
 PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net output.svg --width 1600 --height 900
-```
 
-This script only calls the public `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)` API and exits with a non-zero status if validation or image generation fails.
-
-Convert one or more LTspice ASC schematics to netlists:
-
-```bash
+# Convert ASC to netlist
 PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_to_netlist.py input.asc
-```
 
-By default the generated netlist is written to the same path as the input but with a `.net` extension.  Pass `--out` to specify a custom output path when converting a single file.  This script only calls the public `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` API and exits with a non-zero status if conversion fails.
-
-Extract symbol information from one or more LTspice ASC schematics:
-
-```bash
+# Extract symbol info from ASC
 PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_symbol_info.py input.asc
 ```
-
-By default the extracted JSON is written to the same path as the input but with a `.json` extension.  Pass `--out` to specify a custom output path when extracting from a single file.  This script only calls the public `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)` API and exits with a non-zero status if extraction fails.
 
 ## Example Usage
 
 ```python
 import numpy as np
+from electronics_design import auto_route_wires
+from electronics_design import find_wire_group_index
+from electronics_design import get_ltspice_asc_symbol_info
+from electronics_design import get_ltspice_asy_pins
+from electronics_design import get_ltspice_asy_size
+from electronics_design import get_wire_pos
+from electronics_design import gui_debug
+from electronics_design import is_ltspice_netlist_structure_connected
+from electronics_design import is_valid_ltspice_asc_file
+from electronics_design import is_valid_ltspice_asc_footer
 from electronics_design import is_valid_ltspice_asc_header
 from electronics_design import is_valid_ltspice_asc_spacing
-from electronics_design import is_valid_ltspice_asc_footer
-from electronics_design import is_valid_ltspice_asc_file
 from electronics_design import is_valid_ltspice_asy
-from electronics_design import get_ltspice_asy_size
-from electronics_design import get_ltspice_asy_pins
-from electronics_design import rectangle_points_to_lines
+from electronics_design import is_valid_ltspice_netlist_file
+from electronics_design import is_valid_ltspice_netlist_footer
+from electronics_design import is_valid_ltspice_netlist_format
 from electronics_design import ltspice_asc_plot_schemdraw
-from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_asc_structure_cmp
-from electronics_design import get_ltspice_asc_symbol_info
+from electronics_design import ltspice_asc_to_netlist
+from electronics_design import ltspice_autoplace_symbol_pose
+from electronics_design import ltspice_check_symbol_pose
+from electronics_design import ltspice_netlist_footer_cmp
+from electronics_design import ltspice_netlist_plot_networkx
+from electronics_design import ltspice_netlist_structure_cmp
 from electronics_design import ltspice_netlist_to_symbol_initial
 from electronics_design import ltspice_netlist_to_wiring
 from electronics_design import ltspice_resolve_symbol_pose
-from electronics_design import ltspice_check_symbol_pose
-import numpy as np
-from electronics_design import get_wire_pos
+from electronics_design import rectangle_points_to_lines
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_detailed
 from electronics_design.pathtracing import place_wires_into_groups
-from electronics_design import is_valid_ltspice_netlist_format
-from electronics_design import is_valid_ltspice_netlist_footer
-from electronics_design import is_ltspice_netlist_structure_connected
-from electronics_design import is_valid_ltspice_netlist_file
-from electronics_design import ltspice_netlist_footer_cmp
-from electronics_design import ltspice_netlist_plot_networkx
-from electronics_design import ltspice_netlist_structure_cmp
 
-asc_header_ok, asc_header_message = is_valid_ltspice_asc_header("example.asc")
-asc_spacing_ok, asc_spacing_message = is_valid_ltspice_asc_spacing("example.asc")
-asc_footer_ok, asc_footer_message = is_valid_ltspice_asc_footer("example.asc")
-asc_file_ok, asc_file_message = is_valid_ltspice_asc_file("example.asc")
-asy_ok, asy_message = is_valid_ltspice_asy("example.asy")
-asy_bounds = get_ltspice_asy_size("example.asy")
-asy_pins = get_ltspice_asy_pins("example.asy")
-rectangle_lines = rectangle_points_to_lines(np.array([[-16, -32], [48, 32]]))
-schemdraw_ok, schemdraw_message = ltspice_asc_plot_schemdraw("example.asc", "example.svg")
 convert_settings = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
@@ -853,136 +243,91 @@ convert_settings = {
     "minimum_dist": 32,
     "wire_pin_out_dist": 16,
     "grid_size": 16,
+    "autoplace_iter": 12,
 }
-convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
-    "example.asc",
-    "example.net",
-    convert_settings,
-)
-same_asc_structure, asc_compare_message, asc_compare_line = ltspice_asc_structure_cmp(
-    "example_a.asc",
-    "example_b.asc",
-    convert_settings,
-)
+
+# ASC validation
+header_ok, _ = is_valid_ltspice_asc_header("example.asc")
+spacing_ok, _ = is_valid_ltspice_asc_spacing("example.asc")
+footer_ok, _ = is_valid_ltspice_asc_footer("example.asc")
+asc_ok, _ = is_valid_ltspice_asc_file("example.asc")
+
+# Netlist validation
+fmt_ok, _ = is_valid_ltspice_netlist_format("example.net")
+net_footer_ok, _ = is_valid_ltspice_netlist_footer("example.net")
+conn_ok, _ = is_ltspice_netlist_structure_connected("example.net")
+net_ok, _ = is_valid_ltspice_netlist_file("example.net")
+
+# ASY
+asy_ok, _ = is_valid_ltspice_asy("example.asy")
+bounds = get_ltspice_asy_size("example.asy")
+pins = get_ltspice_asy_pins("example.asy")
+
+# Plotting
+ltspice_asc_plot_schemdraw("example.asc", "schematic.svg")
+ltspice_netlist_plot_networkx("example.net", "graph.png")
+
+# Conversion
+convert_ok, _, _ = ltspice_asc_to_netlist("example.asc", "example.net", convert_settings)
 symbol_info = get_ltspice_asc_symbol_info("example.asc", convert_settings)
-symbol_initial_ok, symbol_initial_error_code, symbol_initial_line = ltspice_netlist_to_symbol_initial(
-    "example.net",
-    "example_symbol_initial.json",
-    convert_settings,
-)
-symbol_pose_ok, symbol_pose_error_code, symbol_pose_line = ltspice_resolve_symbol_pose(
-    "example_symbol_initial.json",
-    convert_settings,
-)
-wiring_ok, wiring_error_code, wiring_line = ltspice_netlist_to_wiring(
-    "example.net",
-    "example_symbol_initial.json",
-    "example_wires.json",
-    convert_settings,
-)
-symbols_collide, colliding_symbol_pairs = ltspice_check_symbol_pose(
-    "example_symbol_initial.json",
-    convert_settings,
-)
-wires_array = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
-wires_connected = are_wires_connected(wires_array)
-all_axis_aligned = are_wires_horizontal_or_vertical(wires_array)
-obstacles_array = np.array([[48, 32, 0, 32], [0, 16, 0, 72]])
-intersects_obstacles = are_wires_intersecting_obstacles_fast(wires_array, obstacles_array)
-intersects_detailed, detailed_pairs = are_wires_intersecting_obstacles_detailed(wires_array, obstacles_array)
-path_wires = np.array([[160, 192, 256, 192], [256, 192, 256, 384], [256, 384, 432, 384]])
-groups = place_wires_into_groups(path_wires)
-flat_points = get_wire_pos(path_wires)
-format_ok, format_message = is_valid_ltspice_netlist_format("example.net")
-footer_ok, footer_message = is_valid_ltspice_netlist_footer("example.net")
-connected_ok, connected_message = is_ltspice_netlist_structure_connected("example.net")
-file_ok, file_message = is_valid_ltspice_netlist_file("example.net")
-same_footer = ltspice_netlist_footer_cmp("example_a.net", "example_b.net")
-plot_ok, plot_message = ltspice_netlist_plot_networkx("example.net", "example.png")
-plot_svg_ok, plot_svg_message = ltspice_netlist_plot_networkx("example.net", "example.svg", 1280, 720)
-plot_jpg_ok, plot_jpg_message = ltspice_netlist_plot_networkx("example.net", "example.jpg", 1280, 720)
-same_structure = ltspice_netlist_structure_cmp("example_a.net", "example_b.net")
+
+# ASP comparison
+cmp_ok, _, _ = ltspice_asc_structure_cmp("a.asc", "b.asc", convert_settings)
+same_structure = ltspice_netlist_structure_cmp("a.net", "b.net")
+same_footer = ltspice_netlist_footer_cmp("a.net", "b.net")
+
+# Symbol pose pipeline
+ltspice_netlist_to_symbol_initial("example.net", "symbols.json", convert_settings)
+ltspice_resolve_symbol_pose("symbols.json", convert_settings)
+collides, pairs = ltspice_check_symbol_pose("symbols.json", convert_settings)
+ltspice_netlist_to_wiring("example.net", "symbols.json", "wires.json", convert_settings)
+ltspice_autoplace_symbol_pose("example.net", "symbols.json", "wires.json", convert_settings)
+
+# Wire utilities
+wires = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
+connected = are_wires_connected(wires)
+axis_aligned = are_wires_horizontal_or_vertical(wires)
+groups = place_wires_into_groups(wires)
+points = get_wire_pos(wires)
+
+obstacles = np.array([[48, 32, 0, 32], [0, 16, 0, 72]])
+hits = are_wires_intersecting_obstacles_fast(wires, obstacles)
+hits_detailed, hit_pairs = are_wires_intersecting_obstacles_detailed(wires, obstacles)
+
+rect_lines = rectangle_points_to_lines(np.array([[-16, -32], [48, 32]]))
+group_idx = find_wire_group_index(np.array([16, 0]), groups)
+path = auto_route_wires(0, 0, 128, 128, obstacles, 16, 16)
 ```
-
-## Test Layout
-
-- `tests/unit/` contains focused unit tests
-- `tests/integration/` contains integration tests against repository netlists and schematic samples
-- `tests/unit/test_asc_to_netlist.py` converts every fixture in `valid_convert/asc/` and compares the generated netlist against the matching ground-truth file in `valid_convert/netlist/`
-- `tests/unit/test_netlist_to_symbol_initial.py` converts every fixture in `valid_convert/netlist/` and compares the generated symbol JSON against the matching ground-truth file in `valid_convert/symbol_initial/`
-- `tests/unit/test_netlist_to_wiring.py` routes every fixture in `test_files/netlist_to_wire/` and checks net connectivity, symbol-rectangle avoidance, and cross-net endpoint separation
-- `tests/unit/test_resolve_symbol_pose.py` resolves every fixture in `test_files/unresolved_symbol_pose/` and compares the updated JSON against the matching ground-truth file in `test_files/resolved_symbol_pose/`
-- `tests/unit/test_check_symbol_pose.py` checks buffered symbol-pose collisions against the JSON fixtures in `test_files/symbol_colliding/` and `test_files/symbol_not_colliding/`
-- `tests/unit/test_asy_validation.py` validates every symbol file in `valid_asy/`
-- `tests/unit/test_asy_size.py` covers `.asy` bounding-rectangle extraction
-- `test_files/asy_size/` contains 20 `.asy` symbol-size fixtures
-- `test_files/asc_header/` contains valid and invalid ASC header fixtures
-- `test_files/asc_spacing/` contains valid and invalid ASC spacing fixtures
-- `test_files/asc_footer/` contains valid and invalid ASC footer fixtures
-- `test_files/asc_validation/` contains valid and invalid whole-file ASC validation fixtures
-- `tests/unit/test_asc_plot_schemdraw.py` covers schemdraw-based ASC plotting outputs
-- `tests/unit/test_wires_connected.py` covers the wire connectivity API
-- `test_files/wires_connected/` contains 15 valid and 15 invalid wire connectivity fixtures
-- `tests/unit/test_wires_horizontal_vertical.py` covers the wire axis-alignment API
-- `test_files/wires_horizontal_vertical/` contains 10 valid and 10 invalid axis-alignment fixtures
-- `tests/unit/test_wires_intersect_obstacles.py` covers the wire-obstacle intersection API
-- `tests/unit/test_wires_intersect_obstacles_detailed.py` covers the detailed wire-obstacle intersection API
-- `test_files/wires_intersect_obstacles/` contains 15 valid and 15 invalid wire-obstacle intersection fixtures
-- `test_files/wires_intersect_obstacles_detailed/` contains 10 valid and 10 invalid detailed wire-obstacle intersection fixtures
-- `tests/unit/test_wires_start_end.py` covers the wire start/end position API
-- `test_files/wire_start_end/` contains 10 connected wire chain fixtures with expected start and end positions
-- `tests/unit/test_get_wire_position.py` covers the wire-position extraction API
-- `test_files/get_wire_position/` contains 10 wire fixtures used by the wire-position extraction tests
-- `test_files/netlist_format/` contains 10 valid and 10 invalid format fixtures
-- `test_files/netlist_footer/` contains 10 valid and 10 invalid footer fixtures
-- `test_files/netlist_connected/` contains 10 valid and 10 invalid connectivity fixtures
-- `test_files/netlist_validation/` contains 10 valid and 10 invalid whole-file validation fixtures
-- `test_files/netlist_cmp/` contains 20 valid and 20 invalid structural comparison pairs
-- `test_files/netlist_to_wire/` contains 15 netlist and symbol-pose fixture pairs used by the wiring-generation tests
-- `test_files/unresolved_symbol_pose/` contains unresolved symbol JSON fixtures used for pose resolution
-- `test_files/resolved_symbol_pose/` contains the expected resolved symbol JSON files for the pose-resolution fixtures
-- `test_files/symbol_colliding/` contains 10 symbol JSON fixtures that should report colliding symbol-index pairs
-- `test_files/symbol_not_colliding/` contains 10 symbol JSON fixtures that should return `False, None`
-- `valid_asy/` contains valid LTspice ASY symbol fixtures
-- `valid_convert/asc/` contains valid LTspice ASC conversion fixtures
-- `valid_convert/netlist/` contains the expected LTspice netlists for the conversion fixtures
-- `valid_convert/symbol_initial/` contains the expected initial symbol JSON files for the netlist conversion fixtures
-- `scripts/ltspice_asc_plot_schemdraw.py` renders validated LTspice ASC schematics to `.png`, `.svg`, or `.jpg` image files
-- `scripts/ltspice_net_to_networkxpng.py` renders validated LTspice netlists to `.png`, `.svg`, or `.jpg` image files
-- `scripts/ltspice_asc_to_netlist.py` converts validated LTspice ASC schematics to LTspice netlists
-- `scripts/ltspice_asc_symbol_info.py` extracts LTspice ASC symbol information and saves it as JSON
-- `scripts/run_all_tests.py` runs unit tests first and integration tests second
 
 ## Package Layout
 
 ```text
 src/electronics_design/
     __init__.py
+    autoroute.py
     ltspice.py
     ltspice_asc.py
     ltspice_asc_plot_schemdraw.py
     ltspice_asc_to_netlist.py
     ltspice_asy.py
+    ltspice_autoplace_symbol_pose.py
     ltspice_net.py
+    ltspice_netlist_plot_networkx.py
     ltspice_netlist_to_symbol_initial.py
     ltspice_netlist_to_wiring.py
     ltspice_resolve_symbol_pose.py
-    ltspice_netlist_plot_networkx.py
     pathtracing.py
 tests/
 test_files/
+valid_asy/
+valid_asc/
+valid_netlist/
 valid_convert/
 scripts/
 pyproject.toml
-README.md
-SUBMIT.md
 ```
 
 ## Build And Publish
-
-The project uses `setuptools` through `pyproject.toml`.
-
-Typical release flow:
 
 ```bash
 .venv/bin/python -m pip install --upgrade build twine
@@ -991,4 +336,4 @@ Typical release flow:
 .venv/bin/python -m twine upload dist/*
 ```
 
-See `SUBMIT.md` for the exact submission checklist.
+See `SUBMIT.md` for the checklist.
