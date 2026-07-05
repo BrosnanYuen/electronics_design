@@ -349,6 +349,7 @@ convert_settings = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
+    "grid_size": 16,
 }
 ```
 
@@ -386,6 +387,7 @@ convert_settings = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
+    "grid_size": 16,
 }
 ```
 
@@ -421,6 +423,7 @@ convert_settings = {
     "custom_search_paths": ["./valid_asy/"],
     "minimum_dist": 32,
     "wire_pin_out_dist": 16,
+    "grid_size": 16,
 }
 ```
 
@@ -455,6 +458,7 @@ convert_settings = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
+    "grid_size": 16,
 }
 ```
 
@@ -487,6 +491,7 @@ convert_settings = {
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
     "minimum_dist": 32,
+    "grid_size": 16,
 }
 ```
 
@@ -847,6 +852,7 @@ convert_settings = {
     "custom_search_paths": ["./valid_asy/"],
     "minimum_dist": 32,
     "wire_pin_out_dist": 16,
+    "grid_size": 16,
 }
 convert_ok, convert_error_code, convert_line = ltspice_asc_to_netlist(
     "example.asc",

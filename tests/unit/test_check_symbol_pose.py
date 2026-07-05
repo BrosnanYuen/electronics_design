@@ -17,6 +17,7 @@ _CONVERT_SETTINGS = {
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
     "minimum_dist": 32,
+    "grid_size": 16,
 }
 _EXPECTED_COLLISIONS = {
     "case_01.json": np.array([[0, 1]], dtype=int),
@@ -67,6 +68,7 @@ class TestLtspiceCheckSymbolPose(unittest.TestCase):
                 "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
                 "custom_search_paths": ["./valid_asy/"],
                 "minimum_dist": 0,
+                "grid_size": 16,
             },
         )
         self.assertEqual(result, (False, None))

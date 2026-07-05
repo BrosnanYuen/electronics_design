@@ -28,6 +28,7 @@ _CONVERT_SETTINGS = {
     "custom_search_paths": ["./valid_asy/"],
     "minimum_dist": 32,
     "wire_pin_out_dist": 16,
+    "grid_size": 16,
 }
 
 
@@ -349,6 +350,7 @@ R2 N003 0 5k
                 "custom_search_paths": ["./valid_asy/"],
                 "minimum_dist": 0,
                 "wire_pin_out_dist": 16,
+                "grid_size": 16,
             }
             result = ltspice_netlist_to_wiring(
                 str(netlist_path),

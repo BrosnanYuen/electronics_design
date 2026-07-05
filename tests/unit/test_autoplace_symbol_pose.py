@@ -21,6 +21,7 @@ _CONVERT_SETTINGS = {
     "minimum_dist": 32,
     "wire_pin_out_dist": 16,
     "autoplace_iter": 12,
+    "grid_size": 16,
 }
 _POSE_KEYS = {"X", "Y", "ORIENTATION", "PINS", "RECTANGLE"}
 

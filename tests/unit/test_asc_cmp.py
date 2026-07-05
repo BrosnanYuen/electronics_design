@@ -13,6 +13,7 @@ _INVALID_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "asc_cmp" / "invalid"
 _CONVERT_SETTINGS = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+    "grid_size": 16,
 }
 _EXPECTED_INVALID_LINES = {
     1: 14,

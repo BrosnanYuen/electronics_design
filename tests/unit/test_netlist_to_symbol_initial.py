@@ -16,6 +16,7 @@ _CONVERT_SETTINGS = {  # Define the LTspice symbol/library settings passed into 
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
+    "grid_size": 16,
 }  # Finish the shared conversion settings dictionary.
 
 

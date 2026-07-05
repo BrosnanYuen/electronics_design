@@ -50,6 +50,7 @@ def main() -> int:
         "custom_search_paths": arguments.custom_search_paths,
         "ltspice_windows_path": arguments.ltspice_windows_path,
         "ltspice_wine_path": arguments.ltspice_wine_path,
+        "grid_size": 16,
     }
     directory_path = Path(arguments.directory)
     if not directory_path.is_dir():

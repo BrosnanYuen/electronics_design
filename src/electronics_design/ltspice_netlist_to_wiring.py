@@ -86,7 +86,12 @@ def ltspice_netlist_to_wiring(
     if not symbol_pose_result[0]:
         return symbol_pose_result[1]
     logical_lines = _collect_logical_code_lines(read_result[1])
-    routing_grid = _infer_routing_grid(symbol_pose_result[2], route_settings["minimum_dist"], route_settings["wire_pin_out_dist"])
+    routing_grid = _infer_routing_grid(
+        symbol_pose_result[2],
+        route_settings["minimum_dist"],
+        route_settings["wire_pin_out_dist"],
+        route_settings.get("grid_size"),
+    )
     net_attachments_result = _collect_net_pin_attachments(
         logical_lines,
         symbol_pose_result[2],
@@ -130,12 +135,16 @@ def ltspice_netlist_to_wiring(
 def _resolve_route_settings(convert_settings: Mapping[str, object]) -> Optional[Dict[str, int]]:
     minimum_dist = _coerce_non_negative_integer(convert_settings.get("minimum_dist", 0))
     wire_pin_out_dist = _coerce_non_negative_integer(convert_settings.get("wire_pin_out_dist", 0))
+    grid_size = _coerce_positive_integer(convert_settings.get("grid_size", 0))
     if minimum_dist is None or wire_pin_out_dist is None:
         return None
-    return {
+    route_settings: Dict[str, int] = {
         "minimum_dist": minimum_dist,
         "wire_pin_out_dist": wire_pin_out_dist,
     }
+    if grid_size is not None:
+        route_settings["grid_size"] = grid_size
+    return route_settings
 
 
 def _coerce_non_negative_integer(value: object) -> Optional[int]:
@@ -146,6 +155,18 @@ def _coerce_non_negative_integer(value: object) -> Optional[int]:
     except (TypeError, ValueError):
         return None
     if integer_value < 0:
+        return None
+    return integer_value
+
+
+def _coerce_positive_integer(value: object) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    try:
+        integer_value = int(value)
+    except (TypeError, ValueError):
+        return None
+    if integer_value <= 0:
         return None
     return integer_value
 
@@ -259,7 +280,10 @@ def _infer_routing_grid(
     symbol_pose_entries: Mapping[str, SymbolPoseEntry],
     minimum_dist: int,
     wire_pin_out_dist: int,
+    explicit_grid_size: Optional[int] = None,
 ) -> int:
+    if explicit_grid_size is not None and explicit_grid_size > 0:
+        return explicit_grid_size
     coordinate_values: List[int] = [minimum_dist, wire_pin_out_dist]
     for symbol_entry in symbol_pose_entries.values():
         coordinate_values.extend(

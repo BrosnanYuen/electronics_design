@@ -891,6 +891,9 @@ def _infer_layout_grid(
     geometries: Iterable[OrientationGeometry],
     convert_settings: Mapping[str, object],
 ) -> int:
+    explicit_grid_size = _resolve_positive_integer(convert_settings.get("grid_size", 0))
+    if explicit_grid_size is not None:
+        return explicit_grid_size
     coordinate_values: List[int] = []
     for geometry in geometries:
         coordinate_values.extend(
@@ -1014,6 +1017,18 @@ def _resolve_non_negative_integer(value: object) -> Optional[int]:
     except (TypeError, ValueError):
         return None
     if integer_value < 0:
+        return None
+    return integer_value
+
+
+def _resolve_positive_integer(value: object) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    try:
+        integer_value = int(value)
+    except (TypeError, ValueError):
+        return None
+    if integer_value <= 0:
         return None
     return integer_value
 
