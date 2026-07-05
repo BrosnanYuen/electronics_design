@@ -348,7 +348,7 @@ R2 N003 0 5k
                 "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
                 "custom_search_paths": ["./valid_asy/"],
                 "minimum_dist": 0,
-                "wire_pin_out_dist": 0,
+                "wire_pin_out_dist": 16,
             }
             result = ltspice_netlist_to_wiring(
                 str(netlist_path),
