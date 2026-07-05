@@ -343,11 +343,18 @@ R2 N003 0 5k
             netlist_path.write_text(netlist_text, encoding="utf-8")
             symbol_pose_path.write_text(json.dumps(symbol_pose, indent=2) + "\n", encoding="utf-8")
 
+            convert_settings = {
+                "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+                "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+                "custom_search_paths": ["./valid_asy/"],
+                "minimum_dist": 0,
+                "wire_pin_out_dist": 0,
+            }
             result = ltspice_netlist_to_wiring(
                 str(netlist_path),
                 str(symbol_pose_path),
                 str(output_path),
-                _CONVERT_SETTINGS,
+                convert_settings,
             )
 
             self.assertEqual(result, (True, "OK", 0))

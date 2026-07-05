@@ -14,6 +14,7 @@ from typing import List
 from typing import Mapping
 from typing import Optional
 from typing import Sequence
+from typing import Set
 from typing import Tuple
 
 import numpy as np
@@ -96,14 +97,25 @@ def ltspice_netlist_to_wiring(
     if not net_attachments_result[0]:
         return False, net_attachments_result[1], net_attachments_result[2]
     symbol_obstacles = _build_symbol_obstacles(symbol_pose_result[2], route_settings["minimum_dist"])
+    all_net_exit_points = {
+        net_name: tuple(attachment.exit_point for attachment in attachments)
+        for net_name, attachments in net_attachments_result[3].items()
+    }
     routed_wires: Dict[str, List[WireRow]] = {}
     processed_other_net_wires: List[WireRow] = []
     for net_name, attachments in _ordered_net_attachments(net_attachments_result[3]):
+        other_net_exit_points = {
+            exit_point
+            for other_net, exit_points in all_net_exit_points.items()
+            if other_net != net_name
+            for exit_point in exit_points
+        }
         route_result = _route_single_net(
             attachments,
             symbol_obstacles,
             processed_other_net_wires,
             routing_grid,
+            other_net_exit_points,
         )
         if not route_result[0]:
             return False, route_result[1], route_result[2]
@@ -350,17 +362,18 @@ def _pin_exit_point(
     center_x = (minimum_x + maximum_x) / 2.0
     center_y = (minimum_y + maximum_y) / 2.0
     pin_x, pin_y = pin_point
+    effective_exit_distance = max(exit_distance, routing_grid)
     if pin_x <= minimum_x:
-        return _snap_point_to_grid((pin_x - exit_distance, pin_y), routing_grid)
+        return _snap_point_to_grid((pin_x - effective_exit_distance, pin_y), routing_grid)
     if pin_x >= maximum_x:
-        return _snap_point_to_grid((pin_x + exit_distance, pin_y), routing_grid)
+        return _snap_point_to_grid((pin_x + effective_exit_distance, pin_y), routing_grid)
     if pin_y <= minimum_y:
-        return _snap_point_to_grid((pin_x, pin_y - exit_distance), routing_grid)
+        return _snap_point_to_grid((pin_x, pin_y - effective_exit_distance), routing_grid)
     if pin_y >= maximum_y:
-        return _snap_point_to_grid((pin_x, pin_y + exit_distance), routing_grid)
+        return _snap_point_to_grid((pin_x, pin_y + effective_exit_distance), routing_grid)
     if abs(pin_x - center_x) >= abs(pin_y - center_y):
-        return _snap_point_to_grid((pin_x + (-exit_distance if pin_x < center_x else exit_distance), pin_y), routing_grid)
-    return _snap_point_to_grid((pin_x, pin_y + (-exit_distance if pin_y < center_y else exit_distance)), routing_grid)
+        return _snap_point_to_grid((pin_x + (-effective_exit_distance if pin_x < center_x else effective_exit_distance), pin_y), routing_grid)
+    return _snap_point_to_grid((pin_x, pin_y + (-effective_exit_distance if pin_y < center_y else effective_exit_distance)), routing_grid)
 
 
 def _snap_point_to_grid(point: Tuple[int, int], routing_grid: int) -> Point:
@@ -422,6 +435,7 @@ def _route_single_net(
     symbol_obstacles: Sequence[WireRow],
     processed_other_net_wires: Sequence[WireRow],
     routing_grid: int,
+    other_net_exit_points: Set[Point] = (),
 ) -> Tuple[bool, str, int, Tuple[WireRow, ...]]:
     if not attachments:
         return True, "OK", 0, ()
@@ -439,6 +453,7 @@ def _route_single_net(
             symbol_obstacles,
             processed_other_net_wires,
             routing_grid,
+            other_net_exit_points,
         )
         if not route_segments_result[0]:
             return False, route_segments_result[1], route_segments_result[2], ()
@@ -476,11 +491,16 @@ def _route_net_exit_points(
     symbol_obstacles: Sequence[WireRow],
     processed_other_net_wires: Sequence[WireRow],
     routing_grid: int,
+    other_net_exit_points: Set[Point] = (),
 ) -> Tuple[bool, str, int, Tuple[WireRow, ...]]:
     connected_points = [unique_exit_points[0]]
     disconnected_points = list(unique_exit_points[1:])
     route_segments: List[WireRow] = []
-    obstacle_array = _wire_rows_to_array((*symbol_obstacles, *processed_other_net_wires))
+    other_net_endpoint_obstacles = _other_net_endpoint_obstacles(
+        processed_other_net_wires,
+        other_net_exit_points,
+    )
+    obstacle_array = _wire_rows_to_array((*symbol_obstacles, *other_net_endpoint_obstacles))
     while disconnected_points:
         candidate_edges = sorted(
             (
@@ -518,6 +538,18 @@ def _route_net_exit_points(
 
 def _manhattan_distance(first_point: Point, second_point: Point) -> int:
     return abs(first_point[0] - second_point[0]) + abs(first_point[1] - second_point[1])
+
+
+def _other_net_endpoint_obstacles(
+    wire_rows: Sequence[WireRow],
+    other_net_exit_points: Set[Point] = (),
+) -> Tuple[WireRow, ...]:
+    unique_points: set = set()
+    for x1, y1, x2, y2 in wire_rows:
+        unique_points.add((int(x1), int(y1)))
+        unique_points.add((int(x2), int(y2)))
+    unique_points.update((int(x), int(y)) for x, y in other_net_exit_points)
+    return tuple((x, y, x, y) for x, y in sorted(unique_points))
 
 
 def _wire_rows_to_array(wire_rows: Iterable[WireRow]) -> np.ndarray:
