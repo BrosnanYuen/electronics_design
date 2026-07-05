@@ -7,6 +7,7 @@ import os  # Re-export the shared os module so existing test patches still apply
 from . import ltspice_asc as _asc  # Import the ASC-specific implementation module.
 from . import ltspice_asc_plot_schemdraw as _asc_plot_schemdraw  # Import the dedicated ASC plotting module.
 from . import ltspice_asc_to_netlist as _asc_to_netlist  # Import the ASC-to-netlist conversion module.
+from . import ltspice_autoplace_symbol_pose as _autoplace_symbol_pose  # Import the symbol autoplace module.
 from . import ltspice_asy as _asy  # Import the ASY-specific implementation module.
 from . import ltspice_net as _net  # Import the netlist-specific implementation module.
 from . import ltspice_netlist_to_symbol_initial as _netlist_to_symbol_initial  # Import the netlist-to-symbol-initial conversion module.
@@ -21,6 +22,7 @@ is_valid_ltspice_asc_file = _asc.is_valid_ltspice_asc_file  # Re-export the ASC 
 ltspice_asc_plot_schemdraw = _asc_plot_schemdraw.ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
 ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
+ltspice_autoplace_symbol_pose = _autoplace_symbol_pose.ltspice_autoplace_symbol_pose  # Re-export the symbol autoplace helper.
 get_ltspice_asc_symbol_info = _asc_to_netlist.get_ltspice_asc_symbol_info  # Re-export the ASC symbol-info helper.
 ltspice_netlist_to_symbol_initial = _netlist_to_symbol_initial.ltspice_netlist_to_symbol_initial  # Re-export the netlist-to-symbol-initial conversion helper.
 ltspice_netlist_to_wiring = _netlist_to_wiring.ltspice_netlist_to_wiring  # Re-export the netlist-to-wiring conversion helper.
@@ -59,6 +61,7 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_asc_plot_schemdraw",  # Export the schemdraw schematic plotting helper.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper.
+    "ltspice_autoplace_symbol_pose",  # Export the symbol autoplace helper.
     "get_ltspice_asc_symbol_info",  # Export the ASC symbol-info helper.
     "ltspice_netlist_to_symbol_initial",  # Export the netlist-to-symbol-initial conversion helper.
     "ltspice_netlist_to_wiring",  # Export the netlist-to-wiring conversion helper.
