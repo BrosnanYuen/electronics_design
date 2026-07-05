@@ -196,6 +196,9 @@ PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_to_netlist.py input.asc
 
 # Extract symbol info from ASC
 PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_symbol_info.py input.asc
+
+# Generate wiring from a netlist and symbol-pose JSON
+PYTHONPATH=src .venv/bin/python scripts/ltspice_netlist_to_wiring.py input.net symbols.json
 ```
 
 ## Example Usage
