@@ -64,7 +64,7 @@ class TestAsyPins(unittest.TestCase):
     def test_incomplete_pin_information_raises_value_error(self) -> None:
         invalid_asy_text = "\n".join(
             [
-                "Version 4",
+                "Version 4.1",
                 "SymbolType CELL",
                 "LINE Normal -16 0 16 0",
                 "PIN -16 0 LEFT 8",

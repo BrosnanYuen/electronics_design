@@ -1,4 +1,4 @@
-Version 4
+Version 4.1
 SymbolType CELL
 LINE Normal -32 -48 -32 48
 LINE Normal -32 -48 32 0

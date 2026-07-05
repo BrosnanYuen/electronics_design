@@ -1,4 +1,4 @@
-Version 4
+Version 4.1
 SymbolType CELL
 RECTANGLE Normal -32 -32 32 32
 CIRCLE Normal -16 -16 16 16

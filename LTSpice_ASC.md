@@ -273,7 +273,7 @@ Examples:
 ### 6.1 Minimal `.asc` skeleton
 
 ```text
-Version 4
+Version 4.1
 SHEET 1 880 680
 WIRE 224 96 128 96
 FLAG 224 304 0
@@ -286,7 +286,7 @@ TEXT 120 344 Left 2 !.tran 10m
 ### 6.2 Minimal `.asy` skeleton
 
 ```text
-Version 4
+Version 4.1
 SymbolType CELL
 LINE Normal 0 0 32 0
 WINDOW 0 36 40 Left 2

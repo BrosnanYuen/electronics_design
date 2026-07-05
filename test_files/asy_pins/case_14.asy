@@ -1,4 +1,4 @@
-Version 4
+Version 4.1
 SymbolType BLOCK
 
 RECTANGLE Normal -48 -24 48 24

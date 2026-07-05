@@ -1,4 +1,4 @@
-Version 4
+Version 4.1
 SymbolType CELL
 ARC Normal -32 -32 32 32 -32 0 32 0
 LINE Normal -64 0 -32 0

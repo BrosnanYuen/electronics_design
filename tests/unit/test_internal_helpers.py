@@ -9,7 +9,7 @@ from electronics_design import ltspice  # Import the internal helper module for 
 
 class TestInternalHelpers(unittest.TestCase):  # Group internal-helper tests together.
     def test_classify_asc_line_accepts_version_keyword(self) -> None:  # Verify ASC keyword classification accepts the Version header record.
-        result = ltspice._classify_asc_line("Version 4")  # Classify a standard ASC Version header line.
+        result = ltspice._classify_asc_line("Version 4.1")  # Classify a standard ASC Version header line.
         self.assertEqual(result, (True, "VERSION"))  # Assert that the Version line is classified correctly.
 
     def test_strip_semicolon_comment(self) -> None:  # Verify inline semicolon comments are removed cleanly.

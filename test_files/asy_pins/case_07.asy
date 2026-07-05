@@ -1,4 +1,4 @@
-Version 4
+Version 4.1
 SymbolType CELL
 RECTANGLE Normal -16 -16 16 16
 LINE Normal -32 -16 -16 -16

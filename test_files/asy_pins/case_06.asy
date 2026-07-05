@@ -1,4 +1,4 @@
-Version 4
+Version 4.1
 SymbolType CELL
 CIRCLE Normal -16 -16 16 16
 WINDOW 0 0 -32 Center 2
