@@ -21,7 +21,8 @@ import numpy as np
 
 from . import ltspice_asc as _asc
 from . import ltspice_net as _net
-from .autoroute import auto_route_wires
+from .autoroute import _build_visibility_graph_for_terminals
+from .autoroute import _route_with_visibility_graph
 from .ltspice_asy import rectangle_points_to_lines
 from .pathtracing import are_wires_connected
 from .pathtracing import are_wires_horizontal_or_vertical
@@ -106,26 +107,27 @@ def ltspice_netlist_to_wiring(
         net_name: tuple(attachment.exit_point for attachment in attachments)
         for net_name, attachments in net_attachments_result[3].items()
     }
-    routed_wires: Dict[str, List[WireRow]] = {}
-    processed_other_net_wires: List[WireRow] = []
-    for net_name, attachments in _ordered_net_attachments(net_attachments_result[3]):
-        other_net_exit_points = {
-            exit_point
-            for other_net, exit_points in all_net_exit_points.items()
-            if other_net != net_name
-            for exit_point in exit_points
-        }
-        route_result = _route_single_net(
-            attachments,
+    ordered_attachments = _ordered_net_attachments(net_attachments_result[3])
+    route_result = _route_all_nets(
+        ordered_attachments,
+        symbol_obstacles,
+        routing_grid,
+        all_net_exit_points,
+    )
+    if not route_result[0] and route_result[4] is not None:
+        fallback_order = _promote_failed_net_first(ordered_attachments, route_result[4])
+        route_result = _route_all_nets(
+            fallback_order,
             symbol_obstacles,
-            processed_other_net_wires,
             routing_grid,
-            other_net_exit_points,
+            all_net_exit_points,
         )
-        if not route_result[0]:
-            return False, route_result[1], route_result[2]
-        routed_wires[net_name] = [list(wire_row) for wire_row in route_result[3]]
-        processed_other_net_wires.extend(route_result[3])
+    if not route_result[0]:
+        return False, route_result[1], route_result[2]
+    routed_wires = {
+        net_name: [list(wire_row) for wire_row in wire_rows]
+        for net_name, wire_rows in route_result[3].items()
+    }
     write_result = _write_wire_json_file(wire_filepath_out, routed_wires)
     if not write_result[0]:
         return False, write_result[1], 0
@@ -337,6 +339,13 @@ def _collect_net_pin_attachments(
             if net_name == "":
                 return False, "WIRING_GENERATION_ERROR", logical_line.line_number, {}
             exit_point = _pin_exit_point(symbol_entry.rectangle, pin.point, exit_distance, routing_grid)
+            exit_point = _nudge_exit_point_off_buffered_boundary(
+                symbol_entry.rectangle,
+                pin.point,
+                exit_point,
+                minimum_dist,
+                routing_grid,
+            )
             attachment = NetPinAttachment(
                 net_name=net_name,
                 instance_name=instance_name,
@@ -419,6 +428,51 @@ def _snap_coordinate_to_grid(value: int, routing_grid: int) -> int:
     return lower_value if abs(normalized_value - lower_value) <= abs(upper_value - normalized_value) else upper_value
 
 
+def _nudge_exit_point_off_buffered_boundary(
+    rectangle: Tuple[Point, Point],
+    pin_point: Point,
+    exit_point: Point,
+    minimum_dist: int,
+    routing_grid: int,
+) -> Point:
+    buffered_rectangle = _buffer_rectangle(rectangle, minimum_dist)
+    nudged_point = exit_point
+    if not _point_is_inside_or_on_rectangle(nudged_point, buffered_rectangle):
+        return nudged_point
+    direction_x = 0
+    direction_y = 0
+    if exit_point[0] != pin_point[0]:
+        direction_x = -1 if exit_point[0] < pin_point[0] else 1
+    elif exit_point[1] != pin_point[1]:
+        direction_y = -1 if exit_point[1] < pin_point[1] else 1
+    else:
+        minimum_x = min(rectangle[0][0], rectangle[1][0])
+        maximum_x = max(rectangle[0][0], rectangle[1][0])
+        minimum_y = min(rectangle[0][1], rectangle[1][1])
+        maximum_y = max(rectangle[0][1], rectangle[1][1])
+        center_x = (minimum_x + maximum_x) / 2.0
+        center_y = (minimum_y + maximum_y) / 2.0
+        if abs(pin_point[0] - center_x) >= abs(pin_point[1] - center_y):
+            direction_x = -1 if pin_point[0] < center_x else 1
+        else:
+            direction_y = -1 if pin_point[1] < center_y else 1
+    while _point_is_inside_or_on_rectangle(nudged_point, buffered_rectangle):
+        nudged_point = (
+            nudged_point[0] + (direction_x * routing_grid),
+            nudged_point[1] + (direction_y * routing_grid),
+        )
+    return nudged_point
+
+
+def _point_is_inside_or_on_rectangle(point: Point, rectangle: Tuple[Point, Point]) -> bool:
+    minimum_x = min(rectangle[0][0], rectangle[1][0])
+    maximum_x = max(rectangle[0][0], rectangle[1][0])
+    minimum_y = min(rectangle[0][1], rectangle[1][1])
+    maximum_y = max(rectangle[0][1], rectangle[1][1])
+    point_x, point_y = point
+    return minimum_x <= point_x <= maximum_x and minimum_y <= point_y <= maximum_y
+
+
 def _build_symbol_obstacles(
     symbol_pose_entries: Mapping[str, SymbolPoseEntry],
     minimum_dist: int,
@@ -454,6 +508,44 @@ def _ordered_net_attachments(
     )
 
 
+def _route_all_nets(
+    ordered_attachments: Sequence[Tuple[str, Tuple[NetPinAttachment, ...]]],
+    symbol_obstacles: Sequence[WireRow],
+    routing_grid: int,
+    all_net_exit_points: Mapping[str, Tuple[Point, ...]],
+) -> Tuple[bool, str, int, Dict[str, Tuple[WireRow, ...]], Optional[str]]:
+    routed_wires: Dict[str, Tuple[WireRow, ...]] = {}
+    processed_other_net_wires: List[WireRow] = []
+    for net_name, attachments in ordered_attachments:
+        other_net_exit_points = {
+            exit_point
+            for other_net, exit_points in all_net_exit_points.items()
+            if other_net != net_name
+            for exit_point in exit_points
+        }
+        route_result = _route_single_net(
+            attachments,
+            symbol_obstacles,
+            processed_other_net_wires,
+            routing_grid,
+            other_net_exit_points,
+        )
+        if not route_result[0]:
+            return False, route_result[1], route_result[2], {}, net_name
+        routed_wires[net_name] = route_result[3]
+        processed_other_net_wires.extend(route_result[3])
+    return True, "OK", 0, routed_wires, None
+
+
+def _promote_failed_net_first(
+    ordered_attachments: Sequence[Tuple[str, Tuple[NetPinAttachment, ...]]],
+    failed_net_name: str,
+) -> Tuple[Tuple[str, Tuple[NetPinAttachment, ...]], ...]:
+    failed_items = [item for item in ordered_attachments if item[0] == failed_net_name]
+    remaining_items = [item for item in ordered_attachments if item[0] != failed_net_name]
+    return tuple(failed_items + remaining_items)
+
+
 def _route_single_net(
     attachments: Sequence[NetPinAttachment],
     symbol_obstacles: Sequence[WireRow],
@@ -469,6 +561,10 @@ def _route_single_net(
         if attachment.pin_point != attachment.exit_point
     )
     unique_exit_points = _unique_exit_points(attachments)
+    if stub_wires:
+        stub_validation_result = _validate_routed_net(attachments, stub_wires, processed_other_net_wires)
+        if stub_validation_result[0]:
+            return True, "OK", 0, stub_wires
     routed_segments: List[WireRow] = []
     if len(unique_exit_points) > 1:
         route_segments_result = _route_net_exit_points(
@@ -517,6 +613,34 @@ def _route_net_exit_points(
     routing_grid: int,
     other_net_exit_points: Set[Point] = (),
 ) -> Tuple[bool, str, int, Tuple[WireRow, ...]]:
+    strict_route_result = _route_net_exit_points_with_obstacles(
+        attachments,
+        unique_exit_points,
+        symbol_obstacles,
+        processed_other_net_wires,
+        routing_grid,
+        other_net_exit_points,
+    )
+    if strict_route_result[0]:
+        return strict_route_result
+    return _route_net_exit_points_with_obstacles(
+        attachments,
+        unique_exit_points,
+        symbol_obstacles,
+        processed_other_net_wires,
+        routing_grid,
+        set(),
+    )
+
+
+def _route_net_exit_points_with_obstacles(
+    attachments: Sequence[NetPinAttachment],
+    unique_exit_points: Sequence[Point],
+    symbol_obstacles: Sequence[WireRow],
+    processed_other_net_wires: Sequence[WireRow],
+    routing_grid: int,
+    other_net_exit_points: Set[Point],
+) -> Tuple[bool, str, int, Tuple[WireRow, ...]]:
     connected_points = [unique_exit_points[0]]
     disconnected_points = list(unique_exit_points[1:])
     route_segments: List[WireRow] = []
@@ -525,6 +649,12 @@ def _route_net_exit_points(
         other_net_exit_points,
     )
     obstacle_array = _wire_rows_to_array((*symbol_obstacles, *other_net_endpoint_obstacles))
+    visibility_graph = _build_visibility_graph_for_terminals(
+        unique_exit_points,
+        obstacle_array,
+        routing_grid,
+        routing_grid,
+    )
     while disconnected_points:
         candidate_edges = sorted(
             (
@@ -538,11 +668,10 @@ def _route_net_exit_points(
         routed_edge = None
         for _distance, start_point, end_point in candidate_edges:
             try:
-                routed_wires = auto_route_wires(
-                    start_point[0],
-                    start_point[1],
-                    end_point[0],
-                    end_point[1],
+                routed_wires = _route_with_visibility_graph(
+                    start_point,
+                    end_point,
+                    visibility_graph,
                     obstacle_array,
                     routing_grid,
                     routing_grid,

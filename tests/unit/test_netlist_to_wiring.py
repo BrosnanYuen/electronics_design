@@ -383,3 +383,109 @@ R2 N003 0 5k
                         -1,
                         msg=f"{net_name} endpoints must not start or end on another net's wire group.",
                     )
+
+    def test_zero_clearance_exit_points_are_nudged_off_symbol_boundaries(self) -> None:
+        netlist_text = """* zero-clearance boundary regression
+V1 N001 0 5
+R1 N001 0 1k
+.tran 1m
+.backanno
+.end
+"""
+        symbol_pose = {
+            "V1": {
+                "SYMBOL": "voltage",
+                "X": 0,
+                "Y": 0,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[0, 0], [64, 80]],
+                "PINS": [[48, 16, "+", 1], [48, 64, "-", 2]],
+                "VALUE": "5",
+            },
+            "R1": {
+                "SYMBOL": "res",
+                "X": 160,
+                "Y": 0,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[160, 0], [192, 80]],
+                "PINS": [[160, 16, "A", 1], [160, 64, "B", 2]],
+                "VALUE": "1k",
+            },
+        }
+        convert_settings = {
+            "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+            "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+            "custom_search_paths": ["./valid_asy/"],
+            "minimum_dist": 0,
+            "wire_pin_out_dist": 0,
+            "grid_size": 16,
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            netlist_path = temporary_path / "boundary_case.net"
+            symbol_pose_path = temporary_path / "boundary_case_symbols.json"
+            output_path = temporary_path / "boundary_case_wires.json"
+            netlist_path.write_text(netlist_text, encoding="utf-8")
+            symbol_pose_path.write_text(json.dumps(symbol_pose, indent=2) + "\n", encoding="utf-8")
+
+            result = ltspice_netlist_to_wiring(
+                str(netlist_path),
+                str(symbol_pose_path),
+                str(output_path),
+                convert_settings,
+            )
+
+            self.assertEqual(result, (True, "OK", 0))
+
+    def test_overlapping_stub_wires_do_not_require_extra_global_routing(self) -> None:
+        netlist_text = """* overlapping stub regression
+V1 N001 0 5
+R1 N001 0 1k
+.tran 1m
+.backanno
+.end
+"""
+        symbol_pose = {
+            "V1": {
+                "SYMBOL": "voltage",
+                "X": 0,
+                "Y": 0,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[0, 0], [64, 80]],
+                "PINS": [[32, 80, "+", 1], [32, 0, "-", 2]],
+                "VALUE": "5",
+            },
+            "R1": {
+                "SYMBOL": "res",
+                "X": 0,
+                "Y": 96,
+                "ORIENTATION": "R0",
+                "RECTANGLE": [[0, 96], [64, 176]],
+                "PINS": [[32, 96, "A", 1], [32, 176, "B", 2]],
+                "VALUE": "1k",
+            },
+        }
+        convert_settings = {
+            "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
+            "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+            "custom_search_paths": ["./valid_asy/"],
+            "minimum_dist": 0,
+            "wire_pin_out_dist": 0,
+            "grid_size": 16,
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            netlist_path = temporary_path / "overlap_case.net"
+            symbol_pose_path = temporary_path / "overlap_case_symbols.json"
+            output_path = temporary_path / "overlap_case_wires.json"
+            netlist_path.write_text(netlist_text, encoding="utf-8")
+            symbol_pose_path.write_text(json.dumps(symbol_pose, indent=2) + "\n", encoding="utf-8")
+
+            result = ltspice_netlist_to_wiring(
+                str(netlist_path),
+                str(symbol_pose_path),
+                str(output_path),
+                convert_settings,
+            )
+
+            self.assertEqual(result, (True, "OK", 0))

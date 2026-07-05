@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import heapq
 from numbers import Integral
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
@@ -49,23 +51,20 @@ def auto_route_wires(
     if _point_hits_any_obstacle(end_point, obstacle_array):
         raise ValueError("end point must not lie on an obstacle")
 
-    candidate_points = _build_candidate_points(
-        start_point,
-        end_point,
+    visibility_graph = _build_full_visibility_graph_for_terminals(
+        (start_point, end_point),
         obstacle_array,
         normalized_grid_x,
         normalized_grid_y,
     )
-    visibility_graph = _build_visibility_graph(candidate_points, obstacle_array)
-    if start_point not in visibility_graph or end_point not in visibility_graph:
-        raise ValueError("no valid route found")
-    try:
-        point_path = nx.shortest_path(visibility_graph, start_point, end_point, weight="weight")
-    except (nx.NetworkXNoPath, nx.NodeNotFound) as path_error:
-        raise ValueError("no valid route found") from path_error
-    wires = _compress_point_path(point_path)
-    _validate_generated_route(wires, obstacle_array, start_point, end_point, normalized_grid_x, normalized_grid_y)
-    return wires
+    return _route_with_full_visibility_graph(
+        start_point,
+        end_point,
+        visibility_graph,
+        obstacle_array,
+        normalized_grid_x,
+        normalized_grid_y,
+    )
 
 
 def _require_grid_value(value: int, label: str) -> int:
@@ -116,21 +115,51 @@ def _build_candidate_points(
     grid_x: int,
     grid_y: int,
 ) -> List[Point]:
-    x_coordinates = {start_point[0], end_point[0]}
-    y_coordinates = {start_point[1], end_point[1]}
+    return _build_candidate_points_for_terminals((start_point, end_point), obstacles, grid_x, grid_y)
+
+
+def _build_candidate_points_for_terminals(
+    terminals: Sequence[Point],
+    obstacles: np.ndarray,
+    grid_x: int,
+    grid_y: int,
+) -> List[Point]:
+    x_coordinates = {int(point[0]) for point in terminals}
+    y_coordinates = {int(point[1]) for point in terminals}
     if len(obstacles) > 0:
         for obstacle in obstacles:
             x1, y1, x2, y2 = (int(value) for value in obstacle)
             x_coordinates.update({x1, x2, x1 - grid_x, x1 + grid_x, x2 - grid_x, x2 + grid_x})
             y_coordinates.update({y1, y2, y1 - grid_y, y1 + grid_y, y2 - grid_y, y2 + grid_y})
     candidate_points: List[Point] = []
+    terminal_points = set(terminals)
     for x_position in sorted(x_coordinates):
         for y_position in sorted(y_coordinates):
             point = (x_position, y_position)
-            if point not in {start_point, end_point} and _point_hits_any_obstacle(point, obstacles):
+            if point not in terminal_points and _point_hits_any_obstacle(point, obstacles):
                 continue
             candidate_points.append(point)
     return candidate_points
+
+
+def _build_visibility_graph_for_terminals(
+    terminals: Sequence[Point],
+    obstacles: np.ndarray,
+    grid_x: int,
+    grid_y: int,
+) -> nx.Graph:
+    candidate_points = _build_candidate_points_for_terminals(terminals, obstacles, grid_x, grid_y)
+    return _build_visibility_graph(candidate_points, obstacles)
+
+
+def _build_full_visibility_graph_for_terminals(
+    terminals: Sequence[Point],
+    obstacles: np.ndarray,
+    grid_x: int,
+    grid_y: int,
+) -> nx.Graph:
+    candidate_points = _build_candidate_points_for_terminals(terminals, obstacles, grid_x, grid_y)
+    return _build_full_visibility_graph(candidate_points, obstacles)
 
 
 def _build_visibility_graph(candidate_points: Sequence[Point], obstacles: np.ndarray) -> nx.Graph:
@@ -142,12 +171,28 @@ def _build_visibility_graph(candidate_points: Sequence[Point], obstacles: np.nda
     for point in candidate_points:
         grouped_by_x[point[0]].append(point)
         grouped_by_y[point[1]].append(point)
+    for group_points in grouped_by_x.values():
+        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[1]), obstacles)
+    for group_points in grouped_by_y.values():
+        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[0]), obstacles)
+    return graph
+
+
+def _build_full_visibility_graph(candidate_points: Sequence[Point], obstacles: np.ndarray) -> nx.Graph:
+    graph = nx.Graph()
+    for point in candidate_points:
+        graph.add_node(point)
+    grouped_by_x: Dict[int, List[Point]] = defaultdict(list)
+    grouped_by_y: Dict[int, List[Point]] = defaultdict(list)
+    for point in candidate_points:
+        grouped_by_x[point[0]].append(point)
+        grouped_by_y[point[1]].append(point)
     max_length = _maximum_possible_route_length(candidate_points)
     segment_penalty = (len(candidate_points) + 1) * (max_length + 1)
     for group_points in grouped_by_x.values():
-        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[1]), obstacles, segment_penalty)
+        _add_full_visible_edges(graph, sorted(group_points, key=lambda point: point[1]), obstacles, segment_penalty)
     for group_points in grouped_by_y.values():
-        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[0]), obstacles, segment_penalty)
+        _add_full_visible_edges(graph, sorted(group_points, key=lambda point: point[0]), obstacles, segment_penalty)
     return graph
 
 
@@ -163,13 +208,25 @@ def _add_visible_edges(
     graph: nx.Graph,
     ordered_points: Sequence[Point],
     obstacles: np.ndarray,
+) -> None:
+    for first_point, second_point in zip(ordered_points, ordered_points[1:]):
+        segment = (first_point[0], first_point[1], second_point[0], second_point[1])
+        if _segment_hits_any_obstacle(segment, obstacles):
+            continue
+        graph.add_edge(first_point, second_point, length=_segment_length(segment))
+
+
+def _add_full_visible_edges(
+    graph: nx.Graph,
+    ordered_points: Sequence[Point],
+    obstacles: np.ndarray,
     segment_penalty: int,
 ) -> None:
     for first_index, first_point in enumerate(ordered_points):
         for second_point in ordered_points[first_index + 1 :]:
             segment = (first_point[0], first_point[1], second_point[0], second_point[1])
             if _segment_hits_any_obstacle(segment, obstacles):
-                continue
+                break
             graph.add_edge(first_point, second_point, weight=segment_penalty + _segment_length(segment))
 
 
@@ -192,6 +249,91 @@ def _compress_point_path(point_path: Sequence[Point]) -> np.ndarray:
         for start_point, end_point in zip(compressed_points, compressed_points[1:])
     ]
     return np.asarray(wires, dtype=int)
+
+
+def _route_with_visibility_graph(
+    start_point: Point,
+    end_point: Point,
+    visibility_graph: nx.Graph,
+    obstacles: np.ndarray,
+    grid_x: int,
+    grid_y: int,
+) -> np.ndarray:
+    if start_point not in visibility_graph or end_point not in visibility_graph:
+        raise ValueError("no valid route found")
+    point_path = _shortest_point_path_with_segment_penalty(visibility_graph, start_point, end_point)
+    wires = _compress_point_path(point_path)
+    _validate_generated_route(wires, obstacles, start_point, end_point, grid_x, grid_y)
+    return wires
+
+
+def _route_with_full_visibility_graph(
+    start_point: Point,
+    end_point: Point,
+    visibility_graph: nx.Graph,
+    obstacles: np.ndarray,
+    grid_x: int,
+    grid_y: int,
+) -> np.ndarray:
+    if start_point not in visibility_graph or end_point not in visibility_graph:
+        raise ValueError("no valid route found")
+    try:
+        point_path = nx.shortest_path(visibility_graph, start_point, end_point, weight="weight")
+    except (nx.NetworkXNoPath, nx.NodeNotFound) as path_error:
+        raise ValueError("no valid route found") from path_error
+    wires = _compress_point_path(point_path)
+    _validate_generated_route(wires, obstacles, start_point, end_point, grid_x, grid_y)
+    return wires
+
+
+def _shortest_point_path_with_segment_penalty(
+    visibility_graph: nx.Graph,
+    start_point: Point,
+    end_point: Point,
+) -> List[Point]:
+    OrientationState = Tuple[Point, str]
+    start_state: OrientationState = (start_point, "")
+    best_costs: Dict[OrientationState, Tuple[int, int]] = {start_state: (0, 0)}
+    previous_states: Dict[OrientationState, Optional[OrientationState]] = {start_state: None}
+    queue: List[Tuple[int, int, Point, str]] = [(0, 0, start_point, "")]
+    final_state: Optional[OrientationState] = None
+    while queue:
+        segment_count, route_length, point, orientation = heapq.heappop(queue)
+        current_state = (point, orientation)
+        if best_costs.get(current_state) != (segment_count, route_length):
+            continue
+        if point == end_point:
+            final_state = current_state
+            break
+        neighbors = sorted(
+            visibility_graph.neighbors(point),
+            key=lambda neighbor: (neighbor[0], neighbor[1]),
+        )
+        for neighbor in neighbors:
+            edge_orientation = _segment_orientation(point, neighbor)
+            edge_length = int(visibility_graph[point][neighbor].get("length", _segment_length((point[0], point[1], neighbor[0], neighbor[1]))))
+            next_segment_count = segment_count + (0 if orientation == edge_orientation else 1)
+            next_route_length = route_length + edge_length
+            next_state = (neighbor, edge_orientation)
+            next_cost = (next_segment_count, next_route_length)
+            if next_cost >= best_costs.get(next_state, (float("inf"), float("inf"))):
+                continue
+            best_costs[next_state] = next_cost
+            previous_states[next_state] = current_state
+            heapq.heappush(queue, (next_segment_count, next_route_length, neighbor, edge_orientation))
+    if final_state is None:
+        raise ValueError("no valid route found")
+    point_path: List[Point] = []
+    current_state: Optional[OrientationState] = final_state
+    while current_state is not None:
+        point_path.append(current_state[0])
+        current_state = previous_states[current_state]
+    point_path.reverse()
+    return point_path
+
+
+def _segment_orientation(first_point: Point, second_point: Point) -> str:
+    return "V" if first_point[0] == second_point[0] else "H"
 
 
 def _validate_generated_route(
