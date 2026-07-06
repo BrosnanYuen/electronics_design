@@ -27,6 +27,7 @@ _BULK_AUTOPLACE_CONVERT_SETTINGS = {
     **_CONVERT_SETTINGS,
     "autoplace_skip_routing": True,
 }
+_BULK_AUTOPLACE_ROUTED_FIXTURE_COUNT = 10
 _POSE_KEYS = {"X", "Y", "ORIENTATION", "PINS", "RECTANGLE"}
 
 
@@ -50,6 +51,10 @@ class TestLtspiceAutoplaceSymbolPose(unittest.TestCase):
             [fixture.stem for fixture in final_fixture_paths],
             msg="The netlist and symbol-final fixture sets must match one-to-one.",
         )
+        routed_fixture_names = {
+            fixture_path.name
+            for fixture_path in netlist_fixture_paths[:_BULK_AUTOPLACE_ROUTED_FIXTURE_COUNT]
+        }
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary_directory_path = Path(temporary_directory)
             for netlist_fixture_path in netlist_fixture_paths:
@@ -65,7 +70,7 @@ class TestLtspiceAutoplaceSymbolPose(unittest.TestCase):
                         str(netlist_fixture_path),
                         str(generated_symbol_path),
                         str(generated_wire_path),
-                        _BULK_AUTOPLACE_CONVERT_SETTINGS,
+                        _CONVERT_SETTINGS if netlist_fixture_path.name in routed_fixture_names else _BULK_AUTOPLACE_CONVERT_SETTINGS,
                     )
                     self.assertEqual(result, (True, "OK", 0), msg=f"{netlist_fixture_path.name} should autoplace successfully.")
                     generated_symbol_pose = _load_json(generated_symbol_path)
