@@ -11,6 +11,7 @@ from . import ltspice_autoplace_symbol_pose as _autoplace_symbol_pose  # Import 
 from . import ltspice_asy as _asy  # Import the ASY-specific implementation module.
 from . import ltspice_net as _net  # Import the netlist-specific implementation module.
 from . import ltspice_netlist_to_symbol_initial as _netlist_to_symbol_initial  # Import the netlist-to-symbol-initial conversion module.
+from . import ltspice_netlist_symbol_wire_to_asc as _netlist_symbol_wire_to_asc  # Import the netlist/symbol/wire-to-ASC conversion module.
 from . import ltspice_netlist_to_wiring as _netlist_to_wiring  # Import the netlist-to-wiring conversion module.
 from . import ltspice_resolve_symbol_pose as _resolve_symbol_pose  # Import the symbol-pose resolution module.
 from . import pathtracing as _pathtracing  # Import the path tracing GUI module.
@@ -25,6 +26,7 @@ ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-expo
 ltspice_autoplace_symbol_pose = _autoplace_symbol_pose.ltspice_autoplace_symbol_pose  # Re-export the symbol autoplace helper.
 get_ltspice_asc_symbol_info = _asc_to_netlist.get_ltspice_asc_symbol_info  # Re-export the ASC symbol-info helper.
 ltspice_netlist_to_symbol_initial = _netlist_to_symbol_initial.ltspice_netlist_to_symbol_initial  # Re-export the netlist-to-symbol-initial conversion helper.
+ltspice_netlist_symbol_wire_to_asc = _netlist_symbol_wire_to_asc.ltspice_netlist_symbol_wire_to_asc  # Re-export the netlist/symbol/wire-to-ASC conversion helper.
 ltspice_netlist_to_wiring = _netlist_to_wiring.ltspice_netlist_to_wiring  # Re-export the netlist-to-wiring conversion helper.
 ltspice_resolve_symbol_pose = _resolve_symbol_pose.ltspice_resolve_symbol_pose  # Re-export the symbol-pose resolution helper.
 ltspice_check_symbol_pose = _resolve_symbol_pose.ltspice_check_symbol_pose  # Re-export the symbol-pose collision helper.
@@ -64,6 +66,7 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_autoplace_symbol_pose",  # Export the symbol autoplace helper.
     "get_ltspice_asc_symbol_info",  # Export the ASC symbol-info helper.
     "ltspice_netlist_to_symbol_initial",  # Export the netlist-to-symbol-initial conversion helper.
+    "ltspice_netlist_symbol_wire_to_asc",  # Export the netlist/symbol/wire-to-ASC conversion helper.
     "ltspice_netlist_to_wiring",  # Export the netlist-to-wiring conversion helper.
     "ltspice_resolve_symbol_pose",  # Export the symbol-pose resolution helper.
     "ltspice_check_symbol_pose",  # Export the symbol-pose collision helper.

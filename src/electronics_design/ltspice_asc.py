@@ -28,6 +28,7 @@ _VALID_DOT_DIRECTIVES = {  # Define dot commands supported by current LTspice ma
     "four",  # Fourier directive.
     "fra",  # FRA analysis directive.
     "func",  # Function definition directive.
+    "function",  # Long-form function definition directive used by some LTspice exports.
     "global",  # Global node declaration directive.
     "ic",  # Initial conditions directive.
     "include",  # Include-file directive.
@@ -124,6 +125,34 @@ _ASC_IOPIN_POLARITIES = {  # Define the accepted LTspice IOPIN direction markers
     "O",  # Short-form output direction.
     "B",  # Short-form bidirectional direction.
 }  # Finish the IOPIN polarity whitelist.
+
+_EMBEDDED_SPICE_DEVICE_PREFIXES = {  # Allow TEXT !... cards that encode SPICE devices such as K-coupling statements.
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "O",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Z",
+    "@",
+    "&",
+}  # Finish the embedded SPICE device-prefix set.
 
 @dataclass(frozen=True)  # Freeze wire records so helpers can reuse them safely.
 class AscWire:  # Represent one LTspice WIRE segment.
@@ -284,10 +313,11 @@ def _validate_asc_footer_lines(lines: Sequence[str]) -> Tuple[bool, int]:  # Val
             return False, line_number  # Report the failing TEXT line number.
         if directive_extract_result[1] == "":  # Ignore ordinary TEXT comments and labels that do not carry a directive.
             continue  # Move to the next line because no directive needs validation.
-        directive_result = _parse_directive_name(directive_extract_result[1])  # Parse the embedded SPICE directive name.
-        if not directive_result[0]:  # Stop when the directive text is malformed or unsupported.
+        spice_text = directive_extract_result[1]  # Read the embedded SPICE card text for validation.
+        directive_result = _parse_directive_name(spice_text)  # Parse the embedded SPICE directive name when the card is a dot command.
+        if not directive_result[0] and not _is_supported_embedded_spice_text(spice_text):  # Allow embedded device cards such as K-coupling statements.
             return False, line_number  # Report the failing directive carrier line number.
-        if directive_result[1] in _ANALYSIS_DIRECTIVES:  # Count analysis directives that satisfy the ASC footer requirement.
+        if directive_result[0] and directive_result[1] in _ANALYSIS_DIRECTIVES:  # Count analysis directives that satisfy the ASC footer requirement.
             analysis_count += 1  # Record the analysis directive count.
     if analysis_count == 0:  # Require at least one simulation analysis directive somewhere in the schematic text.
         return False, last_nonblank_line_number  # Report the final nonblank line when no valid analysis directive exists.
@@ -449,6 +479,13 @@ def _parse_directive_name(code_part: str) -> DirectiveResult:  # Parse and valid
     return True, directive_name, ""  # Return the validated directive name.
 
 
+def _is_supported_embedded_spice_text(code_part: str) -> bool:  # Accept LTspice TEXT !... cards that carry SPICE device statements.
+    stripped_code = code_part.lstrip()  # Ignore leading whitespace before inspecting the embedded SPICE text.
+    if stripped_code == "":  # Reject empty embedded SPICE cards.
+        return False  # Return False because empty cards are malformed.
+    return stripped_code[0].upper() in _EMBEDDED_SPICE_DEVICE_PREFIXES  # Accept known SPICE device prefixes.
+
+
 def _is_version_token(token: str) -> bool:  # Decide whether one token is a valid version field such as 4 or 4.1.
     return re.match(r"^-?\d+(\.\d+)?$", token) is not None  # Accept optional leading minus sign, digits, and optional dotted sub-version.
 
@@ -459,4 +496,3 @@ def _is_integer_token(token: str) -> bool:  # Decide whether one token is a vali
 
 def _format_line_message(prefix: str, line_number: int) -> str:  # Build the required public error message with a line number suffix.
     return f"{prefix} Line {line_number}"  # Return the final user-facing message.
-

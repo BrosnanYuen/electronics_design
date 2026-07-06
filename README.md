@@ -68,9 +68,11 @@ Converts both ASC files to netlists and compares their structure.  Returns `(Tru
 |---|---|
 | `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)` | `{instance_name: {SYMBOL, X, Y, ORIENTATION, RECTANGLE, PINS, ...}, ...}` |
+| `ltspice_netlist_symbol_wire_to_asc(netlist_filepath, symbol_pose_filepath, wire_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 
 - `ltspice_asc_to_netlist` resolves symbols and library files from `convert_settings`, generates a validated netlist. Error codes include `UNKNOWN_SYMBOL`, `UNCONNECTED_SYMBOL_PIN`, `INVALID_GENERATED_NETLIST`, etc.
 - `get_ltspice_asc_symbol_info` returns absolute-coordinate symbol pin and rectangle data keyed by instance name. Raises `ValueError` on failure.
+- `ltspice_netlist_symbol_wire_to_asc` reconstructs one LTspice schematic from a netlist, resolved symbol-pose JSON, and routed wire JSON. The generated `.asc` file is written in Latin-1 encoding.
 
 ### Schematic Plotting
 
@@ -89,6 +91,7 @@ Uses schemdraw (ASC) and networkx (netlist) to render images. Supports `.png`, `
 | `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)` | `(bool, str, int)` |
 | `ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)` | `(bool, np.ndarray | None)` |
 | `ltspice_netlist_to_wiring(netlist_filepath, symbol_pose_filepath, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
+| `ltspice_netlist_symbol_wire_to_asc(netlist_filepath, symbol_pose_filepath, wire_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `ltspice_autoplace_symbol_pose(netlist_filepath, symbol_pose_filepath_out, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
 
 Typical pipeline:
@@ -97,7 +100,8 @@ Typical pipeline:
 2. **resolve_symbol_pose** — populates `RECTANGLE` and `PINS` from `.asy` files using `X`, `Y`, and `ORIENTATION`.
 3. **check_symbol_pose** — detects symbol-rectangle collisions after buffering by `minimum_dist`. Returns `(False, None)` or `(True, collisions_array)`.
 4. **netlist_to_wiring** — routes axis-aligned wires between symbol pins while avoiding obstacles.
-5. **autoplace_symbol_pose** — automatically places symbols using a spring-layout-like algorithm, resolves poses, avoids collisions, and generates wiring.
+5. **netlist_symbol_wire_to_asc** — converts the netlist, final symbol-pose JSON, and wire JSON back into one LTspice `.asc` file.
+6. **autoplace_symbol_pose** — automatically places symbols using a spring-layout-like algorithm, resolves poses, avoids collisions, and generates wiring.
 
 ### Wire / Path Utilities
 
@@ -158,6 +162,7 @@ convert_settings = {
     "wire_pin_out_dist": 16,
     "grid_size": 16,
     "autoplace_iter": 12,
+    "ltspice_version": 4.1,
 }
 ```
 
@@ -230,6 +235,7 @@ from electronics_design import ltspice_netlist_footer_cmp
 from electronics_design import ltspice_netlist_plot_networkx
 from electronics_design import ltspice_netlist_structure_cmp
 from electronics_design import ltspice_netlist_to_symbol_initial
+from electronics_design import ltspice_netlist_symbol_wire_to_asc
 from electronics_design import ltspice_netlist_to_wiring
 from electronics_design import ltspice_resolve_symbol_pose
 from electronics_design import rectangle_points_to_lines
@@ -247,6 +253,7 @@ convert_settings = {
     "wire_pin_out_dist": 16,
     "grid_size": 16,
     "autoplace_iter": 12,
+    "ltspice_version": 4.1,
 }
 
 # ASC validation
@@ -284,6 +291,7 @@ ltspice_netlist_to_symbol_initial("example.net", "symbols.json", convert_setting
 ltspice_resolve_symbol_pose("symbols.json", convert_settings)
 collides, pairs = ltspice_check_symbol_pose("symbols.json", convert_settings)
 ltspice_netlist_to_wiring("example.net", "symbols.json", "wires.json", convert_settings)
+ltspice_netlist_symbol_wire_to_asc("example.net", "symbols.json", "wires.json", "roundtrip.asc", convert_settings)
 ltspice_autoplace_symbol_pose("example.net", "symbols.json", "wires.json", convert_settings)
 
 # Wire utilities
