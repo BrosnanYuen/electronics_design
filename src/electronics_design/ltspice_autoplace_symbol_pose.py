@@ -155,7 +155,7 @@ def ltspice_autoplace_symbol_pose(
             for instance_name in components
         }
         current_positions = dict(base_positions)
-        should_attempt_routing = False
+        should_attempt_routing = True
         ordered_instance_names = tuple(instance_name for instance_name in original_symbol_data if instance_name in components)
         best_attempt_payload: Optional[dict[str, dict[str, object]]] = None
         best_attempt_wires: Optional[str] = None

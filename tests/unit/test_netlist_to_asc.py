@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 import unittest
+
+import numpy as np
 
 from electronics_design import is_valid_ltspice_asc_file
 from electronics_design import ltspice_autoplace_symbol_pose
 from electronics_design import ltspice_netlist_to_asc
 from electronics_design import ltspice_netlist_symbol_wire_to_asc
 from electronics_design import ltspice_netlist_to_symbol_initial
+from electronics_design.pathtracing import are_wires_connected
+from electronics_design.pathtracing import place_wires_into_groups
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _VALID_CONVERT_DIRECTORY = _ROOT_DIRECTORY / "valid_convert"
@@ -30,6 +35,32 @@ _SELECTED_FIXTURES = (
     "RC-lowpass.net",
     "Astable-multivibrator.net",
 )
+
+
+def _load_wire_arrays(filepath: Path) -> dict[str, np.ndarray]:
+    wire_mapping = json.loads(filepath.read_text(encoding="utf-8"))
+    return {
+        net_name: np.asarray(wire_rows, dtype=int)
+        for net_name, wire_rows in wire_mapping.items()
+    }
+
+
+def _read_asc_wire_rows(filepath: Path) -> tuple[tuple[int, int, int, int], ...]:
+    wire_rows: list[tuple[int, int, int, int]] = []
+    for raw_line in filepath.read_text(encoding="latin-1").splitlines():
+        stripped_line = raw_line.strip()
+        if not stripped_line.startswith("WIRE "):
+            continue
+        tokens = stripped_line.split()
+        wire_rows.append((int(tokens[1]), int(tokens[2]), int(tokens[3]), int(tokens[4])))
+    return tuple(wire_rows)
+
+
+def _wire_group_signatures(wire_groups: list[np.ndarray]) -> set[frozenset[tuple[int, int, int, int]]]:
+    return {
+        frozenset(tuple(int(value) for value in wire_row) for wire_row in wire_group.tolist())
+        for wire_group in wire_groups
+    }
 
 
 class TestNetlistToAsc(unittest.TestCase):
@@ -75,6 +106,30 @@ class TestNetlistToAsc(unittest.TestCase):
                         (True, "OK", 0),
                         msg=f"{fixture_name} should autoplace successfully through the public pipeline.",
                     )
+                    manual_wires_by_net = _load_wire_arrays(manual_wire_path)
+                    self.assertTrue(
+                        manual_wires_by_net,
+                        msg=f"{fixture_name} should generate at least one routed net in the intermediate wire JSON.",
+                    )
+                    for net_name, wire_array in manual_wires_by_net.items():
+                        self.assertEqual(
+                            wire_array.ndim,
+                            2,
+                            msg=f"{fixture_name}:{net_name} should serialize wires as a 2D array.",
+                        )
+                        self.assertEqual(
+                            wire_array.shape[1],
+                            4,
+                            msg=f"{fixture_name}:{net_name} should contain X1 Y1 X2 Y2 wire rows.",
+                        )
+                        self.assertTrue(
+                            len(wire_array) > 0,
+                            msg=f"{fixture_name}:{net_name} should contain at least one generated wire segment.",
+                        )
+                        self.assertTrue(
+                            are_wires_connected(wire_array),
+                            msg=f"{fixture_name}:{net_name} should remain internally connected after routing.",
+                        )
                     self.assertEqual(
                         ltspice_netlist_symbol_wire_to_asc(
                             str(netlist_path),
@@ -85,6 +140,32 @@ class TestNetlistToAsc(unittest.TestCase):
                         ),
                         (True, "OK", 0),
                         msg=f"{fixture_name} should generate the final ASC through the public pipeline.",
+                    )
+                    manual_wire_rows = tuple(
+                        tuple(int(value) for value in wire_row)
+                        for wire_array in manual_wires_by_net.values()
+                        for wire_row in wire_array.tolist()
+                    )
+                    generated_asc_wires = _read_asc_wire_rows(output_path)
+                    manual_asc_wires = _read_asc_wire_rows(manual_asc_path)
+                    self.assertTrue(
+                        generated_asc_wires,
+                        msg=f"{fixture_name} should emit WIRE records in the generated ASC output.",
+                    )
+                    self.assertEqual(
+                        sorted(generated_asc_wires),
+                        sorted(manual_wire_rows),
+                        msg=f"{fixture_name} should preserve every routed wire segment in the direct ASC output.",
+                    )
+                    self.assertEqual(
+                        sorted(manual_asc_wires),
+                        sorted(manual_wire_rows),
+                        msg=f"{fixture_name} should preserve every routed wire segment in the explicit three-step ASC output.",
+                    )
+                    self.assertEqual(
+                        _wire_group_signatures(place_wires_into_groups(np.asarray(generated_asc_wires, dtype=int))),
+                        _wire_group_signatures(list(manual_wires_by_net.values())),
+                        msg=f"{fixture_name} should preserve the same connected wire groups in the final ASC output.",
                     )
                     self.assertEqual(
                         output_path.read_text(encoding="latin-1"),
