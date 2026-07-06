@@ -107,3 +107,30 @@ class TestLtspiceAutoplaceSymbolPose(unittest.TestCase):
                             expected_width * expected_height,
                             msg=f"{netlist_fixture_path.name}:{instance_name} should preserve the drawable rectangle area from the ground-truth pose.",
                         )
+
+    def test_voltage_sources_are_forced_to_r0_orientation(self) -> None:
+        netlist_fixture_path = _VALID_NETLIST_DIRECTORY / "RC-lowpass.net"
+        initial_symbol_path = _VALID_SYMBOL_INITIAL_DIRECTORY / "RC-lowpass.json"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_directory_path = Path(temporary_directory)
+            generated_symbol_path = temporary_directory_path / "RC-lowpass.json"
+            generated_wire_path = temporary_directory_path / "RC-lowpass_wires.json"
+            initial_symbol_pose = _load_json(initial_symbol_path)
+            initial_symbol_pose["Vin"]["ORIENTATION"] = "R90"
+            generated_symbol_path.write_text(
+                json.dumps(initial_symbol_pose, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            result = ltspice_autoplace_symbol_pose(
+                str(netlist_fixture_path),
+                str(generated_symbol_path),
+                str(generated_wire_path),
+                _CONVERT_SETTINGS,
+            )
+            self.assertEqual(result, (True, "OK", 0))
+            generated_symbol_pose = _load_json(generated_symbol_path)
+            self.assertEqual(
+                generated_symbol_pose["Vin"]["ORIENTATION"],
+                "R0",
+                msg="Voltage sources should always resolve to R0 orientation during autoplace.",
+            )

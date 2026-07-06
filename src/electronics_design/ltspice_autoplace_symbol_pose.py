@@ -43,6 +43,14 @@ _SYMMETRIC_SYMBOL_NAMES = {
     "pmos",
     "sw",
 }
+_R0_ONLY_SYMBOL_NAMES = {
+    "bv",
+    "e",
+    "e2",
+    "gain",
+    "h",
+    "voltage",
+}
 _GLOBAL_GEOMETRY_CACHE: Dict[Tuple[str, str], "OrientationGeometry"] = {}
 
 
@@ -819,7 +827,11 @@ def _resolve_default_geometry(
     geometry_cache: MutableMapping[Tuple[str, str], OrientationGeometry],
     convert_settings: Mapping[str, object],
 ) -> OrientationGeometry:
-    for preferred_orientation in (_clean_orientation(symbol_entry.get("ORIENTATION", "")), *candidate_orientations):
+    if _is_r0_only_symbol(symbol_entry):
+        preferred_orientations = candidate_orientations
+    else:
+        preferred_orientations = (_clean_orientation(symbol_entry.get("ORIENTATION", "")), *candidate_orientations)
+    for preferred_orientation in preferred_orientations:
         if preferred_orientation == "":
             continue
         return _geometry_for_orientation(symbol_entry, preferred_orientation, geometry_cache, convert_settings)
@@ -882,9 +894,15 @@ def _geometry_for_orientation(
 
 def _candidate_orientations_for_entry(symbol_entry: Mapping[str, object]) -> Tuple[str, ...]:
     symbol_name = str(symbol_entry.get("SYMBOL", "")).strip().lower()
+    if symbol_name in _R0_ONLY_SYMBOL_NAMES:
+        return ("R0",)
     if symbol_name in _SYMMETRIC_SYMBOL_NAMES:
         return ("R0", "M0", "R180", "M180", "R90", "M90", "R270", "M270")
     return ("R0", "R90", "R180", "R270")
+
+
+def _is_r0_only_symbol(symbol_entry: Mapping[str, object]) -> bool:
+    return str(symbol_entry.get("SYMBOL", "")).strip().lower() in _R0_ONLY_SYMBOL_NAMES
 
 
 def _infer_layout_grid(
