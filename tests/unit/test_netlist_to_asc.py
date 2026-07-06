@@ -6,9 +6,11 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import is_valid_ltspice_asc_file
+from electronics_design import ltspice_autoplace_symbol_pose
 from electronics_design import ltspice_netlist_to_asc
+from electronics_design import ltspice_netlist_symbol_wire_to_asc
+from electronics_design import ltspice_netlist_to_symbol_initial
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _VALID_CONVERT_DIRECTORY = _ROOT_DIRECTORY / "valid_convert"
@@ -51,14 +53,43 @@ class TestNetlistToAsc(unittest.TestCase):
                         (True, ""),
                         msg=f"{fixture_name} should generate a valid ASC file.",
                     )
+                    manual_symbol_path = Path(temporary_directory) / f"{netlist_path.stem}_manual_symbol.json"
+                    manual_wire_path = Path(temporary_directory) / f"{netlist_path.stem}_manual_wires.json"
+                    manual_asc_path = Path(temporary_directory) / f"{netlist_path.stem}_manual.asc"
                     self.assertEqual(
-                        ltspice_asc_structure_cmp(
-                            str(output_path),
-                            str(expected_asc_path),
+                        ltspice_netlist_to_symbol_initial(
+                            str(netlist_path),
+                            str(manual_symbol_path),
                             _CONVERT_SETTINGS,
                         ),
-                        (True, "", 0),
-                        msg=f"{fixture_name} should be structurally equivalent to the paired ASC fixture.",
+                        (True, "OK", 0),
+                        msg=f"{fixture_name} should generate the initial symbol JSON through the public pipeline.",
+                    )
+                    self.assertEqual(
+                        ltspice_autoplace_symbol_pose(
+                            str(netlist_path),
+                            str(manual_symbol_path),
+                            str(manual_wire_path),
+                            _CONVERT_SETTINGS,
+                        ),
+                        (True, "OK", 0),
+                        msg=f"{fixture_name} should autoplace successfully through the public pipeline.",
+                    )
+                    self.assertEqual(
+                        ltspice_netlist_symbol_wire_to_asc(
+                            str(netlist_path),
+                            str(manual_symbol_path),
+                            str(manual_wire_path),
+                            str(manual_asc_path),
+                            _CONVERT_SETTINGS,
+                        ),
+                        (True, "OK", 0),
+                        msg=f"{fixture_name} should generate the final ASC through the public pipeline.",
+                    )
+                    self.assertEqual(
+                        output_path.read_text(encoding="latin-1"),
+                        manual_asc_path.read_text(encoding="latin-1"),
+                        msg=f"{fixture_name} should match the explicit three-step public pipeline exactly.",
                     )
 
     def test_invalid_convert_settings_are_rejected(self) -> None:
