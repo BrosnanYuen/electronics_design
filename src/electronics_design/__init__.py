@@ -16,6 +16,7 @@ from .ltspice import ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conv
 from .ltspice import ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
 from .ltspice import ltspice_autoplace_symbol_pose  # Re-export the symbol autoplace helper.
 from .ltspice import get_ltspice_asc_symbol_info  # Re-export the ASC symbol-info helper.
+from .ltspice import ltspice_netlist_to_asc  # Re-export the netlist-to-ASC orchestration helper.
 from .ltspice import ltspice_netlist_to_symbol_initial  # Re-export the netlist-to-symbol-initial conversion helper.
 from .ltspice import ltspice_netlist_symbol_wire_to_asc  # Re-export the netlist/symbol/wire-to-ASC conversion helper.
 from .ltspice import ltspice_netlist_to_wiring  # Re-export the netlist-to-wiring conversion helper.
@@ -49,6 +50,7 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper name.
     "ltspice_autoplace_symbol_pose",  # Export the symbol autoplace helper name.
     "get_ltspice_asc_symbol_info",  # Export the ASC symbol-info helper name.
+    "ltspice_netlist_to_asc",  # Export the netlist-to-ASC orchestration helper name.
     "ltspice_netlist_to_symbol_initial",  # Export the netlist-to-symbol-initial conversion helper name.
     "ltspice_netlist_symbol_wire_to_asc",  # Export the netlist/symbol/wire-to-ASC conversion helper name.
     "ltspice_netlist_to_wiring",  # Export the netlist-to-wiring conversion helper name.

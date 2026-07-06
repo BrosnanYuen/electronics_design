@@ -68,10 +68,12 @@ Converts both ASC files to netlists and compares their structure.  Returns `(Tru
 |---|---|
 | `ltspice_asc_to_netlist(asc_filepath, net_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `get_ltspice_asc_symbol_info(asc_filepath, convert_settings)` | `{instance_name: {SYMBOL, X, Y, ORIENTATION, RECTANGLE, PINS, ...}, ...}` |
+| `ltspice_netlist_to_asc(netlist_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `ltspice_netlist_symbol_wire_to_asc(netlist_filepath, symbol_pose_filepath, wire_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 
 - `ltspice_asc_to_netlist` resolves symbols and library files from `convert_settings`, generates a validated netlist. Error codes include `UNKNOWN_SYMBOL`, `UNCONNECTED_SYMBOL_PIN`, `INVALID_GENERATED_NETLIST`, etc.
 - `get_ltspice_asc_symbol_info` returns absolute-coordinate symbol pin and rectangle data keyed by instance name. Raises `ValueError` on failure.
+- `ltspice_netlist_to_asc` runs the public netlist-to-symbol-initial, autoplace, and netlist/symbol/wire-to-ASC stages to generate one validated schematic from a netlist.
 - `ltspice_netlist_symbol_wire_to_asc` reconstructs one LTspice schematic from a netlist, resolved symbol-pose JSON, and routed wire JSON. The generated `.asc` file is written in Latin-1 encoding.
 
 ### Schematic Plotting
@@ -93,6 +95,7 @@ Uses schemdraw (ASC) and networkx (netlist) to render images. Supports `.png`, `
 | `ltspice_netlist_to_wiring(netlist_filepath, symbol_pose_filepath, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `ltspice_netlist_symbol_wire_to_asc(netlist_filepath, symbol_pose_filepath, wire_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `ltspice_autoplace_symbol_pose(netlist_filepath, symbol_pose_filepath_out, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
+| `ltspice_netlist_to_asc(netlist_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 
 Typical pipeline:
 
@@ -102,6 +105,7 @@ Typical pipeline:
 4. **netlist_to_wiring** — routes axis-aligned wires between symbol pins while avoiding obstacles.
 5. **netlist_symbol_wire_to_asc** — converts the netlist, final symbol-pose JSON, and wire JSON back into one LTspice `.asc` file.
 6. **autoplace_symbol_pose** — automatically places symbols using a spring-layout-like algorithm, resolves poses, avoids collisions, and generates wiring.
+7. **netlist_to_asc** — runs steps 1, 4, and 5 through the public APIs and writes one LTspice `.asc` file directly from a netlist.
 
 ### Wire / Path Utilities
 
@@ -231,6 +235,7 @@ from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_autoplace_symbol_pose
 from electronics_design import ltspice_check_symbol_pose
+from electronics_design import ltspice_netlist_to_asc
 from electronics_design import ltspice_netlist_footer_cmp
 from electronics_design import ltspice_netlist_plot_networkx
 from electronics_design import ltspice_netlist_structure_cmp
@@ -293,6 +298,7 @@ collides, pairs = ltspice_check_symbol_pose("symbols.json", convert_settings)
 ltspice_netlist_to_wiring("example.net", "symbols.json", "wires.json", convert_settings)
 ltspice_netlist_symbol_wire_to_asc("example.net", "symbols.json", "wires.json", "roundtrip.asc", convert_settings)
 ltspice_autoplace_symbol_pose("example.net", "symbols.json", "wires.json", convert_settings)
+ltspice_netlist_to_asc("example.net", "autoplace.asc", convert_settings)
 
 # Wire utilities
 wires = np.array([[16, 32, 0, 16], [0, 16, 16, 48]])
