@@ -163,7 +163,7 @@ def ltspice_autoplace_symbol_pose(
             for instance_name in components
         }
         current_positions = dict(base_positions)
-        should_attempt_routing = True
+        should_attempt_routing = not _resolve_autoplace_skip_routing(convert_settings)
         ordered_instance_names = tuple(instance_name for instance_name in original_symbol_data if instance_name in components)
         best_attempt_payload: Optional[dict[str, dict[str, object]]] = None
         best_attempt_wires: Optional[str] = None
@@ -271,6 +271,13 @@ def ltspice_autoplace_symbol_pose(
         except OSError:
             return False, "WRITE_ERROR", 0
     return _OK_RESULT
+
+
+def _resolve_autoplace_skip_routing(convert_settings: Mapping[str, object]) -> bool:
+    raw_value = convert_settings.get("autoplace_skip_routing", False)
+    if isinstance(raw_value, bool):
+        return raw_value
+    return False
 
 
 def _prepare_working_symbol_pose_file(

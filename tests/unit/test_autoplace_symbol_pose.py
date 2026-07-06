@@ -23,6 +23,10 @@ _CONVERT_SETTINGS = {
     "autoplace_iter": 12,
     "grid_size": 16,
 }
+_BULK_AUTOPLACE_CONVERT_SETTINGS = {
+    **_CONVERT_SETTINGS,
+    "autoplace_skip_routing": True,
+}
 _POSE_KEYS = {"X", "Y", "ORIENTATION", "PINS", "RECTANGLE"}
 
 
@@ -61,7 +65,7 @@ class TestLtspiceAutoplaceSymbolPose(unittest.TestCase):
                         str(netlist_fixture_path),
                         str(generated_symbol_path),
                         str(generated_wire_path),
-                        _CONVERT_SETTINGS,
+                        _BULK_AUTOPLACE_CONVERT_SETTINGS,
                     )
                     self.assertEqual(result, (True, "OK", 0), msg=f"{netlist_fixture_path.name} should autoplace successfully.")
                     generated_symbol_pose = _load_json(generated_symbol_path)
