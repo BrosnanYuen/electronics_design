@@ -156,10 +156,11 @@ def _build_asc_lines(
     text_records = _collect_text_records(logical_lines, symbol_pose)
     if not _has_active_analysis_text_record(text_records):
         text_records = (*text_records, TextRecord(payload="!.op", font_size=2, estimated_height=_estimate_text_height("!.op", 2)))
+    sheet_width, sheet_height = _compute_sheet_size(all_points, text_records)
     text_lines = _layout_text_records(text_records, all_points)
     return (
         f"Version {version_text}",
-        "SHEET 1 880 680",
+        f"SHEET 1 {sheet_width} {sheet_height}",
         *wire_lines,
         *flag_lines,
         *symbol_lines,
@@ -501,17 +502,35 @@ def _estimate_text_height(payload: str, font_size: int) -> int:
     return logical_line_count * line_height
 
 
+def _compute_sheet_size(all_points: Sequence[Point], text_records: Sequence[TextRecord]) -> Tuple[int, int]:
+    if all_points:
+        min_x = min(point[0] for point in all_points)
+        max_x = max(point[0] for point in all_points)
+        min_y = min(point[1] for point in all_points)
+        max_y = max(point[1] for point in all_points)
+    else:
+        min_x = max_x = min_y = max_y = 0
+    content_width = max_x - min_x
+    content_height = max_y - min_y
+    text_height = sum(record.estimated_height + 16 for record in text_records)
+    sheet_width = max(content_width + 256, 880)
+    sheet_height = max(content_height + text_height + 256, 680)
+    return sheet_width, sheet_height
+
+
 def _layout_text_records(text_records: Sequence[TextRecord], all_points: Sequence[Point]) -> Tuple[str, ...]:
     if not text_records:
         return ()
     if all_points:
         max_x = max(point[0] for point in all_points)
+        max_y = max(point[1] for point in all_points)
         min_y = min(point[1] for point in all_points)
     else:
         max_x = 0
+        max_y = 0
         min_y = 0
     text_x = max_x + 48
-    current_y = min_y
+    current_y = max_y + 48
     text_lines: List[str] = []
     for text_record in text_records:
         text_lines.append(f"TEXT {text_x} {current_y} Left {text_record.font_size} {text_record.payload}")

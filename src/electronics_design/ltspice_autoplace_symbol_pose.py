@@ -34,6 +34,7 @@ _AUTOPLACE_ERROR: ConversionResult = (False, "AUTOPLACE_FAILED", 0)
 _DEFAULT_AUTOPLACE_ITERATIONS = 12
 _NO_CONNECT_PREFIXES = ("NC", "NC_", "NC-")
 _GROUND_NETS = {"0", "GND"}
+_POWER_NET_NAMES = {"VCC", "VDD", "VEE", "V+", "V-", "VBAT", "VB+", "HT", "HV", "B+", "V++", "V--"}
 _SYMMETRIC_SYMBOL_NAMES = {
     "npn",
     "pnp",
@@ -211,6 +212,11 @@ def ltspice_autoplace_symbol_pose(
                 current_positions,
                 current_geometries,
                 minimum_dist,
+                routing_grid,
+            )
+            current_positions = _normalize_positions_to_positive_space(
+                current_positions,
+                current_geometries,
                 routing_grid,
             )
             candidate_payload = _build_symbol_pose_payload(
@@ -408,9 +414,11 @@ def _build_component_graph(
                 if first_connection.instance_name == second_connection.instance_name:
                     continue
                 if graph.has_edge(first_connection.instance_name, second_connection.instance_name):
-                    graph[first_connection.instance_name][second_connection.instance_name]["weight"] += net_weight
+                    edge_data = graph[first_connection.instance_name][second_connection.instance_name]
+                    edge_data["weight"] += net_weight
+                    edge_data["nets"].add(net_name)
                 else:
-                    graph.add_edge(first_connection.instance_name, second_connection.instance_name, weight=net_weight)
+                    graph.add_edge(first_connection.instance_name, second_connection.instance_name, weight=net_weight, nets={net_name})
     return graph
 
 
@@ -424,30 +432,51 @@ def _group_connections_by_net(
     return grouped_connections
 
 
+def _signal_flow_subgraph(subgraph: nx.Graph) -> nx.Graph:
+    signal_graph = nx.Graph()
+    signal_graph.add_nodes_from(subgraph.nodes)
+    for u, v, data in subgraph.edges(data=True):
+        nets = data.get("nets", set())
+        has_signal = any(
+            n.upper() not in _GROUND_NETS and not _is_power_net(n)
+            for n in nets
+        )
+        if has_signal:
+            signal_graph.add_edge(u, v, **data)
+    return signal_graph
+
+
 def _build_initial_positions(
     component_graph: nx.Graph,
     geometries: Mapping[str, OrientationGeometry],
     minimum_dist: int,
     routing_grid: int,
 ) -> Dict[str, Point]:
-    padding = max(routing_grid * 4, minimum_dist * 2, 64)
-    component_gap = max(padding * 2, 192)
+    padding = max(routing_grid * 3, minimum_dist * 2, 48)
+    component_gap = max(padding * 2, 128)
+    base_x = float(max(routing_grid * 8, 128))
     positions: Dict[str, Point] = {}
-    current_x_offset = 0.0
+    current_x_offset = base_x
     for component_nodes in sorted(nx.connected_components(component_graph), key=lambda nodes: (-len(nodes), sorted(nodes)[0])):
         subgraph = component_graph.subgraph(component_nodes).copy()
-        if len(subgraph.nodes) == 1:
-            node_name = next(iter(subgraph.nodes))
+        signal_subgraph = _signal_flow_subgraph(subgraph)
+        if len(signal_subgraph.nodes) == 0:
+            signal_subgraph = subgraph
+        if len(signal_subgraph.nodes) == 1:
+            node_name = next(iter(signal_subgraph.nodes))
             geometry = geometries[node_name]
             positions[node_name] = _origin_from_center(
-                (current_x_offset + geometry.width / 2.0, 0.0),
+                (current_x_offset + geometry.width / 2.0, base_x),
                 geometry,
                 routing_grid,
             )
             current_x_offset += geometry.width + component_gap
             continue
-        root_node = _choose_root_component(subgraph)
-        layer_map = nx.single_source_shortest_path_length(subgraph, root_node)
+        root_node = _choose_root_component(signal_subgraph)
+        layer_map = nx.single_source_shortest_path_length(signal_subgraph, root_node)
+        orphan_nodes = set(signal_subgraph.nodes) - set(layer_map.keys())
+        for orphan_node in orphan_nodes:
+            layer_map[orphan_node] = max(layer_map.values()) + 1 if layer_map else 0
         layers: Dict[int, List[str]] = {}
         for node_name, layer_index in layer_map.items():
             layers.setdefault(layer_index, []).append(node_name)
@@ -476,7 +505,7 @@ def _build_initial_positions(
         for layer_index, layer_nodes in ordered_layers:
             layer_height = sum(geometries[node_name].height for node_name in layer_nodes)
             layer_height += padding * max(len(layer_nodes) - 1, 0)
-            current_y = -(layer_height / 2.0)
+            current_y = base_x - (layer_height / 2.0)
             for node_name in layer_nodes:
                 geometry = geometries[node_name]
                 center_y = current_y + (geometry.height / 2.0)
@@ -559,7 +588,7 @@ def _choose_orientations(
                 pin_connections_by_instance,
             )
             if orientation == current_orientation:
-                score -= 0.5
+                score -= 15.0
             if score < best_score:
                 best_score = score
                 best_orientation = orientation
@@ -583,6 +612,8 @@ def _orientation_score(
     pin_connections_by_instance: Mapping[str, Sequence[PinConnection]],
 ) -> float:
     score = 0.0
+    center_x = origin[0] + geometry.center_offset[0]
+    center_y = origin[1] + geometry.center_offset[1]
     local_pin_points = {
         pin.spice_order: (origin[0] + pin.point[0], origin[1] + pin.point[1])
         for pin in geometry.pins
@@ -603,7 +634,36 @@ def _orientation_score(
         target_x = sum(point[0] for point in other_points) / len(other_points)
         target_y = sum(point[1] for point in other_points) / len(other_points)
         pin_point = local_pin_points[connection.spice_order]
-        score += _net_weight(connection.net_name) * (abs(pin_point[0] - target_x) + abs(pin_point[1] - target_y))
+        net_w = _net_weight(connection.net_name)
+        score += net_w * (abs(pin_point[0] - target_x) + abs(pin_point[1] - target_y))
+        pin_x, pin_y = pin_point
+        delta_x = pin_x - center_x
+        delta_y = pin_y - center_y
+        is_ground = connection.net_name.upper() in _GROUND_NETS
+        is_power = _is_power_net(connection.net_name)
+        if is_ground:
+            if delta_y > 0:
+                score -= 30.0
+            else:
+                score += 60.0
+        elif is_power:
+            if delta_y < 0:
+                score -= 30.0
+            else:
+                score += 60.0
+        else:
+            target_delta_x = target_x - center_x
+            target_delta_y = target_y - center_y
+            pin_is_horizontal = abs(delta_x) > abs(delta_y)
+            target_is_horizontal = abs(target_delta_x) > abs(target_delta_y)
+            if target_is_horizontal and pin_is_horizontal:
+                score -= 8.0
+            elif not target_is_horizontal and not pin_is_horizontal:
+                score -= 4.0
+            elif target_is_horizontal and not pin_is_horizontal:
+                score += 14.0
+            else:
+                score += 8.0
     return score
 
 
@@ -631,13 +691,15 @@ def _relax_positions(
 ) -> Dict[str, Point]:
     net_groups = _group_connections_by_net(pin_connections_by_instance)
     positions = dict(current_positions)
-    for _ in range(2):
+    for _ in range(1):
         absolute_pin_points = _absolute_pin_points(positions, geometries)
         updated_positions = dict(positions)
         for instance_name in sorted(positions):
             suggestions: List[Tuple[float, float, float]] = []
             geometry = geometries[instance_name]
             for connection in pin_connections_by_instance.get(instance_name, ()):
+                if connection.net_name.upper() in _GROUND_NETS or _is_power_net(connection.net_name):
+                    continue
                 pin_geometry = _pin_geometry_by_order(geometry, connection.spice_order)
                 if pin_geometry is None:
                     continue
@@ -659,8 +721,8 @@ def _relax_positions(
             suggested_origin_x = sum(target_x * weight for target_x, _target_y, weight in suggestions) / total_weight
             suggested_origin_y = sum(target_y * weight for _target_x, target_y, weight in suggestions) / total_weight
             blended_origin = (
-                (positions[instance_name][0] * 0.35) + (suggested_origin_x * 0.65),
-                (positions[instance_name][1] * 0.35) + (suggested_origin_y * 0.65),
+                (positions[instance_name][0] * 0.85) + (suggested_origin_x * 0.15),
+                (positions[instance_name][1] * 0.85) + (suggested_origin_y * 0.15),
             )
             updated_positions[instance_name] = (
                 _snap_coordinate_to_grid(int(round(blended_origin[0])), routing_grid),
@@ -777,7 +839,7 @@ def _expand_layout_for_iteration(
 ) -> Dict[str, Point]:
     if iteration_index == 0:
         return dict(positions)
-    scale = 1.0 + (0.12 * iteration_index)
+    scale = 1.0 + (0.06 * iteration_index)
     center_x = sum(position[0] for position in positions.values()) / max(len(positions), 1)
     center_y = sum(position[1] for position in positions.values()) / max(len(positions), 1)
     expanded_positions: Dict[str, Point] = {}
@@ -795,7 +857,7 @@ def _expand_layout_for_routing_retry(
     routing_grid: int,
     iteration_index: int,
 ) -> Dict[str, Point]:
-    scale = 1.15 + (0.08 * iteration_index)
+    scale = 1.10 + (0.04 * iteration_index)
     center_x = sum(_rectangle_center(_absolute_rectangle(position, geometries[instance_name]))[0] for instance_name, position in positions.items()) / max(len(positions), 1)
     center_y = sum(_rectangle_center(_absolute_rectangle(position, geometries[instance_name]))[1] for instance_name, position in positions.items()) / max(len(positions), 1)
     expanded_positions: Dict[str, Point] = {}
@@ -807,6 +869,40 @@ def _expand_layout_for_routing_retry(
         )
         expanded_positions[instance_name] = _origin_from_center(shifted_center, geometries[instance_name], routing_grid)
     return expanded_positions
+
+
+def _normalize_positions_to_positive_space(
+    positions: Mapping[str, Point],
+    geometries: Mapping[str, OrientationGeometry],
+    routing_grid: int,
+) -> Dict[str, Point]:
+    if not positions:
+        return dict(positions)
+    min_x = None
+    min_y = None
+    for instance_name, origin in positions.items():
+        geometry = geometries[instance_name]
+        absolute_rect = _absolute_rectangle(origin, geometry)
+        if min_x is None:
+            min_x = absolute_rect[0]
+            min_y = absolute_rect[1]
+        else:
+            min_x = min(min_x, absolute_rect[0])
+            min_y = min(min_y, absolute_rect[1])
+    if min_x is None:
+        return dict(positions)
+    target_margin = max(routing_grid * 5, 80)
+    shift_x = max(0, target_margin - int(min_x))
+    shift_y = max(0, target_margin - int(min_y))
+    if shift_x == 0 and shift_y == 0:
+        return dict(positions)
+    return {
+        instance_name: (
+            _snap_coordinate_to_grid(position[0] + shift_x, routing_grid),
+            _snap_coordinate_to_grid(position[1] + shift_y, routing_grid),
+        )
+        for instance_name, position in positions.items()
+    }
 
 
 def _build_symbol_pose_payload(
@@ -1075,10 +1171,16 @@ def _is_no_connect_net(net_name: str) -> bool:
     return net_name.upper().startswith(_NO_CONNECT_PREFIXES)
 
 
+def _is_power_net(net_name: str) -> bool:
+    return net_name.upper() in _POWER_NET_NAMES
+
+
 def _net_weight(net_name: str) -> float:
     uppercase_name = net_name.upper()
     if uppercase_name in _GROUND_NETS:
         return 0.35
+    if _is_power_net(net_name):
+        return 0.45
     if _is_no_connect_net(net_name):
         return 0.0
     return 1.0
