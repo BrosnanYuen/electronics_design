@@ -32,6 +32,7 @@ ltspice_netlist_symbol_wire_to_asc = _netlist_symbol_wire_to_asc.ltspice_netlist
 ltspice_netlist_to_wiring = _netlist_to_wiring.ltspice_netlist_to_wiring  # Re-export the netlist-to-wiring conversion helper.
 ltspice_resolve_symbol_pose = _resolve_symbol_pose.ltspice_resolve_symbol_pose  # Re-export the symbol-pose resolution helper.
 ltspice_check_symbol_pose = _resolve_symbol_pose.ltspice_check_symbol_pose  # Re-export the symbol-pose collision helper.
+ltspice_symbol_facing = _resolve_symbol_pose.ltspice_symbol_facing  # Re-export the symbol pin-facing helper.
 is_valid_ltspice_asy = _asy.is_valid_ltspice_asy  # Re-export the ASY validator.
 get_ltspice_asy_size = _asy.get_ltspice_asy_size  # Re-export the ASY size helper.
 get_ltspice_asy_pins = _asy.get_ltspice_asy_pins  # Re-export the ASY pin extraction helper.
@@ -73,6 +74,7 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "ltspice_netlist_to_wiring",  # Export the netlist-to-wiring conversion helper.
     "ltspice_resolve_symbol_pose",  # Export the symbol-pose resolution helper.
     "ltspice_check_symbol_pose",  # Export the symbol-pose collision helper.
+    "ltspice_symbol_facing",  # Export the symbol pin-facing helper.
     "is_valid_ltspice_asy",  # Export the ASY validator.
     "get_ltspice_asy_size",  # Export the ASY size helper.
     "get_ltspice_asy_pins",  # Export the ASY pin extraction helper.

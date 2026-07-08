@@ -22,6 +22,7 @@ from .ltspice import ltspice_netlist_symbol_wire_to_asc  # Re-export the netlist
 from .ltspice import ltspice_netlist_to_wiring  # Re-export the netlist-to-wiring conversion helper.
 from .ltspice import ltspice_resolve_symbol_pose  # Re-export the symbol-pose resolution helper.
 from .ltspice import ltspice_check_symbol_pose  # Re-export the symbol-pose collision helper.
+from .ltspice import ltspice_symbol_facing  # Re-export the symbol pin-facing helper.
 from .ltspice import is_ltspice_netlist_structure_connected  # Re-export the connectivity validator.
 from .ltspice import is_valid_ltspice_netlist_file  # Re-export the whole-file validator.
 from .ltspice import is_valid_ltspice_netlist_footer  # Re-export the footer validator.
@@ -56,6 +57,7 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_netlist_to_wiring",  # Export the netlist-to-wiring conversion helper name.
     "ltspice_resolve_symbol_pose",  # Export the symbol-pose resolution helper name.
     "ltspice_check_symbol_pose",  # Export the symbol-pose collision helper name.
+    "ltspice_symbol_facing",  # Export the symbol pin-facing helper name.
     "is_valid_ltspice_netlist_format",  # Export the format validator name.
     "is_valid_ltspice_netlist_footer",  # Export the footer validator name.
     "is_ltspice_netlist_structure_connected",  # Export the connectivity validator name.
