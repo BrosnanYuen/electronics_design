@@ -93,6 +93,7 @@ Uses schemdraw (ASC) and networkx (netlist) to render images. Supports `.png`, `
 | `ltspice_resolve_symbol_pose(symbol_json_filepath, convert_settings)` | `(bool, str, int)` |
 | `ltspice_check_symbol_pose(symbol_json_filepath, convert_settings)` | `(bool, np.ndarray | None)` |
 | `ltspice_symbol_facing(symbol_pose_filepath, convert_settings)` | `{instance_name: [[x, y, pin_name, spice_order, facing], ...], ...}` |
+| `ltspice_symbol_estimate(symbol_pose_filepath, core_symbol_name, core_symbol_pin_id, supporting_symbol_name, supporting_symbol_pin_id, convert_settings)` | `{supporting_symbol_name: {SYMBOL, X, Y, ORIENTATION, RECTANGLE, PINS, ...}}` |
 | `ltspice_netlist_to_wiring(netlist_filepath, symbol_pose_filepath, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `ltspice_netlist_symbol_wire_to_asc(netlist_filepath, symbol_pose_filepath, wire_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `ltspice_autoplace_symbol_pose(netlist_filepath, symbol_pose_filepath_out, wire_filepath_out, convert_settings)` | `(bool, str, int)` |
@@ -103,11 +104,12 @@ Typical pipeline:
 1. **netlist → symbol_initial** — generates JSON with `SYMBOL`, `X=0`, `Y=0`, `ORIENTATION=""`, empty `RECTANGLE` and `PINS`.
 2. **resolve_symbol_pose** — populates `RECTANGLE` and `PINS` from `.asy` files using `X`, `Y`, and `ORIENTATION`.
 3. **symbol_facing** — derives the outward-facing side of each resolved pin as `+X DIRECTION`, `-X DIRECTION`, `+Y DIRECTION`, or `-Y DIRECTION`.
-4. **check_symbol_pose** — detects symbol-rectangle collisions after buffering by `minimum_dist`. Returns `(False, None)` or `(True, collisions_array)`.
-5. **netlist_to_wiring** — routes axis-aligned wires between symbol pins while avoiding obstacles.
-6. **netlist_symbol_wire_to_asc** — converts the netlist, final symbol-pose JSON, and wire JSON back into one LTspice `.asc` file.
-7. **autoplace_symbol_pose** — automatically places symbols using a spring-layout-like algorithm, resolves poses, avoids collisions, and generates wiring.
-8. **netlist_to_asc** — runs steps 1, 4, and 5 through the public APIs and writes one LTspice `.asc` file directly from a netlist.
+4. **symbol_estimate** — estimates one supporting symbol pose around one fixed core symbol by choosing `R0/R90/R180/R270`, aligning the requested support pin opposite the core pin facing, and enforcing `minimum_dist` without colliding with the core symbol.
+5. **check_symbol_pose** — detects symbol-rectangle collisions after buffering by `minimum_dist`. Returns `(False, None)` or `(True, collisions_array)`.
+6. **netlist_to_wiring** — routes axis-aligned wires between symbol pins while avoiding obstacles.
+7. **netlist_symbol_wire_to_asc** — converts the netlist, final symbol-pose JSON, and wire JSON back into one LTspice `.asc` file.
+8. **autoplace_symbol_pose** — automatically places symbols using a spring-layout-like algorithm, resolves poses, avoids collisions, and generates wiring.
+9. **netlist_to_asc** — runs the public netlist-to-symbol-initial, autoplace, and netlist/symbol/wire-to-ASC stages and writes one LTspice `.asc` file directly from a netlist.
 
 ### Wire / Path Utilities
 
@@ -245,6 +247,8 @@ from electronics_design import ltspice_netlist_to_symbol_initial
 from electronics_design import ltspice_netlist_symbol_wire_to_asc
 from electronics_design import ltspice_netlist_to_wiring
 from electronics_design import ltspice_resolve_symbol_pose
+from electronics_design import ltspice_symbol_estimate
+from electronics_design import ltspice_symbol_facing
 from electronics_design import rectangle_points_to_lines
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
@@ -297,6 +301,15 @@ same_footer = ltspice_netlist_footer_cmp("a.net", "b.net")
 ltspice_netlist_to_symbol_initial("example.net", "symbols.json", convert_settings)
 ltspice_resolve_symbol_pose("symbols.json", convert_settings)
 collides, pairs = ltspice_check_symbol_pose("symbols.json", convert_settings)
+pin_facings = ltspice_symbol_facing("symbols.json", convert_settings)
+supporting_symbol_pose = ltspice_symbol_estimate(
+    "symbols.json",
+    "U1",
+    5,
+    "R1",
+    1,
+    convert_settings,
+)
 ltspice_netlist_to_wiring("example.net", "symbols.json", "wires.json", convert_settings)
 ltspice_netlist_symbol_wire_to_asc("example.net", "symbols.json", "wires.json", "roundtrip.asc", convert_settings)
 ltspice_autoplace_symbol_pose("example.net", "symbols.json", "wires.json", convert_settings)
@@ -333,6 +346,7 @@ src/electronics_design/
     ltspice_net.py
     ltspice_netlist_plot_networkx.py
     ltspice_netlist_to_symbol_initial.py
+    ltspice_symbol_estimate.py
     ltspice_netlist_to_wiring.py
     ltspice_resolve_symbol_pose.py
     pathtracing.py
