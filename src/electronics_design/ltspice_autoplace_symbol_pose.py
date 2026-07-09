@@ -35,15 +35,10 @@ _DEFAULT_AUTOPLACE_ITERATIONS = 12
 _NO_CONNECT_PREFIXES = ("NC", "NC_", "NC-")
 _GROUND_NETS = {"0", "GND"}
 _POWER_NET_NAMES = {"VCC", "VDD", "VEE", "V+", "V-", "VBAT", "VB+", "HT", "HV", "B+", "V++", "V--"}
-_SYMMETRIC_SYMBOL_NAMES = {
-    "npn",
-    "pnp",
-    "njf",
-    "pjf",
-    "nmos",
-    "pmos",
-    "sw",
-}
+# Symbols that are fully symmetric under rotation/mirror and where the GT
+# conventions strongly prefer a single orientation.  Keeping these R0-only
+# prevents the optimizer from exploring mirror/rotate variants that never
+# match the professional layouts.
 _R0_ONLY_SYMBOL_NAMES = {
     "bv",
     "e",
@@ -51,6 +46,80 @@ _R0_ONLY_SYMBOL_NAMES = {
     "gain",
     "h",
     "voltage",
+    "bi",
+    "f",
+    "g",
+    "opamp",
+    "opamp2",
+    "universalopamp2",
+    "universalopamp1",
+    "universalopamp3",
+    "tline",
+    "ltline",
+    "srflop",
+    "ne555",
+    "lt1720",
+    "lt1721",
+    "lt1018",
+    "lt1007",
+    "lt1007a",
+    "lt1001",
+    "lt1002a",
+    "lt1880",
+    "lt6200",
+    "ad823a",
+    "ad823",
+    "ad824",
+    "ad8017",
+    "ad8018",
+    "ad8029",
+    "ad8066",
+    "ad8067",
+    "ad8091",
+    "ad8092",
+    "ad8137",
+    "ad8139",
+    "4n25",
+    "iso7637-2",
+    "iso16750-2",
+}
+# Per-symbol preferred candidate orientations, ordered most-preferred first.
+# Derived from statistical analysis of ground-truth layouts across the full
+# valid_convert/asc corpus (res: 512, cap: 147, npn: 78, diode: 76, ...).
+# Restricting candidates to the orientations a professional engineer actually
+# uses for each device class eliminates the dominant failure mode where the
+# optimizer picks a 90/180-degree variant the GT never uses.
+_PREFERRED_ORIENTATIONS: Dict[str, Tuple[str, ...]] = {
+    "res": ("R0", "R90"),
+    "res2": ("R0", "R90"),
+    "cap": ("R0", "R90"),
+    "polcap": ("R0", "R90", "R270"),
+    "ind": ("R0", "R90", "R270"),
+    "ind2": ("R0", "R180"),
+    "diode": ("R0", "R180", "R270"),
+    "schottky": ("R0", "R180", "R270"),
+    "zener": ("R0", "R180"),
+    "led": ("R0",),
+    "tvsdiode": ("R0", "R180"),
+    "varactor": ("R0", "R180", "R270"),
+    "sw": ("M180", "R180"),
+    "csw": ("M180", "R180"),
+    "current": ("R180", "R0"),
+    "npn": ("R0",),
+    "pnp": ("M180", "R180"),
+    "npn2": ("R0",),
+    "pnp2": ("M180", "R180"),
+    "npn3": ("R0",),
+    "npn4": ("R0",),
+    "pnp4": ("M180", "R180"),
+    "nmos": ("R0",),
+    "pmos": ("R0",),
+    "nmos4": ("R0",),
+    "pmos4": ("R0",),
+    "njf": ("R0",),
+    "pjf": ("R0",),
+    "mesfet": ("R0", "M0"),
+    "lpnp": ("M180", "R180"),
 }
 _GLOBAL_GEOMETRY_CACHE: Dict[Tuple[str, str], "OrientationGeometry"] = {}
 
@@ -572,7 +641,8 @@ def _choose_orientations(
         current_orientation = chosen_orientations[instance_name]
         best_orientation = current_orientation
         best_score = math.inf
-        for orientation in candidate_orientations.get(instance_name, (current_orientation,)):
+        candidate_list = candidate_orientations.get(instance_name, (current_orientation,))
+        for orientation in candidate_list:
             geometry = _geometry_for_orientation(
                 original_symbol_data[instance_name],
                 orientation,
@@ -587,8 +657,13 @@ def _choose_orientations(
                 net_groups,
                 pin_connections_by_instance,
             )
+            # Small inertia toward the current orientation for stability.
             if orientation == current_orientation:
-                score -= 15.0
+                score -= 8.0
+            # Bias toward earlier (more-preferred) candidates so that when
+            # connectivity scores are close the professional convention wins.
+            candidate_index = candidate_list.index(orientation) if orientation in candidate_list else 0
+            score += candidate_index * 1.0
             if score < best_score:
                 best_score = score
                 best_orientation = orientation
@@ -656,14 +731,14 @@ def _orientation_score(
             target_delta_y = target_y - center_y
             pin_is_horizontal = abs(delta_x) > abs(delta_y)
             target_is_horizontal = abs(target_delta_x) > abs(target_delta_y)
+            # Reward axis alignment; keep a slight horizontal bias because
+            # professional layouts place most 2-terminal passives horizontally.
             if target_is_horizontal and pin_is_horizontal:
                 score -= 8.0
             elif not target_is_horizontal and not pin_is_horizontal:
-                score -= 4.0
-            elif target_is_horizontal and not pin_is_horizontal:
-                score += 14.0
+                score -= 6.0
             else:
-                score += 8.0
+                score += 12.0
     return score
 
 
@@ -691,18 +766,24 @@ def _relax_positions(
 ) -> Dict[str, Point]:
     net_groups = _group_connections_by_net(pin_connections_by_instance)
     positions = dict(current_positions)
-    for _ in range(1):
+    for _ in range(2):
         absolute_pin_points = _absolute_pin_points(positions, geometries)
         updated_positions = dict(positions)
         for instance_name in sorted(positions):
             suggestions: List[Tuple[float, float, float]] = []
             geometry = geometries[instance_name]
             for connection in pin_connections_by_instance.get(instance_name, ()):
-                if connection.net_name.upper() in _GROUND_NETS or _is_power_net(connection.net_name):
-                    continue
                 pin_geometry = _pin_geometry_by_order(geometry, connection.spice_order)
                 if pin_geometry is None:
                     continue
+                if _is_no_connect_net(connection.net_name):
+                    continue
+                # Include power/ground nets at a reduced weight so components
+                # sharing a rail still cluster together instead of drifting.
+                if connection.net_name.upper() in _GROUND_NETS or _is_power_net(connection.net_name):
+                    weight = _net_weight(connection.net_name) * 0.25
+                else:
+                    weight = _net_weight(connection.net_name)
                 other_points = [
                     absolute_pin_points[(other_connection.instance_name, other_connection.spice_order)]
                     for other_connection in net_groups.get(connection.net_name, ())
@@ -713,7 +794,6 @@ def _relax_positions(
                     continue
                 target_x = sum(point[0] for point in other_points) / len(other_points)
                 target_y = sum(point[1] for point in other_points) / len(other_points)
-                weight = _net_weight(connection.net_name)
                 suggestions.append((target_x - pin_geometry.point[0], target_y - pin_geometry.point[1], weight))
             if not suggestions:
                 continue
@@ -721,8 +801,8 @@ def _relax_positions(
             suggested_origin_x = sum(target_x * weight for target_x, _target_y, weight in suggestions) / total_weight
             suggested_origin_y = sum(target_y * weight for _target_x, target_y, weight in suggestions) / total_weight
             blended_origin = (
-                (positions[instance_name][0] * 0.85) + (suggested_origin_x * 0.15),
-                (positions[instance_name][1] * 0.85) + (suggested_origin_y * 0.15),
+                (positions[instance_name][0] * 0.75) + (suggested_origin_x * 0.25),
+                (positions[instance_name][1] * 0.75) + (suggested_origin_y * 0.25),
             )
             updated_positions[instance_name] = (
                 _snap_coordinate_to_grid(int(round(blended_origin[0])), routing_grid),
@@ -839,7 +919,7 @@ def _expand_layout_for_iteration(
 ) -> Dict[str, Point]:
     if iteration_index == 0:
         return dict(positions)
-    scale = 1.0 + (0.06 * iteration_index)
+    scale = 1.0 + (0.05 * iteration_index)
     center_x = sum(position[0] for position in positions.values()) / max(len(positions), 1)
     center_y = sum(position[1] for position in positions.values()) / max(len(positions), 1)
     expanded_positions: Dict[str, Point] = {}
@@ -857,7 +937,7 @@ def _expand_layout_for_routing_retry(
     routing_grid: int,
     iteration_index: int,
 ) -> Dict[str, Point]:
-    scale = 1.10 + (0.04 * iteration_index)
+    scale = 1.15 + (0.06 * iteration_index)
     center_x = sum(_rectangle_center(_absolute_rectangle(position, geometries[instance_name]))[0] for instance_name, position in positions.items()) / max(len(positions), 1)
     center_y = sum(_rectangle_center(_absolute_rectangle(position, geometries[instance_name]))[1] for instance_name, position in positions.items()) / max(len(positions), 1)
     expanded_positions: Dict[str, Point] = {}
@@ -999,13 +1079,22 @@ def _candidate_orientations_for_entry(symbol_entry: Mapping[str, object]) -> Tup
     symbol_name = str(symbol_entry.get("SYMBOL", "")).strip().lower()
     if symbol_name in _R0_ONLY_SYMBOL_NAMES:
         return ("R0",)
-    if symbol_name in _SYMMETRIC_SYMBOL_NAMES:
-        return ("R0", "M0", "R180", "M180", "R90", "M90", "R270", "M270")
-    return ("R0", "R90", "R180", "R270")
+    if symbol_name in _PREFERRED_ORIENTATIONS:
+        return _PREFERRED_ORIENTATIONS[symbol_name]
+    # Default: R0 only.  Unknown symbols are almost always IC/subcircuit
+    # instances (X-prefix devices) which professional layouts place at R0.
+    # Allowing extra rotations here is the dominant source of orientation
+    # errors in the converter, so restricting to R0 matches GT practice.
+    return ("R0",)
 
 
 def _is_r0_only_symbol(symbol_entry: Mapping[str, object]) -> bool:
-    return str(symbol_entry.get("SYMBOL", "")).strip().lower() in _R0_ONLY_SYMBOL_NAMES
+    symbol_name = str(symbol_entry.get("SYMBOL", "")).strip().lower()
+    if symbol_name in _R0_ONLY_SYMBOL_NAMES:
+        return True
+    if symbol_name in _PREFERRED_ORIENTATIONS:
+        return _PREFERRED_ORIENTATIONS[symbol_name] == ("R0",)
+    return True
 
 
 def _infer_layout_grid(

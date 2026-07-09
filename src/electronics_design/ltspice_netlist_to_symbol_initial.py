@@ -331,12 +331,42 @@ def _extract_comment_symbol_hints(lines: Sequence[str]) -> Dict[str, str]:
         hint_match = _MODELFILE_HINT_PATTERN.search(stripped_line)
         if hint_match is None:
             continue
-        symbol_name = Path(hint_match.group("symbol_path").replace("\\", "/")).stem
+        symbol_name = _symbol_relative_path_from_hint(hint_match.group("symbol_path"))
         for raw_instance in hint_match.group("instances").split(","):
             normalized_instance = _normalize_instance_name(raw_instance.strip())
             if normalized_instance != "":
                 hints[normalized_instance] = symbol_name
     return hints
+
+
+def _symbol_relative_path_from_hint(raw_symbol_path: str) -> str:
+    """Return the symbol path relative to the LTspice ``lib\\sym`` directory.
+
+    LTspice netlists embed the full Windows symbol path in a comment, e.g.
+    ``C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\sym\\Comparators\\LT1721.asy``.
+    The ASC SYMBOL record stores the path relative to ``sym`` with a doubled
+    backslash (``Comparators\\\\LT1721``).  Earlier code stripped the entire
+    subdirectory and kept only the stem (``LT1721``); preserving the relative
+    subdirectory makes generated schematics match the professional convention.
+    """
+    normalized_path = raw_symbol_path.replace("\\", "/")
+    parts = normalized_path.split("/")
+    sym_index = -1
+    for index in range(len(parts) - 1, -1, -1):
+        if parts[index].lower() == "sym" and index > 0 and parts[index - 1].lower() == "lib":
+            sym_index = index
+            break
+    if sym_index == -1:
+        return Path(normalized_path).stem
+    relative_parts = parts[sym_index + 1:]
+    if not relative_parts:
+        return Path(normalized_path).stem
+    relative_path = "/".join(relative_parts)
+    stem = Path(relative_path).stem
+    relative_dir = "/".join(relative_parts[:-1])
+    if relative_dir:
+        return f"{relative_dir}\\\\{stem}"
+    return stem
 
 
 def _load_symbol_hints_from_matching_asc(
@@ -434,7 +464,9 @@ def _resolve_symbol_name(
     if template_symbol_name != "":
         return template_symbol_name
     if prefix == "A":
-        return tokens[-1].lower()
+        symbol_basename = tokens[-1].lower()
+        resolved_symbol_name = _resolve_exact_symbol_basename(symbol_basename, symbol_path_lookup)
+        return resolved_symbol_name if resolved_symbol_name is not None else symbol_basename
     if prefix == "B":
         return "bi" if tokens[3].strip().upper().startswith("I=") else "bv"
     if prefix == "C":
@@ -550,7 +582,52 @@ def _resolve_exact_symbol_basename(symbol_name: str, symbol_path_lookup: Mapping
     resolved_symbol_filepath = _asc_to_netlist._resolve_symbol_filepath(symbol_name, symbol_path_lookup)
     if resolved_symbol_filepath is None:
         return None
+    relative_name = _symbol_relative_path_from_lookup(symbol_name, symbol_path_lookup)
+    if relative_name is not None:
+        return relative_name
     return Path(resolved_symbol_filepath).stem
+
+
+def _symbol_relative_path_from_lookup(symbol_name: str, symbol_path_lookup: Mapping[str, str]) -> Optional[str]:
+    """Return the symbol path relative to the LTspice ``sym`` directory.
+
+    Generated ASC files use a doubled-backslash subdirectory path (e.g.
+    ``OpAmps\\\\opamp``) rather than the bare stem.  This searches the lookup
+    keys for a ``lib/sym/...`` structured entry matching the requested symbol
+    stem so that subdirectory information is preserved even when the symbol
+    is also present in a flat custom search directory.
+    """
+    normalized_stem = symbol_name.replace("\\", "/").split("/")[-1].lower()
+    best_key: Optional[str] = None
+    best_depth = 0
+    for lookup_key in symbol_path_lookup:
+        key_path = lookup_key.replace("\\", "/")
+        parts = key_path.split("/")
+        sym_index = -1
+        for index in range(len(parts) - 1, -1, -1):
+            if parts[index].lower() == "sym" and index > 0 and parts[index - 1].lower() == "lib":
+                sym_index = index
+                break
+        if sym_index == -1:
+            continue
+        relative_parts = parts[sym_index + 1:]
+        if not relative_parts:
+            continue
+        key_stem = Path("/".join(relative_parts)).stem.lower()
+        if key_stem != normalized_stem:
+            continue
+        depth = len(relative_parts)
+        if depth > best_depth:
+            best_depth = depth
+            best_key = "/".join(relative_parts)
+    if best_key is None:
+        return None
+    stem = Path(best_key).stem
+    relative_dir = "/".join(best_key.split("/")[:-1])
+    if relative_dir:
+        title_dir = "\\".join(part.title() if part.islower() else part for part in relative_dir.split("/"))
+        return f"{title_dir}\\\\{stem}"
+    return stem
 
 
 def _infer_x_symbol_name_from_library_context(

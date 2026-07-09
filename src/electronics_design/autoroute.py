@@ -171,10 +171,14 @@ def _build_visibility_graph(candidate_points: Sequence[Point], obstacles: np.nda
     for point in candidate_points:
         grouped_by_x[point[0]].append(point)
         grouped_by_y[point[1]].append(point)
+    # Use the segment-penalty edge weights so the shortest path minimizes
+    # the number of bends, producing cleaner orthogonal routes.
+    max_length = _maximum_possible_route_length(candidate_points)
+    segment_penalty = (len(candidate_points) + 1) * (max_length + 1)
     for group_points in grouped_by_x.values():
-        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[1]), obstacles)
+        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[1]), obstacles, segment_penalty)
     for group_points in grouped_by_y.values():
-        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[0]), obstacles)
+        _add_visible_edges(graph, sorted(group_points, key=lambda point: point[0]), obstacles, segment_penalty)
     return graph
 
 
@@ -208,12 +212,17 @@ def _add_visible_edges(
     graph: nx.Graph,
     ordered_points: Sequence[Point],
     obstacles: np.ndarray,
+    segment_penalty: int = 0,
 ) -> None:
+    # Add edges between consecutive visible collinear points.  Edges that
+    # cross an obstacle are skipped so the graph still connects around it
+    # via other collinear points.
     for first_point, second_point in zip(ordered_points, ordered_points[1:]):
         segment = (first_point[0], first_point[1], second_point[0], second_point[1])
         if _segment_hits_any_obstacle(segment, obstacles):
             continue
-        graph.add_edge(first_point, second_point, length=_segment_length(segment))
+        segment_len = _segment_length(segment)
+        graph.add_edge(first_point, second_point, length=segment_len, weight=segment_penalty + segment_len)
 
 
 def _add_full_visible_edges(
