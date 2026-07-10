@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 
 _SCRIPT_PATH = Path(__file__).with_name("ltspice_netlist_to_asc.py")
@@ -72,6 +73,12 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default=4.1,
         help="LTspice file format version used in generated ASC files. Default: 4.1.",
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=600,
+        help="Maximum seconds allowed for each conversion. Default: 600 (10 minutes).",
+    )
     return parser
 
 
@@ -110,19 +117,41 @@ def _convert_one(
     netlist_path: Path,
     output_path: Path,
     arguments: argparse.Namespace,
-) -> tuple[Path, int, str]:
+) -> tuple[Path, int | None, float, str]:
+    started_at = time.perf_counter()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    completed = subprocess.run(
-        _conversion_command(netlist_path, output_path, arguments),
-        cwd=_SCRIPT_PATH.parent.parent,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            _conversion_command(netlist_path, output_path, arguments),
+            cwd=_SCRIPT_PATH.parent.parent,
+            capture_output=True,
+            text=True,
+            timeout=arguments.timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        diagnostics = "\n".join(
+            part.strip()
+            for part in (error.stdout, error.stderr)
+            if isinstance(part, str) and part.strip()
+        )
+        return (
+            netlist_path,
+            None,
+            time.perf_counter() - started_at,
+            f"timed out after {arguments.timeout:g} seconds"
+            + (f"\n{diagnostics}" if diagnostics else ""),
+        )
+
     diagnostics = "\n".join(
         part.strip() for part in (completed.stdout, completed.stderr) if part.strip()
     )
-    return netlist_path, completed.returncode, diagnostics
+    return (
+        netlist_path,
+        completed.returncode,
+        time.perf_counter() - started_at,
+        diagnostics,
+    )
 
 
 def main() -> int:
@@ -149,25 +178,58 @@ def main() -> int:
         jobs.append((netlist_path, output_path))
 
     exit_code = 0
+    started_at = time.perf_counter()
     worker_count = os.cpu_count() or 1
+    print(
+        f"Starting conversion of {len(jobs)} .net file(s) with "
+        f"{worker_count} worker(s); timeout per file: {arguments.timeout:g} seconds.",
+        flush=True,
+    )
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
             executor.submit(_convert_one, netlist_path, output_path, arguments): netlist_path
             for netlist_path, output_path in jobs
         }
+        for netlist_path in futures.values():
+            print(f"[START] {netlist_path}", flush=True)
         for future in as_completed(futures):
             netlist_path = futures[future]
             try:
-                _, returncode, diagnostics = future.result()
+                _, returncode, elapsed, diagnostics = future.result()
             except (OSError, subprocess.SubprocessError) as error:
-                print(f"{netlist_path}: {error}", file=sys.stderr)
+                print(f"[ERROR] {netlist_path}: {error}", file=sys.stderr, flush=True)
                 exit_code = 1
                 continue
-            if returncode != 0:
-                print(f"{netlist_path.name}: conversion failed", file=sys.stderr)
-                if diagnostics:
-                    print(diagnostics, file=sys.stderr)
+            if returncode is None:
+                print(
+                    f"[TIMEOUT] {netlist_path.name}: {diagnostics} "
+                    f"(elapsed {elapsed:.2f}s)",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 exit_code = 1
+            elif returncode != 0:
+                print(
+                    f"[ERROR] {netlist_path.name}: conversion failed "
+                    f"(exit {returncode}, elapsed {elapsed:.2f}s)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                if diagnostics:
+                    print(diagnostics, file=sys.stderr, flush=True)
+                exit_code = 1
+            else:
+                print(
+                    f"[FINISHED] {netlist_path.name}: converted successfully "
+                    f"(elapsed {elapsed:.2f}s)",
+                    flush=True,
+                )
+
+    total_elapsed = time.perf_counter() - started_at
+    if exit_code == 0:
+        print(f"Completed all conversions successfully in {total_elapsed:.2f}s.", flush=True)
+    else:
+        print(f"Completed with errors in {total_elapsed:.2f}s.", file=sys.stderr, flush=True)
 
     return exit_code
 
