@@ -62,21 +62,21 @@ _R0_ONLY_SYMBOL_NAMES = {
 # order supplies a conventional tie-break only; pin roles and neighboring nets
 # decide the final pose.
 _PREFERRED_ORIENTATIONS: Dict[str, Tuple[str, ...]] = {
-    "res": ("R0", "R90"),
-    "res2": ("R0", "R90"),
-    "cap": ("R0", "R90"),
-    "polcap": ("R0", "R90", "R270"),
-    "ind": ("R0", "R90", "R270"),
-    "ind2": ("R0", "R180"),
-    "diode": ("R0", "R180", "R270"),
-    "schottky": ("R0", "R180", "R270"),
-    "zener": ("R0", "R180"),
+    "res": ("R0", "R90", "R180", "R270"),
+    "res2": ("R0", "R90", "R180", "R270"),
+    "cap": ("R0", "R90", "R180", "R270"),
+    "polcap": ("R0", "R90", "R180", "R270"),
+    "ind": ("R0", "R90", "R180", "R270"),
+    "ind2": ("R0", "R90", "R180", "R270"),
+    "diode": ("R180", "R0", "R270", "R90"),
+    "schottky": ("R180", "R0", "R270", "R90"),
+    "zener": ("R180", "R0", "R270", "R90"),
     "led": ("R0",),
-    "tvsdiode": ("R0", "R180"),
-    "varactor": ("R0", "R180", "R270"),
+    "tvsdiode": ("R180", "R0", "R270", "R90"),
+    "varactor": ("R180", "R0", "R270", "R90"),
     "sw": ("M180", "R180"),
     "csw": ("M180", "R180"),
-    "current": ("R180", "R0"),
+    "current": ("R0", "R180", "R270", "R90"),
     "npn": ("R0",),
     "pnp": ("M180", "R180"),
     "npn2": ("R0",),
@@ -244,13 +244,14 @@ def ltspice_autoplace_symbol_pose(
             # coarse graph layout has chosen the visual structure.  Keeping
             # this refinement bounded preserves the left-to-right layering
             # while tightening feedback loops and repeated analog stages.
-            current_positions = _relax_positions(
-                current_positions,
-                current_geometries,
-                pin_connections_by_instance,
-                placement_clearance,
-                routing_grid,
-            )
+            if iteration_index == 0:
+                current_positions = _relax_positions(
+                    current_positions,
+                    current_geometries,
+                    pin_connections_by_instance,
+                    placement_clearance,
+                    routing_grid,
+                )
             current_positions = _normalize_positions_to_positive_space(
                 current_positions,
                 current_geometries,
@@ -455,8 +456,11 @@ def _build_component_graph(
         is_layout_signal = (
             net_name.upper() not in _GROUND_NETS
             and not _is_power_net(net_name)
-            and len(connections) <= 3
         )
+        # A high-fanout signal is still structural.  Scale its clique edges
+        # down by fanout so it keeps one functional block together without
+        # overwhelming the local two- and three-pin nets that define stages.
+        signal_weight = net_weight / max(len(connections) - 1, 1)
         for first_index, first_connection in enumerate(connections):
             for second_connection in connections[first_index + 1 :]:
                 if first_connection.instance_name == second_connection.instance_name:
@@ -465,14 +469,14 @@ def _build_component_graph(
                     edge_data = graph[first_connection.instance_name][second_connection.instance_name]
                     edge_data["weight"] += net_weight
                     if is_layout_signal:
-                        edge_data["signal_weight"] += net_weight
+                        edge_data["signal_weight"] += signal_weight
                     edge_data["nets"].add(net_name)
                 else:
                     graph.add_edge(
                         first_connection.instance_name,
                         second_connection.instance_name,
                         weight=net_weight,
-                        signal_weight=net_weight if is_layout_signal else 0.0,
+                        signal_weight=signal_weight if is_layout_signal else 0.0,
                         nets={net_name},
                     )
     return graph
@@ -681,7 +685,7 @@ def _layout_feedback_group(
         signal_subgraph,
         seed=17,
         k=ideal_distance,
-        iterations=max(80, node_count * 8),
+        iterations=max(200, node_count * 12),
         weight="weight",
         scale=1.0,
         center=(0.0, 0.0),
@@ -695,8 +699,8 @@ def _layout_feedback_group(
     horizontal_step = max(maximum_width + symbol_gap, 128)
     vertical_step = max(maximum_height + symbol_gap, 112)
     span = max(math.sqrt(node_count), 2.0)
-    horizontal_scale = horizontal_step * span * 0.95
-    vertical_scale = vertical_step * span * 0.72
+    horizontal_scale = horizontal_step * span * 0.72
+    vertical_scale = vertical_step * span * 0.58
 
     # Sources conventionally sit on the left.  The reflection leaves all
     # graph distances unchanged while making the result read naturally.
@@ -827,7 +831,9 @@ def _choose_orientations(
             # Geometry can override this tie-break whenever circuit topology
             # clearly calls for another rotation or mirror.
             candidate_index = candidate_list.index(orientation) if orientation in candidate_list else 0
-            score += candidate_index * 4.0
+            score += candidate_index * _orientation_tie_break_weight(
+                original_symbol_data[instance_name]
+            )
             if score < best_score:
                 best_score = score
                 best_orientation = orientation
@@ -839,7 +845,66 @@ def _choose_orientations(
             convert_settings,
         )
         absolute_pin_points = _absolute_pin_points(positions, current_geometries)
-    return chosen_orientations
+    return _harmonize_shared_rail_orientations(
+        chosen_orientations,
+        original_symbol_data,
+        candidate_orientations,
+        pin_connections_by_instance,
+    )
+
+
+def _harmonize_shared_rail_orientations(
+    chosen_orientations: Mapping[str, str],
+    original_symbol_data: Mapping[str, Mapping[str, object]],
+    candidate_orientations: Mapping[str, Sequence[str]],
+    pin_connections_by_instance: Mapping[str, Sequence[PinConnection]],
+) -> Dict[str, str]:
+    """Align repeated devices attached to one signal rail.
+
+    Rectifier banks, parallel loads, and repeated converter legs are normally
+    drawn as an aligned array.  The shared non-power rail is a general
+    topology signal for that pattern and avoids any dependence on fixture or
+    instance names.
+    """
+
+    harmonized = dict(chosen_orientations)
+    for net_name, connections in _group_connections_by_net(pin_connections_by_instance).items():
+        if net_name.upper() in _GROUND_NETS or _is_power_net(net_name):
+            continue
+        members_by_symbol: Dict[str, List[str]] = {}
+        for connection in connections:
+            symbol_name = str(
+                original_symbol_data.get(connection.instance_name, {}).get("SYMBOL", "")
+            ).strip().lower()
+            if symbol_name not in _PREFERRED_ORIENTATIONS:
+                continue
+            members_by_symbol.setdefault(symbol_name, []).append(connection.instance_name)
+        for member_names in members_by_symbol.values():
+            unique_members = tuple(dict.fromkeys(member_names))
+            if len(unique_members) < 3:
+                continue
+            first_member = unique_members[0]
+            candidate_list = tuple(candidate_orientations.get(first_member, ()))
+            if not candidate_list:
+                continue
+            vote_counts = {
+                orientation: sum(
+                    harmonized.get(member_name) == orientation
+                    for member_name in unique_members
+                )
+                for orientation in candidate_list
+            }
+            consensus = max(
+                candidate_list,
+                key=lambda orientation: (
+                    vote_counts[orientation],
+                    -candidate_list.index(orientation),
+                ),
+            )
+            for member_name in unique_members:
+                if consensus in candidate_orientations.get(member_name, ()):
+                    harmonized[member_name] = consensus
+    return harmonized
 
 
 def _orientation_score(
@@ -906,6 +971,19 @@ def _orientation_score(
             else:
                 score += 36.0
     return score
+
+
+def _orientation_tie_break_weight(symbol_entry: Mapping[str, object]) -> float:
+    """Return a visual-convention penalty that topology may still override."""
+
+    symbol_name = str(symbol_entry.get("SYMBOL", "")).strip().lower()
+    if symbol_name in {"diode", "schottky", "zener", "tvsdiode", "varactor"}:
+        return 18.0
+    if symbol_name in {"sw", "csw", "current"}:
+        return 24.0
+    if symbol_name in {"res", "res2", "cap", "polcap", "ind", "ind2"}:
+        return 8.0
+    return 4.0
 
 
 def _absolute_pin_points(
@@ -1005,17 +1083,37 @@ def _resolve_collisions(
                     continue
                 moved_any_symbol = True
                 overlap_x, overlap_y = overlap
+                first_center = _rectangle_center(first_buffered_rectangle)
+                second_center = _rectangle_center(second_buffered_rectangle)
                 if overlap_x <= overlap_y:
-                    shift_x = _snap_shift(overlap_x + routing_grid, routing_grid)
+                    total_shift = _snap_shift(overlap_x + routing_grid, routing_grid)
+                    first_shift = _snap_shift(max(total_shift // 2, routing_grid), routing_grid)
+                    second_shift = total_shift - first_shift
+                    if second_shift <= 0:
+                        second_shift = routing_grid
+                    direction = 1 if second_center[0] >= first_center[0] else -1
+                    resolved_positions[first_name] = (
+                        resolved_positions[first_name][0] - direction * first_shift,
+                        resolved_positions[first_name][1],
+                    )
                     resolved_positions[second_name] = (
-                        resolved_positions[second_name][0] + shift_x,
+                        resolved_positions[second_name][0] + direction * second_shift,
                         resolved_positions[second_name][1],
                     )
                 else:
-                    shift_y = _snap_shift(overlap_y + routing_grid, routing_grid)
+                    total_shift = _snap_shift(overlap_y + routing_grid, routing_grid)
+                    first_shift = _snap_shift(max(total_shift // 2, routing_grid), routing_grid)
+                    second_shift = total_shift - first_shift
+                    if second_shift <= 0:
+                        second_shift = routing_grid
+                    direction = 1 if second_center[1] >= first_center[1] else -1
+                    resolved_positions[first_name] = (
+                        resolved_positions[first_name][0],
+                        resolved_positions[first_name][1] - direction * first_shift,
+                    )
                     resolved_positions[second_name] = (
                         resolved_positions[second_name][0],
-                        resolved_positions[second_name][1] + shift_y,
+                        resolved_positions[second_name][1] + direction * second_shift,
                     )
         if not moved_any_symbol:
             break

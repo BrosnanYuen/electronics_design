@@ -652,6 +652,14 @@ def _route_net_exit_points_with_obstacles(
     obstacle_array = _wire_rows_to_array((*symbol_obstacles, *other_net_endpoint_obstacles))
     visibility_graph = None
     while disconnected_points:
+        connected_points = list(
+            dict.fromkeys(
+                (
+                    *connected_points,
+                    *_same_net_junction_candidates(route_segments, disconnected_points),
+                )
+            )
+        )
         candidate_edges = sorted(
             (
                 _manhattan_distance(connected_point, disconnected_point),
@@ -701,6 +709,7 @@ def _route_net_exit_points_with_obstacles(
                     break
         if routed_edge is None:
             return False, "WIRING_GENERATION_ERROR", min(attachment.line_number for attachment in attachments), ()
+        route_segments = list(_split_wire_rows_at_point(route_segments, start_point))
         route_segments.extend(routed_edge)
         for x1, y1, x2, y2 in routed_edge:
             for route_point in ((x1, y1), (x2, y2)):
@@ -709,6 +718,45 @@ def _route_net_exit_points_with_obstacles(
         visibility_graph = None
         disconnected_points.remove(end_point)
     return True, "OK", 0, _dedupe_wire_rows(route_segments)
+
+
+def _same_net_junction_candidates(
+    routed_segments: Sequence[WireRow],
+    disconnected_points: Sequence[Point],
+) -> Tuple[Point, ...]:
+    """Offer T-junctions on an existing same-net trunk as routing targets."""
+
+    candidates: List[Point] = []
+    for x1, y1, x2, y2 in routed_segments:
+        candidates.extend(((x1, y1), (x2, y2)))
+        for point_x, point_y in disconnected_points:
+            if y1 == y2 and min(x1, x2) <= point_x <= max(x1, x2):
+                candidates.append((point_x, y1))
+            elif x1 == x2 and min(y1, y2) <= point_y <= max(y1, y2):
+                candidates.append((x1, point_y))
+    return tuple(dict.fromkeys(candidates))
+
+
+def _split_wire_rows_at_point(
+    wire_rows: Sequence[WireRow],
+    junction_point: Point,
+) -> Tuple[WireRow, ...]:
+    """Split any same-net segment whose interior receives a T-junction."""
+
+    junction_x, junction_y = junction_point
+    split_rows: List[WireRow] = []
+    for x1, y1, x2, y2 in wire_rows:
+        point_is_interior = (
+            y1 == y2 == junction_y and min(x1, x2) < junction_x < max(x1, x2)
+        ) or (
+            x1 == x2 == junction_x and min(y1, y2) < junction_y < max(y1, y2)
+        )
+        if not point_is_interior:
+            split_rows.append((x1, y1, x2, y2))
+            continue
+        split_rows.append((x1, y1, junction_x, junction_y))
+        split_rows.append((junction_x, junction_y, x2, y2))
+    return _dedupe_wire_rows(split_rows)
 
 
 def _manhattan_distance(first_point: Point, second_point: Point) -> int:

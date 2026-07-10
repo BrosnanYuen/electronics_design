@@ -355,10 +355,10 @@ def _read_text_file_lines(filepath: str) -> ReadLinesResult:  # Load a file whil
 
 def _coerce_path(filepath: str) -> Tuple[bool, str]:  # Convert a path-like input into a string path safely.
     try:  # Attempt filesystem coercion through the standard library.
-        path_string = os.fspath(filepath)  # Convert a string or path-like object into a filesystem path string.
+        path_string = os.fsdecode(os.fspath(filepath))  # Convert string, bytes, or path-like input into a text path.
     except TypeError:  # Catch invalid path-like objects.
         return False, ""  # Signal failure so the caller can map it to the public API error.
-    return True, path_string  # Return the usable path string.
+    return True, os.path.expanduser(path_string)  # Expand configurable user-relative paths without embedding a home directory.
 
 
 def _load_parsed_elements(filepath: str) -> ElementParseResult:  # Load a file and parse its device elements through the existing internal helpers.
