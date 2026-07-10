@@ -240,6 +240,17 @@ def ltspice_autoplace_symbol_pose(
                 placement_clearance,
                 routing_grid,
             )
+            # Pull electrically related pins toward one another after the
+            # coarse graph layout has chosen the visual structure.  Keeping
+            # this refinement bounded preserves the left-to-right layering
+            # while tightening feedback loops and repeated analog stages.
+            current_positions = _relax_positions(
+                current_positions,
+                current_geometries,
+                pin_connections_by_instance,
+                placement_clearance,
+                routing_grid,
+            )
             current_positions = _normalize_positions_to_positive_space(
                 current_positions,
                 current_geometries,
@@ -562,6 +573,23 @@ def _layout_signal_group(
         instance_name = next(iter(signal_subgraph.nodes))
         return {instance_name: _origin_from_center((0.0, 0.0), geometries[instance_name], routing_grid)}
 
+    # Feedback loops, bridges, differential pairs, and oscillators do not
+    # have a meaningful single-source breadth-first hierarchy.  Forcing them
+    # into BFS columns separates components that belong beside one another
+    # and creates tall, wire-heavy drawings.  A deterministic spring layout
+    # preserves their local electrical neighborhoods and naturally exposes
+    # symmetric circuit structure.  Trees and simple chains still use the
+    # layered layout below because that is the clearest professional style
+    # for unidirectional signal flow.
+    if _benefits_from_topology_layout(signal_subgraph):
+        return _layout_feedback_group(
+            signal_subgraph,
+            component_graph,
+            geometries,
+            symbol_gap,
+            routing_grid,
+        )
+
     root_node = _choose_root_component(signal_subgraph)
     layer_map = dict(nx.single_source_shortest_path_length(signal_subgraph, root_node))
     layers: Dict[int, List[str]] = {}
@@ -624,6 +652,81 @@ def _layout_signal_group(
                 routing_grid,
             )
             current_y += geometry.height + symbol_gap
+    return positions
+
+
+def _benefits_from_topology_layout(signal_subgraph: nx.Graph) -> bool:
+    """Return whether a signal island is better represented as a 2-D graph."""
+
+    node_count = len(signal_subgraph.nodes)
+    if node_count < 4:
+        return False
+    cycle_count = len(nx.cycle_basis(signal_subgraph))
+    branch_count = sum(1 for node_name in signal_subgraph if signal_subgraph.degree(node_name) >= 3)
+    return cycle_count > 0 or branch_count >= 2
+
+
+def _layout_feedback_group(
+    signal_subgraph: nx.Graph,
+    component_graph: nx.Graph,
+    geometries: Mapping[str, OrientationGeometry],
+    symbol_gap: int,
+    routing_grid: int,
+) -> Dict[str, Point]:
+    """Lay out a cyclic/branching signal island by electrical proximity."""
+
+    node_count = len(signal_subgraph.nodes)
+    ideal_distance = 1.0 / math.sqrt(max(node_count, 1))
+    raw_positions = nx.spring_layout(
+        signal_subgraph,
+        seed=17,
+        k=ideal_distance,
+        iterations=max(80, node_count * 8),
+        weight="weight",
+        scale=1.0,
+        center=(0.0, 0.0),
+    )
+
+    # Give the diagram a landscape aspect ratio and enough room for the
+    # largest symbol plus a routing channel.  Scaling from the actual spring
+    # extent avoids giant canvases for nearly linear feedback networks.
+    maximum_width = max(geometry.width for geometry in geometries.values())
+    maximum_height = max(geometry.height for geometry in geometries.values())
+    horizontal_step = max(maximum_width + symbol_gap, 128)
+    vertical_step = max(maximum_height + symbol_gap, 112)
+    span = max(math.sqrt(node_count), 2.0)
+    horizontal_scale = horizontal_step * span * 0.95
+    vertical_scale = vertical_step * span * 0.72
+
+    # Sources conventionally sit on the left.  The reflection leaves all
+    # graph distances unchanged while making the result read naturally.
+    source_nodes = [
+        node_name
+        for node_name in signal_subgraph
+        if str(component_graph.nodes[node_name].get("prefix", "")).upper() in {"V", "I"}
+    ]
+    flip_x = False
+    if source_nodes and len(source_nodes) < node_count:
+        source_mean_x = sum(float(raw_positions[node_name][0]) for node_name in source_nodes) / len(source_nodes)
+        other_nodes = [node_name for node_name in signal_subgraph if node_name not in source_nodes]
+        other_mean_x = sum(float(raw_positions[node_name][0]) for node_name in other_nodes) / len(other_nodes)
+        flip_x = source_mean_x > other_mean_x
+
+    positions: Dict[str, Point] = {}
+    for instance_name in sorted(
+        signal_subgraph,
+        key=lambda name: (_graph_line_number(component_graph, name), name),
+    ):
+        raw_x = float(raw_positions[instance_name][0])
+        raw_y = float(raw_positions[instance_name][1])
+        if flip_x:
+            raw_x = -raw_x
+        center_point = (raw_x * horizontal_scale, raw_y * vertical_scale)
+        positions[instance_name] = _origin_from_center(
+            center_point,
+            geometries[instance_name],
+            routing_grid,
+        )
     return positions
 
 
