@@ -22,6 +22,7 @@ import numpy as np
 from . import ltspice_asc as _asc
 from . import ltspice_net as _net
 from .autoroute import _build_visibility_graph_for_terminals
+from .autoroute import _route_simple_orthogonal
 from .autoroute import _route_with_visibility_graph
 from .ltspice_asy import rectangle_points_to_lines
 from .pathtracing import are_wires_connected
@@ -649,12 +650,7 @@ def _route_net_exit_points_with_obstacles(
         other_net_exit_points,
     )
     obstacle_array = _wire_rows_to_array((*symbol_obstacles, *other_net_endpoint_obstacles))
-    visibility_graph = _build_visibility_graph_for_terminals(
-        unique_exit_points,
-        obstacle_array,
-        routing_grid,
-        routing_grid,
-    )
+    visibility_graph = None
     while disconnected_points:
         candidate_edges = sorted(
             (
@@ -668,10 +664,9 @@ def _route_net_exit_points_with_obstacles(
         routed_edge = None
         for _distance, start_point, end_point in candidate_edges:
             try:
-                routed_wires = _route_with_visibility_graph(
+                routed_wires = _route_simple_orthogonal(
                     start_point,
                     end_point,
-                    visibility_graph,
                     obstacle_array,
                     routing_grid,
                     routing_grid,
@@ -682,9 +677,36 @@ def _route_net_exit_points_with_obstacles(
             if routed_edge:
                 break
         if routed_edge is None:
+            if visibility_graph is None:
+                visibility_graph = _build_visibility_graph_for_terminals(
+                    (*connected_points, *disconnected_points),
+                    obstacle_array,
+                    routing_grid,
+                    routing_grid,
+                )
+            for _distance, start_point, end_point in candidate_edges:
+                try:
+                    routed_wires = _route_with_visibility_graph(
+                        start_point,
+                        end_point,
+                        visibility_graph,
+                        obstacle_array,
+                        routing_grid,
+                        routing_grid,
+                    )
+                except ValueError:
+                    continue
+                routed_edge = tuple(tuple(int(value) for value in row) for row in routed_wires.tolist())
+                if routed_edge:
+                    break
+        if routed_edge is None:
             return False, "WIRING_GENERATION_ERROR", min(attachment.line_number for attachment in attachments), ()
         route_segments.extend(routed_edge)
-        connected_points.append(end_point)
+        for x1, y1, x2, y2 in routed_edge:
+            for route_point in ((x1, y1), (x2, y2)):
+                if route_point not in connected_points:
+                    connected_points.append(route_point)
+        visibility_graph = None
         disconnected_points.remove(end_point)
     return True, "OK", 0, _dedupe_wire_rows(route_segments)
 

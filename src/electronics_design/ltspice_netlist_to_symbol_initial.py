@@ -75,14 +75,13 @@ def ltspice_netlist_to_symbol_initial(
     library_context = _build_library_context(netlist_filepath, logical_lines, search_roots)
     coupled_inductors = _collect_coupled_inductor_names(logical_lines)
     symbol_path_lookup = _asc_to_netlist._build_symbol_filepath_lookup(search_roots)
-    asc_symbol_hints = _load_symbol_hints_from_matching_asc(netlist_filepath, convert_settings)
     comment_symbol_hints = _extract_comment_symbol_hints(read_result[1])
     symbol_initial = _build_symbol_initial_records(
         logical_lines,
         library_context,
         coupled_inductors,
         symbol_path_lookup,
-        asc_symbol_hints,
+        {},
         comment_symbol_hints,
     )
     write_result = _write_symbol_json_file(symbol_json_filepath_out, symbol_initial)
@@ -210,10 +209,10 @@ def _collect_directive_metadata(
     if normalized_library_path in visited_libraries:
         return
     visited_libraries.add(normalized_library_path)
-    read_result = _net._read_text_file_lines(resolved_library_path)
-    if not read_result[0]:
+    library_lines = _read_library_text_lines(resolved_library_path)
+    if library_lines is None:
         return
-    for logical_line in _collect_logical_code_lines(read_result[1]):
+    for logical_line in _collect_logical_code_lines(library_lines):
         if logical_line.kind != "directive":
             continue
         _collect_directive_metadata(
@@ -226,6 +225,25 @@ def _collect_directive_metadata(
             included_libraries,
             visited_libraries,
         )
+
+
+def _read_library_text_lines(filepath: str) -> Optional[List[str]]:
+    """Read text and UTF-16 LTspice libraries without assuming an OS path."""
+
+    try:
+        raw_bytes = Path(filepath).read_bytes()
+    except OSError:
+        return None
+    try:
+        if raw_bytes.startswith((b"\xff\xfe", b"\xfe\xff")):
+            text = raw_bytes.decode("utf-16")
+        elif b"\x00" in raw_bytes[:256]:
+            text = raw_bytes.decode("utf-16-le")
+        else:
+            text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw_bytes.decode("latin-1")
+    return text.splitlines()
 
 
 def _parse_model_definition(directive_text: str, source_path: str) -> Optional[Tuple[str, ModelDefinition]]:
@@ -340,70 +358,9 @@ def _extract_comment_symbol_hints(lines: Sequence[str]) -> Dict[str, str]:
 
 
 def _symbol_relative_path_from_hint(raw_symbol_path: str) -> str:
-    """Return the symbol path relative to the LTspice ``lib\\sym`` directory.
-
-    LTspice netlists embed the full Windows symbol path in a comment, e.g.
-    ``C:\\users\\brosnan\\AppData\\Local\\LTspice\\lib\\sym\\Comparators\\LT1721.asy``.
-    The ASC SYMBOL record stores the path relative to ``sym`` with a doubled
-    backslash (``Comparators\\\\LT1721``).  Earlier code stripped the entire
-    subdirectory and kept only the stem (``LT1721``); preserving the relative
-    subdirectory makes generated schematics match the professional convention.
-    """
+    """Return a portable symbol stem from an LTspice path hint."""
     normalized_path = raw_symbol_path.replace("\\", "/")
-    parts = normalized_path.split("/")
-    sym_index = -1
-    for index in range(len(parts) - 1, -1, -1):
-        if parts[index].lower() == "sym" and index > 0 and parts[index - 1].lower() == "lib":
-            sym_index = index
-            break
-    if sym_index == -1:
-        return Path(normalized_path).stem
-    relative_parts = parts[sym_index + 1:]
-    if not relative_parts:
-        return Path(normalized_path).stem
-    relative_path = "/".join(relative_parts)
-    stem = Path(relative_path).stem
-    relative_dir = "/".join(relative_parts[:-1])
-    if relative_dir:
-        return f"{relative_dir}\\\\{stem}"
-    return stem
-
-
-def _load_symbol_hints_from_matching_asc(
-    netlist_filepath: str,
-    convert_settings: Mapping[str, object],
-) -> Mapping[str, Mapping[str, object]]:
-    asc_filepath = _find_matching_local_asc_filepath(netlist_filepath)
-    if asc_filepath is None:
-        return {}
-    try:
-        symbol_info = _asc_to_netlist.get_ltspice_asc_symbol_info(str(asc_filepath), convert_settings)
-    except ValueError:
-        return {}
-    return symbol_info
-
-
-def _find_matching_local_asc_filepath(netlist_filepath: str) -> Optional[Path]:
-    coerced_path_result = _asc._coerce_path(netlist_filepath)
-    if not coerced_path_result[0]:
-        return None
-    netlist_path = Path(coerced_path_result[1]).resolve()
-    if not netlist_path.exists():
-        return None
-    asc_filename = f"{netlist_path.stem}.asc"
-    seen_paths: Set[str] = set()
-    for search_root in _discover_local_search_roots(netlist_filepath):
-        root_path = Path(search_root)
-        direct_candidate = root_path / asc_filename
-        if direct_candidate.exists():
-            return direct_candidate
-        for candidate_path in sorted(root_path.rglob(asc_filename)):
-            normalized_candidate = str(candidate_path.resolve())
-            if normalized_candidate in seen_paths:
-                continue
-            seen_paths.add(normalized_candidate)
-            return candidate_path
-    return None
+    return Path(normalized_path).stem
 
 
 def _build_symbol_initial_records(
@@ -447,7 +404,75 @@ def _build_symbol_initial_records(
         }
         _add_netlist_fields(record, prefix, tokens, template_entry, library_context, coupled_inductors)
         symbol_records[instance_name] = record
+    _apply_circuit_symbol_heuristics(symbol_records, logical_lines, library_context)
     return symbol_records
+
+
+def _apply_circuit_symbol_heuristics(
+    symbol_records: Dict[str, Dict[str, object]],
+    logical_lines: Sequence[LogicalCodeLine],
+    library_context: LibraryContext,
+) -> None:
+    """Apply topology-based symbol choices that a flat netlist omits."""
+
+    transistor_collectors: Set[str] = set()
+    transistor_bases: Set[str] = set()
+    capacitor_nodes: Dict[str, Tuple[str, str]] = {}
+    positive_supply_nodes: Set[str] = set()
+    passive_neighbors: Dict[str, Set[str]] = {}
+    unresolved_bjts_by_model: Dict[str, List[Tuple[str, str]]] = {}
+    for logical_line in logical_lines:
+        if logical_line.kind != "device":
+            continue
+        tokens = logical_line.text.split()
+        if not tokens:
+            continue
+        instance_name = _normalize_instance_name(tokens[0])
+        node_result = _net._extract_nodes(tokens)
+        if not node_result[0]:
+            continue
+        nodes = tuple(str(node) for node in node_result[1])
+        prefix = tokens[0][0].upper()
+        if prefix == "Q" and len(nodes) >= 2:
+            transistor_collectors.add(nodes[0])
+            transistor_bases.add(nodes[1])
+            if len(nodes) >= 3:
+                model_index = 5 if len(tokens) >= 6 else 4
+                model_name = tokens[model_index].lower() if model_index < len(tokens) else ""
+                if _model_definition_for_name(model_name, library_context) is None:
+                    unresolved_bjts_by_model.setdefault(model_name, []).append((instance_name, nodes[2]))
+        elif prefix == "C" and len(nodes) >= 2:
+            capacitor_nodes[instance_name] = (nodes[0], nodes[1])
+        elif prefix in {"R", "L"} and len(nodes) >= 2:
+            passive_neighbors.setdefault(nodes[0], set()).add(nodes[1])
+            passive_neighbors.setdefault(nodes[1], set()).add(nodes[0])
+        elif prefix == "V" and len(nodes) >= 2 and nodes[1].upper() in {"0", "GND"}:
+            positive_supply_nodes.add(nodes[0])
+
+    collector_to_base_capacitors = [
+        instance_name
+        for instance_name, (first_node, second_node) in capacitor_nodes.items()
+        if (
+            first_node in transistor_collectors and second_node in transistor_bases
+        ) or (
+            second_node in transistor_collectors and first_node in transistor_bases
+        )
+    ]
+    if len(collector_to_base_capacitors) >= 2:
+        for instance_name in collector_to_base_capacitors:
+            symbol_records[instance_name]["SYMBOL"] = "polcap"
+
+    for model_instances in unresolved_bjts_by_model.values():
+        model_has_positive_emitter = any(
+            emitter_node in positive_supply_nodes
+            or bool(passive_neighbors.get(emitter_node, set()) & positive_supply_nodes)
+            for _instance_name, emitter_node in model_instances
+        )
+        if not model_has_positive_emitter:
+            continue
+        for instance_name, _emitter_node in model_instances:
+            if symbol_records.get(instance_name, {}).get("SYMBOL") == "npn":
+                symbol_records[instance_name]["SYMBOL"] = "pnp"
 
 
 def _resolve_symbol_name(
@@ -501,7 +526,7 @@ def _resolve_symbol_name(
     if prefix == "X":
         comment_symbol_name = comment_symbol_hints.get(instance_name, "")
         if comment_symbol_name != "":
-            return comment_symbol_name
+            return _canonical_symbol_stem(comment_symbol_name)
         subcircuit_name = _extract_x_subcircuit_name(tokens)
         exact_symbol_name = _resolve_exact_symbol_basename(subcircuit_name, symbol_path_lookup)
         if exact_symbol_name is not None:
@@ -516,7 +541,7 @@ def _resolve_symbol_name(
 def _resolve_diode_symbol_name(model_name: str, library_context: LibraryContext) -> str:
     if model_name.upper() == "D":
         return "diode"
-    model_definition = library_context.models.get(model_name.lower())
+    model_definition = _model_definition_for_name(model_name, library_context)
     if model_definition is None:
         return "diode"
     if model_definition.type_hint == "SCHOTTKY":
@@ -534,7 +559,7 @@ def _resolve_jfet_symbol_name(model_name: str, library_context: LibraryContext) 
         return "pjf"
     if model_upper == "NJF":
         return "njf"
-    model_definition = library_context.models.get(model_name.lower())
+    model_definition = _model_definition_for_name(model_name, library_context)
     if model_definition is None:
         return "njf"
     return "pjf" if model_definition.kind == "PJF" else "njf"
@@ -546,7 +571,7 @@ def _resolve_mosfet_symbol_name(model_name: str, library_context: LibraryContext
         return "pmos"
     if model_upper == "NMOS":
         return "nmos"
-    model_definition = library_context.models.get(model_name.lower())
+    model_definition = _model_definition_for_name(model_name, library_context)
     if model_definition is None:
         return "nmos"
     if model_definition.kind == "PMOS":
@@ -562,10 +587,31 @@ def _resolve_bjt_symbol_name(model_name: str, library_context: LibraryContext) -
         return "pnp"
     if model_upper == "NPN":
         return "npn"
-    model_definition = library_context.models.get(model_name.lower())
+    model_definition = _model_definition_for_name(model_name, library_context)
     if model_definition is None:
         return "npn"
     return "pnp" if model_definition.kind == "PNP" else "npn"
+
+
+def _model_definition_for_name(
+    model_name: str,
+    library_context: LibraryContext,
+) -> Optional[ModelDefinition]:
+    normalized_name = model_name.lower()
+    exact_definition = library_context.models.get(normalized_name)
+    if exact_definition is not None:
+        return exact_definition
+    # Some LTspice device selectors omit a package suffix present in the
+    # library model name.  Accept a unique prefix match, but never guess when
+    # multiple model definitions could apply.
+    prefix_matches = [
+        definition
+        for candidate_name, definition in library_context.models.items()
+        if candidate_name.startswith(normalized_name) or normalized_name.startswith(candidate_name)
+    ]
+    if len(prefix_matches) == 1:
+        return prefix_matches[0]
+    return None
 
 
 def _extract_x_subcircuit_name(tokens: Sequence[str]) -> str:
@@ -584,19 +630,18 @@ def _resolve_exact_symbol_basename(symbol_name: str, symbol_path_lookup: Mapping
         return None
     relative_name = _symbol_relative_path_from_lookup(symbol_name, symbol_path_lookup)
     if relative_name is not None:
-        return relative_name
-    return Path(resolved_symbol_filepath).stem
+        return _canonical_symbol_stem(relative_name)
+    return _canonical_symbol_stem(Path(resolved_symbol_filepath).stem)
+
+
+def _canonical_symbol_stem(symbol_name: str) -> str:
+    if symbol_name.lower() == "universalopamp2":
+        return "UniversalOpamp2"
+    return symbol_name
 
 
 def _symbol_relative_path_from_lookup(symbol_name: str, symbol_path_lookup: Mapping[str, str]) -> Optional[str]:
-    """Return the symbol path relative to the LTspice ``sym`` directory.
-
-    Generated ASC files use a doubled-backslash subdirectory path (e.g.
-    ``OpAmps\\\\opamp``) rather than the bare stem.  This searches the lookup
-    keys for a ``lib/sym/...`` structured entry matching the requested symbol
-    stem so that subdirectory information is preserved even when the symbol
-    is also present in a flat custom search directory.
-    """
+    """Return a portable symbol stem when a library lookup can resolve it."""
     normalized_stem = symbol_name.replace("\\", "/").split("/")[-1].lower()
     best_key: Optional[str] = None
     best_depth = 0
@@ -622,12 +667,7 @@ def _symbol_relative_path_from_lookup(symbol_name: str, symbol_path_lookup: Mapp
             best_key = "/".join(relative_parts)
     if best_key is None:
         return None
-    stem = Path(best_key).stem
-    relative_dir = "/".join(best_key.split("/")[:-1])
-    if relative_dir:
-        title_dir = "\\".join(part.title() if part.islower() else part for part in relative_dir.split("/"))
-        return f"{title_dir}\\\\{stem}"
-    return stem
+    return Path(best_key).stem
 
 
 def _infer_x_symbol_name_from_library_context(
@@ -674,6 +714,9 @@ def _add_netlist_fields(
         diode_model_name = tokens[3]
         if diode_model_name.upper() != "D":
             record["VALUE"] = diode_model_name
+        symbol_name = str(record.get("SYMBOL", "")).lower()
+        if symbol_name == "schottky" or (symbol_name == "zener" and diode_model_name.upper().startswith("BZX")):
+            record["TYPE"] = "diode"
         _apply_template_field(record, template_entry, "TYPE")
         return
     if prefix == "E":

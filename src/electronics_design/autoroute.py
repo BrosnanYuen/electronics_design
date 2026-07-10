@@ -152,6 +152,97 @@ def _build_visibility_graph_for_terminals(
     return _build_visibility_graph(candidate_points, obstacles)
 
 
+def _route_simple_orthogonal(
+    start_point: Point,
+    end_point: Point,
+    obstacles: np.ndarray,
+    grid_x: int,
+    grid_y: int,
+) -> np.ndarray:
+    """Try direct, L, and three-segment channel routes before graph search.
+
+    Most professional schematic connections need at most two bends.  Trying
+    those paths first avoids constructing a large Cartesian visibility graph
+    for every net while retaining the graph router for genuinely obstructed
+    cases.
+    """
+
+    if start_point == end_point:
+        return np.empty((0, 4), dtype=int)
+    candidate_paths: List[Tuple[Point, ...]] = [
+        (start_point, end_point),
+        (start_point, (end_point[0], start_point[1]), end_point),
+        (start_point, (start_point[0], end_point[1]), end_point),
+    ]
+    x_tracks = {start_point[0], end_point[0]}
+    y_tracks = {start_point[1], end_point[1]}
+    for raw_row in obstacles:
+        x1, y1, x2, y2 = (int(value) for value in raw_row)
+        x_tracks.update((x1 - grid_x, x1 + grid_x, x2 - grid_x, x2 + grid_x))
+        y_tracks.update((y1 - grid_y, y1 + grid_y, y2 - grid_y, y2 + grid_y))
+    if len(obstacles) > 0:
+        obstacle_x = [int(value) for row in obstacles for value in (row[0], row[2])]
+        obstacle_y = [int(value) for row in obstacles for value in (row[1], row[3])]
+        outer_x_tracks = (min(obstacle_x) - 2 * grid_x, max(obstacle_x) + 2 * grid_x)
+        outer_y_tracks = (min(obstacle_y) - 2 * grid_y, max(obstacle_y) + 2 * grid_y)
+        for start_track_x in outer_x_tracks:
+            for end_track_x in outer_x_tracks:
+                for track_y in outer_y_tracks:
+                    candidate_paths.append(
+                        (
+                            start_point,
+                            (start_track_x, start_point[1]),
+                            (start_track_x, track_y),
+                            (end_track_x, track_y),
+                            (end_track_x, end_point[1]),
+                            end_point,
+                        )
+                    )
+    for track_x in sorted(
+        x_tracks,
+        key=lambda value: (abs(value - start_point[0]) + abs(value - end_point[0]), value),
+    ):
+        candidate_paths.append(
+            (start_point, (track_x, start_point[1]), (track_x, end_point[1]), end_point)
+        )
+    for track_y in sorted(
+        y_tracks,
+        key=lambda value: (abs(value - start_point[1]) + abs(value - end_point[1]), value),
+    ):
+        candidate_paths.append(
+            (start_point, (start_point[0], track_y), (end_point[0], track_y), end_point)
+        )
+
+    valid_routes: List[Tuple[int, int, np.ndarray]] = []
+    seen_paths: set[Tuple[Point, ...]] = set()
+    for raw_path in candidate_paths:
+        point_path = tuple(
+            point
+            for index, point in enumerate(raw_path)
+            if index == 0 or point != raw_path[index - 1]
+        )
+        if point_path in seen_paths or len(point_path) < 2:
+            continue
+        seen_paths.add(point_path)
+        wires = _compress_point_path(point_path)
+        try:
+            _validate_generated_route(
+                wires,
+                obstacles,
+                start_point,
+                end_point,
+                grid_x,
+                grid_y,
+            )
+        except ValueError:
+            continue
+        route_length = sum(_segment_length(tuple(int(value) for value in row)) for row in wires)
+        valid_routes.append((len(wires), route_length, wires))
+    if not valid_routes:
+        raise ValueError("no simple orthogonal route found")
+    return min(valid_routes, key=lambda item: (item[0], item[1]))[2]
+
+
 def _build_full_visibility_graph_for_terminals(
     terminals: Sequence[Point],
     obstacles: np.ndarray,

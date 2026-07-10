@@ -35,10 +35,9 @@ _DEFAULT_AUTOPLACE_ITERATIONS = 12
 _NO_CONNECT_PREFIXES = ("NC", "NC_", "NC-")
 _GROUND_NETS = {"0", "GND"}
 _POWER_NET_NAMES = {"VCC", "VDD", "VEE", "V+", "V-", "VBAT", "VB+", "HT", "HV", "B+", "V++", "V--"}
-# Symbols that are fully symmetric under rotation/mirror and where the GT
-# conventions strongly prefer a single orientation.  Keeping these R0-only
-# prevents the optimizer from exploring mirror/rotate variants that never
-# match the professional layouts.
+# Functional blocks normally read left-to-right in a schematic.  Their pin
+# geometry, rather than a model-specific exception list, determines placement;
+# R0 is the stable visual convention for these generic block symbols.
 _R0_ONLY_SYMBOL_NAMES = {
     "bv",
     "e",
@@ -58,37 +57,10 @@ _R0_ONLY_SYMBOL_NAMES = {
     "ltline",
     "srflop",
     "ne555",
-    "lt1720",
-    "lt1721",
-    "lt1018",
-    "lt1007",
-    "lt1007a",
-    "lt1001",
-    "lt1002a",
-    "lt1880",
-    "lt6200",
-    "ad823a",
-    "ad823",
-    "ad824",
-    "ad8017",
-    "ad8018",
-    "ad8029",
-    "ad8066",
-    "ad8067",
-    "ad8091",
-    "ad8092",
-    "ad8137",
-    "ad8139",
-    "4n25",
-    "iso7637-2",
-    "iso16750-2",
 }
-# Per-symbol preferred candidate orientations, ordered most-preferred first.
-# Derived from statistical analysis of ground-truth layouts across the full
-# valid_convert/asc corpus (res: 512, cap: 147, npn: 78, diode: 76, ...).
-# Restricting candidates to the orientations a professional engineer actually
-# uses for each device class eliminates the dominant failure mode where the
-# optimizer picks a 90/180-degree variant the GT never uses.
+# Candidate orientations are broad enough to follow circuit topology.  The
+# order supplies a conventional tie-break only; pin roles and neighboring nets
+# decide the final pose.
 _PREFERRED_ORIENTATIONS: Dict[str, Tuple[str, ...]] = {
     "res": ("R0", "R90"),
     "res2": ("R0", "R90"),
@@ -152,6 +124,7 @@ class ComponentRecord:
 @dataclass(frozen=True)
 class PinConnection:
     instance_name: str
+    prefix: str
     line_number: int
     net_name: str
     pin_name: str
@@ -220,12 +193,14 @@ def ltspice_autoplace_symbol_pose(
         component_graph = _build_component_graph(pin_connections_by_instance)
         routing_grid = _infer_layout_grid(default_geometries.values(), convert_settings)
         minimum_dist = _resolve_non_negative_integer(convert_settings.get("minimum_dist", 0))
-        if minimum_dist is None:
+        wire_pin_out_dist = _resolve_non_negative_integer(convert_settings.get("wire_pin_out_dist", 0))
+        if minimum_dist is None or wire_pin_out_dist is None:
             return False, "INVALID_CONVERT_SETTINGS", 0
+        placement_clearance = minimum_dist + wire_pin_out_dist + routing_grid
         base_positions = _build_initial_positions(
             component_graph,
             default_geometries,
-            minimum_dist,
+            placement_clearance,
             routing_grid,
         )
         current_orientations = {
@@ -259,28 +234,10 @@ def ltspice_autoplace_symbol_pose(
                 }
             except ValueError:
                 return _AUTOPLACE_ERROR
-            current_positions = _relax_positions(
-                current_positions,
-                current_geometries,
-                pin_connections_by_instance,
-                minimum_dist,
-                routing_grid,
-            )
             current_positions = _resolve_collisions(
                 current_positions,
                 current_geometries,
-                minimum_dist,
-                routing_grid,
-            )
-            current_positions = _expand_layout_for_iteration(
-                current_positions,
-                iteration_index,
-                routing_grid,
-            )
-            current_positions = _resolve_collisions(
-                current_positions,
-                current_geometries,
-                minimum_dist,
+                placement_clearance,
                 routing_grid,
             )
             current_positions = _normalize_positions_to_positive_space(
@@ -457,6 +414,7 @@ def _build_pin_connections_by_instance(
             connections.append(
                 PinConnection(
                     instance_name=instance_name,
+                    prefix=component.prefix,
                     line_number=component.line_number,
                     net_name=net_name,
                     pin_name=pin.pin_name,
@@ -471,13 +429,23 @@ def _build_component_graph(
     pin_connections_by_instance: Mapping[str, Sequence[PinConnection]],
 ) -> nx.Graph:
     graph = nx.Graph()
-    for instance_name in pin_connections_by_instance:
-        graph.add_node(instance_name)
+    for instance_name, connections in pin_connections_by_instance.items():
+        first_connection = connections[0] if connections else None
+        graph.add_node(
+            instance_name,
+            line_number=first_connection.line_number if first_connection is not None else 0,
+            prefix=first_connection.prefix if first_connection is not None else instance_name[:1].upper(),
+        )
     net_groups = _group_connections_by_net(pin_connections_by_instance)
     for net_name, connections in net_groups.items():
         if len(connections) < 2:
             continue
         net_weight = _net_weight(net_name)
+        is_layout_signal = (
+            net_name.upper() not in _GROUND_NETS
+            and not _is_power_net(net_name)
+            and len(connections) <= 3
+        )
         for first_index, first_connection in enumerate(connections):
             for second_connection in connections[first_index + 1 :]:
                 if first_connection.instance_name == second_connection.instance_name:
@@ -485,9 +453,17 @@ def _build_component_graph(
                 if graph.has_edge(first_connection.instance_name, second_connection.instance_name):
                     edge_data = graph[first_connection.instance_name][second_connection.instance_name]
                     edge_data["weight"] += net_weight
+                    if is_layout_signal:
+                        edge_data["signal_weight"] += net_weight
                     edge_data["nets"].add(net_name)
                 else:
-                    graph.add_edge(first_connection.instance_name, second_connection.instance_name, weight=net_weight, nets={net_name})
+                    graph.add_edge(
+                        first_connection.instance_name,
+                        second_connection.instance_name,
+                        weight=net_weight,
+                        signal_weight=net_weight if is_layout_signal else 0.0,
+                        nets={net_name},
+                    )
     return graph
 
 
@@ -503,15 +479,11 @@ def _group_connections_by_net(
 
 def _signal_flow_subgraph(subgraph: nx.Graph) -> nx.Graph:
     signal_graph = nx.Graph()
-    signal_graph.add_nodes_from(subgraph.nodes)
+    signal_graph.add_nodes_from(subgraph.nodes(data=True))
     for u, v, data in subgraph.edges(data=True):
-        nets = data.get("nets", set())
-        has_signal = any(
-            n.upper() not in _GROUND_NETS and not _is_power_net(n)
-            for n in nets
-        )
-        if has_signal:
-            signal_graph.add_edge(u, v, **data)
+        signal_weight = float(data.get("signal_weight", 0.0))
+        if signal_weight > 0.0:
+            signal_graph.add_edge(u, v, **{**data, "weight": signal_weight})
     return signal_graph
 
 
@@ -521,71 +493,158 @@ def _build_initial_positions(
     minimum_dist: int,
     routing_grid: int,
 ) -> Dict[str, Point]:
-    padding = max(routing_grid * 3, minimum_dist * 2, 48)
-    component_gap = max(padding * 2, 128)
-    base_x = float(max(routing_grid * 8, 128))
+    if not component_graph.nodes:
+        return {}
+    symbol_gap = max(routing_grid * 3, minimum_dist * 2 + routing_grid, 64)
+    group_gap = max(symbol_gap * 2, 160)
+
+    # Power and ground rails connect almost every device but do not describe
+    # the visual signal-flow hierarchy.  Splitting on signal connectivity
+    # prevents a common failure where one rail turns the whole schematic into
+    # a clique and unrelated components are assigned arbitrary distant layers.
+    signal_graph = _signal_flow_subgraph(component_graph)
+    group_nodes = sorted(
+        nx.connected_components(signal_graph),
+        key=lambda nodes: (
+            min(_graph_line_number(component_graph, node_name) for node_name in nodes),
+            -len(nodes),
+            min(nodes),
+        ),
+    )
+    local_layouts: List[Tuple[Dict[str, Point], Rectangle]] = []
+    for nodes in group_nodes:
+        subgraph = signal_graph.subgraph(nodes).copy()
+        local_positions = _layout_signal_group(
+            subgraph,
+            component_graph,
+            geometries,
+            symbol_gap,
+            routing_grid,
+        )
+        local_layouts.append((local_positions, _layout_bounds(local_positions, geometries)))
+
+    # Pack independent signal islands in reading order.  This keeps repeated
+    # channels and supply blocks compact instead of producing one very long
+    # horizontal strip.
+    total_symbols = max(len(component_graph.nodes), 1)
+    row_width_limit = max(800, int(math.ceil(math.sqrt(total_symbols))) * 320)
+    packed_positions: Dict[str, Point] = {}
+    cursor_x = 0
+    cursor_y = 0
+    row_height = 0
+    for local_positions, bounds in local_layouts:
+        layout_width = max(bounds[2] - bounds[0], routing_grid)
+        layout_height = max(bounds[3] - bounds[1], routing_grid)
+        if cursor_x > 0 and cursor_x + layout_width > row_width_limit:
+            cursor_x = 0
+            cursor_y += row_height + group_gap
+            row_height = 0
+        shift_x = cursor_x - bounds[0]
+        shift_y = cursor_y - bounds[1]
+        for instance_name, position in local_positions.items():
+            packed_positions[instance_name] = (
+                _snap_coordinate_to_grid(position[0] + shift_x, routing_grid),
+                _snap_coordinate_to_grid(position[1] + shift_y, routing_grid),
+            )
+        cursor_x += layout_width + group_gap
+        row_height = max(row_height, layout_height)
+    return packed_positions
+
+
+def _layout_signal_group(
+    signal_subgraph: nx.Graph,
+    component_graph: nx.Graph,
+    geometries: Mapping[str, OrientationGeometry],
+    symbol_gap: int,
+    routing_grid: int,
+) -> Dict[str, Point]:
+    if len(signal_subgraph.nodes) == 1:
+        instance_name = next(iter(signal_subgraph.nodes))
+        return {instance_name: _origin_from_center((0.0, 0.0), geometries[instance_name], routing_grid)}
+
+    root_node = _choose_root_component(signal_subgraph)
+    layer_map = dict(nx.single_source_shortest_path_length(signal_subgraph, root_node))
+    layers: Dict[int, List[str]] = {}
+    for instance_name, layer_index in layer_map.items():
+        layers.setdefault(layer_index, []).append(instance_name)
+
+    # Alternating barycentric sweeps reduce edge crossings while netlist order
+    # provides a deterministic, human-authored tie-break for repeated stages.
+    for layer_nodes in layers.values():
+        layer_nodes.sort(key=lambda name: (_graph_line_number(component_graph, name), name))
+    for _ in range(3):
+        previous_order: Dict[str, int] = {}
+        for layer_index in sorted(layers):
+            layers[layer_index].sort(
+                key=lambda name: (
+                    _neighbor_barycenter(name, previous_order, signal_subgraph),
+                    _graph_line_number(component_graph, name),
+                    name,
+                )
+            )
+            previous_order = {name: index for index, name in enumerate(layers[layer_index])}
+        next_order: Dict[str, int] = {}
+        for layer_index in sorted(layers, reverse=True):
+            layers[layer_index].sort(
+                key=lambda name: (
+                    _neighbor_barycenter(name, next_order, signal_subgraph),
+                    _graph_line_number(component_graph, name),
+                    name,
+                )
+            )
+            next_order = {name: index for index, name in enumerate(layers[layer_index])}
+
+    layer_widths = {
+        layer_index: max(geometries[name].width for name in layer_nodes)
+        for layer_index, layer_nodes in layers.items()
+    }
+    layer_centers: Dict[int, float] = {}
+    current_x = 0.0
+    for layer_index in sorted(layers):
+        layer_centers[layer_index] = current_x + layer_widths[layer_index] / 2.0
+        current_x += layer_widths[layer_index] + symbol_gap
+
     positions: Dict[str, Point] = {}
-    current_x_offset = base_x
-    for component_nodes in sorted(nx.connected_components(component_graph), key=lambda nodes: (-len(nodes), sorted(nodes)[0])):
-        subgraph = component_graph.subgraph(component_nodes).copy()
-        signal_subgraph = _signal_flow_subgraph(subgraph)
-        if len(signal_subgraph.nodes) == 0:
-            signal_subgraph = subgraph
-        if len(signal_subgraph.nodes) == 1:
-            node_name = next(iter(signal_subgraph.nodes))
-            geometry = geometries[node_name]
-            positions[node_name] = _origin_from_center(
-                (current_x_offset + geometry.width / 2.0, base_x),
+    maximum_layer_height = max(
+        sum(geometries[name].height for name in layer_nodes)
+        + symbol_gap * max(len(layer_nodes) - 1, 0)
+        for layer_nodes in layers.values()
+    )
+    for layer_index in sorted(layers):
+        layer_nodes = layers[layer_index]
+        layer_height = sum(geometries[name].height for name in layer_nodes)
+        layer_height += symbol_gap * max(len(layer_nodes) - 1, 0)
+        current_y = (maximum_layer_height - layer_height) / 2.0
+        for instance_name in layer_nodes:
+            geometry = geometries[instance_name]
+            center_y = current_y + geometry.height / 2.0
+            positions[instance_name] = _origin_from_center(
+                (layer_centers[layer_index], center_y),
                 geometry,
                 routing_grid,
             )
-            current_x_offset += geometry.width + component_gap
-            continue
-        root_node = _choose_root_component(signal_subgraph)
-        layer_map = nx.single_source_shortest_path_length(signal_subgraph, root_node)
-        orphan_nodes = set(signal_subgraph.nodes) - set(layer_map.keys())
-        for orphan_node in orphan_nodes:
-            layer_map[orphan_node] = max(layer_map.values()) + 1 if layer_map else 0
-        layers: Dict[int, List[str]] = {}
-        for node_name, layer_index in layer_map.items():
-            layers.setdefault(layer_index, []).append(node_name)
-        ordered_layers = []
-        previous_layer_order: Dict[str, int] = {}
-        for layer_index in sorted(layers):
-            layer_nodes = list(layers[layer_index])
-            layer_nodes.sort(
-                key=lambda node_name: (
-                    _neighbor_barycenter(node_name, previous_layer_order, subgraph),
-                    -subgraph.degree(node_name, weight="weight"),
-                    node_name,
-                )
-            )
-            previous_layer_order = {node_name: order_index for order_index, node_name in enumerate(layer_nodes)}
-            ordered_layers.append((layer_index, layer_nodes))
-        layer_widths = {
-            layer_index: max(geometries[node_name].width for node_name in layer_nodes)
-            for layer_index, layer_nodes in ordered_layers
-        }
-        layer_x_centers: Dict[int, float] = {}
-        layer_left = current_x_offset
-        for layer_index, _layer_nodes in ordered_layers:
-            layer_x_centers[layer_index] = layer_left + (layer_widths[layer_index] / 2.0)
-            layer_left += layer_widths[layer_index] + padding
-        for layer_index, layer_nodes in ordered_layers:
-            layer_height = sum(geometries[node_name].height for node_name in layer_nodes)
-            layer_height += padding * max(len(layer_nodes) - 1, 0)
-            current_y = base_x - (layer_height / 2.0)
-            for node_name in layer_nodes:
-                geometry = geometries[node_name]
-                center_y = current_y + (geometry.height / 2.0)
-                positions[node_name] = _origin_from_center(
-                    (layer_x_centers[layer_index], center_y),
-                    geometry,
-                    routing_grid,
-                )
-                current_y = center_y + (geometry.height / 2.0) + padding
-        current_x_offset = layer_left + component_gap
+            current_y += geometry.height + symbol_gap
     return positions
+
+
+def _layout_bounds(
+    positions: Mapping[str, Point],
+    geometries: Mapping[str, OrientationGeometry],
+) -> Rectangle:
+    rectangles = [
+        _absolute_rectangle(position, geometries[instance_name])
+        for instance_name, position in positions.items()
+    ]
+    return (
+        min(rectangle[0] for rectangle in rectangles),
+        min(rectangle[1] for rectangle in rectangles),
+        max(rectangle[2] for rectangle in rectangles),
+        max(rectangle[3] for rectangle in rectangles),
+    )
+
+
+def _graph_line_number(graph: nx.Graph, instance_name: str) -> int:
+    return int(graph.nodes[instance_name].get("line_number", 0))
 
 
 def _choose_root_component(subgraph: nx.Graph) -> str:
@@ -599,6 +658,7 @@ def _choose_root_component(subgraph: nx.Graph) -> str:
         candidate_nodes,
         key=lambda node_name: (
             subgraph.degree(node_name, weight="weight"),
+            -_graph_line_number(subgraph, node_name),
             -len(node_name),
             node_name,
         ),
@@ -659,11 +719,12 @@ def _choose_orientations(
             )
             # Small inertia toward the current orientation for stability.
             if orientation == current_orientation:
-                score -= 8.0
-            # Bias toward earlier (more-preferred) candidates so that when
-            # connectivity scores are close the professional convention wins.
+                score -= 6.0
+            # Earlier candidates are visual conventions, not fixed answers.
+            # Geometry can override this tie-break whenever circuit topology
+            # clearly calls for another rotation or mirror.
             candidate_index = candidate_list.index(orientation) if orientation in candidate_list else 0
-            score += candidate_index * 1.0
+            score += candidate_index * 4.0
             if score < best_score:
                 best_score = score
                 best_orientation = orientation
@@ -717,15 +778,17 @@ def _orientation_score(
         is_ground = connection.net_name.upper() in _GROUND_NETS
         is_power = _is_power_net(connection.net_name)
         if is_ground:
-            if delta_y > 0:
-                score -= 30.0
+            pin_is_vertical = abs(delta_y) >= abs(delta_x)
+            if delta_y > 0 and pin_is_vertical:
+                score -= 120.0
             else:
-                score += 60.0
+                score += 240.0
         elif is_power:
-            if delta_y < 0:
-                score -= 30.0
+            pin_is_vertical = abs(delta_y) >= abs(delta_x)
+            if delta_y < 0 and pin_is_vertical:
+                score -= 120.0
             else:
-                score += 60.0
+                score += 240.0
         else:
             target_delta_x = target_x - center_x
             target_delta_y = target_y - center_y
@@ -734,11 +797,11 @@ def _orientation_score(
             # Reward axis alignment; keep a slight horizontal bias because
             # professional layouts place most 2-terminal passives horizontally.
             if target_is_horizontal and pin_is_horizontal:
-                score -= 8.0
+                score -= 24.0
             elif not target_is_horizontal and not pin_is_horizontal:
-                score -= 6.0
+                score -= 18.0
             else:
-                score += 12.0
+                score += 36.0
     return score
 
 
@@ -819,7 +882,7 @@ def _resolve_collisions(
     routing_grid: int,
 ) -> Dict[str, Point]:
     resolved_positions = dict(positions)
-    for _ in range(32):
+    for _ in range(max(64, len(resolved_positions) * 16)):
         moved_any_symbol = False
         instance_names = sorted(resolved_positions)
         for first_index, first_name in enumerate(instance_names):
@@ -839,18 +902,14 @@ def _resolve_collisions(
                     continue
                 moved_any_symbol = True
                 overlap_x, overlap_y = overlap
-                first_center = _rectangle_center(first_buffered_rectangle)
-                second_center = _rectangle_center(second_buffered_rectangle)
                 if overlap_x <= overlap_y:
-                    direction = -1 if second_center[0] < first_center[0] else 1
-                    shift_x = _snap_shift(overlap_x + routing_grid, routing_grid) * direction
+                    shift_x = _snap_shift(overlap_x + routing_grid, routing_grid)
                     resolved_positions[second_name] = (
                         resolved_positions[second_name][0] + shift_x,
                         resolved_positions[second_name][1],
                     )
                 else:
-                    direction = -1 if second_center[1] < first_center[1] else 1
-                    shift_y = _snap_shift(overlap_y + routing_grid, routing_grid) * direction
+                    shift_y = _snap_shift(overlap_y + routing_grid, routing_grid)
                     resolved_positions[second_name] = (
                         resolved_positions[second_name][0],
                         resolved_positions[second_name][1] + shift_y,
@@ -937,7 +996,11 @@ def _expand_layout_for_routing_retry(
     routing_grid: int,
     iteration_index: int,
 ) -> Dict[str, Point]:
-    scale = 1.15 + (0.06 * iteration_index)
+    # Routing retries add modest clearance without destroying the topology or
+    # ballooning the schematic.  The previous compounding 15%..81% expansion
+    # was the main cause of multi-thousand-coordinate layouts and poor
+    # relative-position scores.
+    scale = 1.04 + min(0.01 * iteration_index, 0.06)
     center_x = sum(_rectangle_center(_absolute_rectangle(position, geometries[instance_name]))[0] for instance_name, position in positions.items()) / max(len(positions), 1)
     center_y = sum(_rectangle_center(_absolute_rectangle(position, geometries[instance_name]))[1] for instance_name, position in positions.items()) / max(len(positions), 1)
     expanded_positions: Dict[str, Point] = {}
@@ -1163,7 +1226,9 @@ def _rectangle_overlap(first_rectangle: Rectangle, second_rectangle: Rectangle) 
     overlap_top = max(first_rectangle[1], second_rectangle[1])
     overlap_right = min(first_rectangle[2], second_rectangle[2])
     overlap_bottom = min(first_rectangle[3], second_rectangle[3])
-    if overlap_left >= overlap_right or overlap_top >= overlap_bottom:
+    # Buffered rectangles that merely touch still intersect as line obstacles,
+    # so reserve one routing-grid step for edge/corner clearance as well.
+    if overlap_left > overlap_right or overlap_top > overlap_bottom:
         return None
     return overlap_right - overlap_left, overlap_bottom - overlap_top
 
