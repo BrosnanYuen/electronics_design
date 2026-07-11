@@ -4,21 +4,8 @@ import re
 import sys
 from pathlib import Path
 
-REPORT_FILES = [
-    "Lossless-transmission-line-pulse",
-    "Ferranti-effect-lines",
-    "DCDC-full-bridge",
-    "Logic-gates-transistors-BJTs",
-    "professional-input-stage",
-    "Transformer-step-down-5-1",
-    "555 - Monostable mode",
-    "RLC-step-response-resonance-frequency-series-parallel",
-    "Analog-multiplier",
-    "Non-inverting-integrator",
-]
-
 GT_DIR = Path("valid_convert/asc")
-GEN_DIR = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/netlist_baseline")
+GEN_DIR = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/test")
 
 _SYMBOL_RE = re.compile(r"^SYMBOL\s+(\S+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s*$")
 _INSTNAME_RE = re.compile(r"^SYMATTR\s+InstName\s+(\S+)\s*$")
@@ -94,21 +81,24 @@ def score_file(gt_path: Path, gen_path: Path):
 def main():
     total_score = 0.0
     count = 0
-    for stem in REPORT_FILES:
-        gt_path = GT_DIR / f"{stem}.asc"
-        gen_path = GEN_DIR / f"{stem}.asc"
+    generated_paths = sorted(GEN_DIR.glob("*.asc"), key=lambda path: path.name.casefold())
+    if not generated_paths:
+        print(f"No generated .asc files found in {GEN_DIR}.")
+        return
+    for gen_path in generated_paths:
+        stem = gen_path.stem
+        gt_path = GT_DIR / gen_path.name
         if not gt_path.exists():
+            print(f"{stem:55s} [GROUND TRUTH MISSING]")
             continue
         r = score_file(gt_path, gen_path)
-        exists = "OK" if gen_path.exists() else "MISSING"
-        print(f"{stem:55s} GT={r['gt']:2d} GEN={r['gen']:2d} O={r['orient']:18s} NN={r['nn']:5s} D={r['dist']:5s} S={r['set']:5s} => {r['score']:6s} [{exists}]")
-        if gen_path.exists():
-            total_score += float(r["score"].rstrip("%"))
-            count += 1
+        print(f"{stem:55s} GT={r['gt']:2d} GEN={r['gen']:2d} O={r['orient']:18s} NN={r['nn']:5s} D={r['dist']:5s} S={r['set']:5s} => {r['score']:6s} [OK]")
+        total_score += float(r["score"].rstrip("%"))
+        count += 1
     if count:
         print(f"\nAverage score across {count} files: {total_score/count:.1f}%")
     else:
-        print("No generated files found.")
+        print("No generated files with matching ground truth found.")
 
 
 if __name__ == "__main__":

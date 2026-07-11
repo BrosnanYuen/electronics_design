@@ -8,12 +8,15 @@ import tempfile
 import unittest
 
 from electronics_design import ltspice_autoplace_symbol_pose
+from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import ltspice_check_symbol_pose
+from electronics_design import ltspice_netlist_symbol_wire_to_asc
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _VALID_NETLIST_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "netlist"
 _VALID_SYMBOL_INITIAL_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "symbol_initial"
 _VALID_SYMBOL_FINAL_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "symbol_final"
+_VALID_ASC_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "asc"
 _CONVERT_SETTINGS = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
@@ -36,6 +39,60 @@ def _load_json(filepath: Path) -> dict[str, object]:
 
 
 class TestLtspiceAutoplaceSymbolPose(unittest.TestCase):
+    def test_dense_regressions_use_bounded_labelled_wiring(self) -> None:
+        fixture_names = (
+            "Common-emitter-amplifier-design",
+            "Three-phase-naive-supply-system",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_directory_path = Path(temporary_directory)
+            for fixture_name in fixture_names:
+                with self.subTest(fixture=fixture_name):
+                    netlist_path = _VALID_NETLIST_DIRECTORY / f"{fixture_name}.net"
+                    symbol_path = temporary_directory_path / f"{fixture_name}.json"
+                    wire_path = temporary_directory_path / f"{fixture_name}_wires.json"
+                    asc_path = temporary_directory_path / f"{fixture_name}.asc"
+                    symbol_path.write_text(
+                        (_VALID_SYMBOL_INITIAL_DIRECTORY / f"{fixture_name}.json").read_text(
+                            encoding="utf-8"
+                        ),
+                        encoding="utf-8",
+                    )
+                    self.assertEqual(
+                        ltspice_autoplace_symbol_pose(
+                            str(netlist_path),
+                            str(symbol_path),
+                            str(wire_path),
+                            _CONVERT_SETTINGS,
+                        ),
+                        (True, "OK", 0),
+                    )
+                    generated_wires = _load_json(wire_path)
+                    self.assertTrue(generated_wires)
+                    self.assertTrue(all(wire_rows for wire_rows in generated_wires.values()))
+                    self.assertEqual(
+                        ltspice_check_symbol_pose(str(symbol_path), _CONVERT_SETTINGS),
+                        (False, None),
+                    )
+                    self.assertEqual(
+                        ltspice_netlist_symbol_wire_to_asc(
+                            str(netlist_path),
+                            str(symbol_path),
+                            str(wire_path),
+                            str(asc_path),
+                            _CONVERT_SETTINGS,
+                        ),
+                        (True, "OK", 0),
+                    )
+                    self.assertEqual(
+                        ltspice_asc_structure_cmp(
+                            str(asc_path),
+                            str(_VALID_ASC_DIRECTORY / f"{fixture_name}.asc"),
+                            _CONVERT_SETTINGS,
+                        ),
+                        (True, "", 0),
+                    )
+
     def test_all_valid_convert_symbol_layouts(self) -> None:
         netlist_fixture_paths = sorted(_VALID_NETLIST_DIRECTORY.glob("*.net"))
         initial_fixture_paths = sorted(_VALID_SYMBOL_INITIAL_DIRECTORY.glob("*.json"))

@@ -15,9 +15,12 @@ from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
+import numpy as np
+
 from . import ltspice_asc as _asc
 from . import ltspice_asc_to_netlist as _asc_to_netlist
 from . import ltspice_net as _net
+from .pathtracing import place_wires_into_groups
 
 ConversionResult = Tuple[bool, str, int]
 Point = Tuple[int, int]
@@ -132,9 +135,7 @@ def _build_asc_lines(
         for wire_row in normalized_wire_rows:
             wire_lines.append(f"WIRE {wire_row[0]} {wire_row[1]} {wire_row[2]} {wire_row[3]}")
             all_points.extend(((wire_row[0], wire_row[1]), (wire_row[2], wire_row[3])))
-        flag_line = _flag_line_for_net(net_name, normalized_wire_rows)
-        if flag_line is not None:
-            flag_lines.append(flag_line)
+        flag_lines.extend(_flag_lines_for_net(net_name, normalized_wire_rows))
     symbol_lines: List[str] = []
     symbol_bounds = _collect_symbol_bounds(symbol_pose)
     all_points.extend(symbol_bounds)
@@ -150,7 +151,11 @@ def _build_asc_lines(
         for window_line in _load_symbol_window_lines(symbol_name, symbol_paths):
             symbol_lines.append(window_line)
         symbol_lines.append(f"SYMATTR InstName {instance_name}")
-        merged_attributes = _merge_symbol_attributes(symbol_entry, instance_payload_attributes.get(instance_name, {}))
+        merged_attributes = _merge_symbol_attributes(
+            symbol_entry,
+            instance_payload_attributes.get(instance_name, {}),
+            _load_symbol_default_attributes(symbol_name, symbol_paths),
+        )
         for attribute_key in _ordered_attribute_keys(merged_attributes):
             symbol_lines.append(f"SYMATTR {attribute_key} {merged_attributes[attribute_key]}")
     text_records = _collect_text_records(logical_lines, symbol_pose)
@@ -296,6 +301,35 @@ def _flag_line_for_net(net_name: str, wire_rows: Sequence[WireRow]) -> Optional[
     return f"FLAG {flag_point[0]} {flag_point[1]} {normalized_net_name}"
 
 
+def _flag_lines_for_net(net_name: str, wire_rows: Sequence[WireRow]) -> Tuple[str, ...]:
+    """Return labels needed to make every disconnected wire group one net."""
+
+    if not wire_rows:
+        return ()
+    wire_groups = place_wires_into_groups(np.asarray(wire_rows, dtype=int))
+    if len(wire_groups) <= 1:
+        flag_line = _flag_line_for_net(net_name, wire_rows)
+        return (flag_line,) if flag_line is not None else ()
+    normalized_net_name = net_name.strip()
+    if normalized_net_name == "":
+        return ()
+    flag_name = "0" if normalized_net_name.upper() == "0" else normalized_net_name
+    flag_lines: List[str] = []
+    for wire_group in wire_groups:
+        group_rows = tuple(tuple(int(value) for value in row) for row in wire_group.tolist())
+        points = [
+            point
+            for wire_row in group_rows
+            for point in ((wire_row[0], wire_row[1]), (wire_row[2], wire_row[3]))
+        ]
+        if flag_name.upper() in {"0", "GND"}:
+            flag_point = max(points, key=lambda point: (point[1], point[0]))
+        else:
+            flag_point = min(points, key=lambda point: (point[1], point[0]))
+        flag_lines.append(f"FLAG {flag_point[0]} {flag_point[1]} {flag_name}")
+    return tuple(flag_lines)
+
+
 def _collect_symbol_bounds(symbol_pose: Mapping[str, Mapping[str, object]]) -> List[Point]:
     bounds: List[Point] = []
     for symbol_entry in symbol_pose.values():
@@ -331,10 +365,38 @@ def _load_symbol_window_lines(symbol_name: str, symbol_paths: Mapping[str, str])
     )
 
 
+def _load_symbol_default_attributes(
+    symbol_name: str,
+    symbol_paths: Mapping[str, str],
+) -> Dict[str, str]:
+    """Read defaults from the selected ASY instead of duplicating them."""
+
+    symbol_filepath = _asc_to_netlist._resolve_symbol_filepath(symbol_name, symbol_paths)
+    if symbol_filepath is None:
+        return {}
+    read_result = _asc._read_text_file_lines(symbol_filepath)
+    if not read_result[0]:
+        return {}
+    defaults: Dict[str, str] = {}
+    for raw_line in read_result[1]:
+        stripped_line = raw_line.strip()
+        if not stripped_line.upper().startswith("SYMATTR "):
+            continue
+        tokens = stripped_line.split(maxsplit=2)
+        if len(tokens) < 3:
+            continue
+        normalized_key = _ATTRIBUTE_KEY_ALIASES.get(tokens[1].upper())
+        if normalized_key is not None:
+            defaults[normalized_key] = tokens[2].strip()
+    return defaults
+
+
 def _merge_symbol_attributes(
     symbol_entry: Mapping[str, object],
     payload_attributes: Mapping[str, str],
+    symbol_defaults: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, str]:
+    defaults = symbol_defaults or {}
     merged_attributes: Dict[str, str] = {}
     for raw_key, raw_value in symbol_entry.items():
         normalized_key = _ATTRIBUTE_KEY_ALIASES.get(str(raw_key).upper())
@@ -344,8 +406,25 @@ def _merge_symbol_attributes(
         if clean_value != "":
             merged_attributes[normalized_key] = clean_value
     for attribute_key, attribute_value in payload_attributes.items():
-        if attribute_key not in merged_attributes and attribute_value.strip() != "":
-            merged_attributes[attribute_key] = attribute_value.strip()
+        if attribute_key in merged_attributes or attribute_value.strip() == "":
+            continue
+        payload_value = attribute_value.strip()
+        if attribute_key == "SpiceLine":
+            default_spice_tokens = " ".join(
+                value
+                for value in (
+                    defaults.get("SpiceLine", "").strip(),
+                    defaults.get("SpiceLine2", "").strip(),
+                )
+                if value != ""
+            ).split()
+            payload_tokens = payload_value.split()
+            if default_spice_tokens and payload_tokens[: len(default_spice_tokens)] == default_spice_tokens:
+                payload_value = " ".join(payload_tokens[len(default_spice_tokens) :])
+        elif payload_value == defaults.get(attribute_key, "").strip():
+            payload_value = ""
+        if payload_value != "":
+            merged_attributes[attribute_key] = payload_value
     return merged_attributes
 
 
