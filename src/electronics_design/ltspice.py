@@ -5,7 +5,6 @@ from __future__ import annotations  # Keep annotations lazy and consistent with 
 import os  # Re-export the shared os module so existing test patches still apply.
 
 from . import ltspice_asc as _asc  # Import the ASC-specific implementation module.
-from . import ltspice_asc_plot_schemdraw as _asc_plot_schemdraw  # Import the dedicated ASC plotting module.
 from . import ltspice_asc_to_netlist as _asc_to_netlist  # Import the ASC-to-netlist conversion module.
 from . import ltspice_autoplace_symbol_pose as _autoplace_symbol_pose  # Import the symbol autoplace module.
 from . import ltspice_asy as _asy  # Import the ASY-specific implementation module.
@@ -22,7 +21,6 @@ is_valid_ltspice_asc_header = _asc.is_valid_ltspice_asc_header  # Re-export the 
 is_valid_ltspice_asc_spacing = _asc.is_valid_ltspice_asc_spacing  # Re-export the ASC spacing validator.
 is_valid_ltspice_asc_footer = _asc.is_valid_ltspice_asc_footer  # Re-export the ASC footer validator.
 is_valid_ltspice_asc_file = _asc.is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
-ltspice_asc_plot_schemdraw = _asc_plot_schemdraw.ltspice_asc_plot_schemdraw  # Re-export the schemdraw schematic plotting helper.
 ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
 ltspice_autoplace_symbol_pose = _autoplace_symbol_pose.ltspice_autoplace_symbol_pose  # Re-export the symbol autoplace helper.
@@ -65,7 +63,6 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "is_valid_ltspice_asc_spacing",  # Export the ASC spacing validator.
     "is_valid_ltspice_asc_footer",  # Export the ASC footer validator.
     "is_valid_ltspice_asc_file",  # Export the ASC whole-file validator.
-    "ltspice_asc_plot_schemdraw",  # Export the schemdraw schematic plotting helper.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper.
     "ltspice_autoplace_symbol_pose",  # Export the symbol autoplace helper.

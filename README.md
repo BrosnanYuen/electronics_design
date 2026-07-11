@@ -80,10 +80,9 @@ Converts both ASC files to netlists and compares their structure.  Returns `(Tru
 
 | Function | Returns |
 |---|---|
-| `ltspice_asc_plot_schemdraw(asc_filepath, schemdraw_imagepath_out, width=1920, height=1080, convert_settings=None)` | `(bool, str)` |
 | `ltspice_netlist_plot_networkx(netlist_filepath, networkx_imagepath_out, width=1920, height=1080)` | `(bool, str)` |
 
-Uses schemdraw (ASC) and networkx (netlist) to render images. Supports `.png`, `.svg`, `.jpg`, `.jpeg` output.
+Uses networkx to render netlist graphs. Supports `.png`, `.svg`, `.jpg`, `.jpeg` output.
 
 ### Symbol Pose Pipeline
 
@@ -180,7 +179,7 @@ No hard-coded paths are permitted in `src/`; all search paths must be supplied t
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install "networkx>=3.6.1" "schemdraw>=0.23" "matplotlib>=3.11.0"
+.venv/bin/python -m pip install "networkx>=3.6.1"
 ```
 
 Run tests:
@@ -198,9 +197,6 @@ PYTHONPATH=src .venv/bin/python scripts/run_all_tests.py
 ## CLI Usage
 
 ```bash
-# Render an ASC schematic to an image
-PYTHONPATH=src .venv/bin/python scripts/ltspice_asc_plot_schemdraw.py input.asc output.svg --width 1600 --height 900
-
 # Render a netlist to a network graph
 PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net output.svg --width 1600 --height 900
 
@@ -234,7 +230,6 @@ from electronics_design import is_valid_ltspice_asy
 from electronics_design import is_valid_ltspice_netlist_file
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_valid_ltspice_netlist_format
-from electronics_design import ltspice_asc_plot_schemdraw
 from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import ltspice_asc_to_netlist
 from electronics_design import ltspice_autoplace_symbol_pose
@@ -285,7 +280,6 @@ bounds = get_ltspice_asy_size("example.asy")
 pins = get_ltspice_asy_pins("example.asy")
 
 # Plotting
-ltspice_asc_plot_schemdraw("example.asc", "schematic.svg")
 ltspice_netlist_plot_networkx("example.net", "graph.png")
 
 # Conversion
@@ -339,7 +333,6 @@ src/electronics_design/
     autoroute.py
     ltspice.py
     ltspice_asc.py
-    ltspice_asc_plot_schemdraw.py
     ltspice_asc_to_netlist.py
     ltspice_asy.py
     ltspice_autoplace_symbol_pose.py
