@@ -389,10 +389,14 @@ def _collect_net_pin_attachments(
         if not node_result[0]:
             return False, "WIRING_GENERATION_ERROR", logical_line.line_number, {}
         symbol_entry = symbol_pose_entries[instance_name]
-        pin_limit = min(len(node_result[1]), len(symbol_entry.pins))
-        if pin_limit == 0:
+        node_names = node_result[1]
+        if not node_names or not symbol_entry.pins:
             continue
-        for node_name, pin in zip(node_result[1][:pin_limit], symbol_entry.pins[:pin_limit]):
+        for pin in symbol_entry.pins:
+            node_index = pin.spice_order - 1
+            if node_index < 0 or node_index >= len(node_names):
+                continue
+            node_name = node_names[node_index]
             net_name = str(node_name).strip()
             if net_name == "":
                 return False, "WIRING_GENERATION_ERROR", logical_line.line_number, {}

@@ -10,6 +10,7 @@ from electronics_design import ltspice_asc_structure_cmp
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _VALID_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "asc_cmp" / "valid"
 _INVALID_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "asc_cmp" / "invalid"
+_REFERENCE_ASC_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "asc"
 _CONVERT_SETTINGS = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
@@ -30,6 +31,20 @@ _EXPECTED_INVALID_LINES = {
 
 
 class TestAscComparison(unittest.TestCase):
+    def test_structure_comparison_accepts_drawing_without_analysis_directive(self) -> None:
+        drawing_path = (
+            _REFERENCE_ASC_DIRECTORY
+            / "Adjustable-duty-cycle-555-square-wave-oscillator.asc"
+        )
+        self.assertEqual(
+            ltspice_asc_structure_cmp(
+                str(drawing_path),
+                str(drawing_path),
+                _CONVERT_SETTINGS,
+            ),
+            (True, "", 0),
+        )
+
     def test_valid_comparison_pairs(self) -> None:
         for case_number in range(1, 11):
             first_path = _VALID_DIRECTORY / f"valid_case_{case_number:02d}_a.asc"

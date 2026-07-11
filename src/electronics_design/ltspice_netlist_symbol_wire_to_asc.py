@@ -409,10 +409,29 @@ def _merge_symbol_attributes(
         if attribute_key in merged_attributes or attribute_value.strip() == "":
             continue
         payload_value = attribute_value.strip()
+        if attribute_key == "Value" and "SpiceLine" in merged_attributes:
+            payload_tokens = payload_value.split()
+            explicit_spice_tokens = merged_attributes["SpiceLine"].split()
+            if (
+                explicit_spice_tokens
+                and payload_tokens[-len(explicit_spice_tokens) :] == explicit_spice_tokens
+            ):
+                payload_value = " ".join(payload_tokens[: -len(explicit_spice_tokens)])
         if attribute_key == "SpiceLine":
+            combined_payload_value = " ".join(
+                value
+                for value in (
+                    payload_attributes.get("Value", "").strip(),
+                    payload_value,
+                )
+                if value != ""
+            )
+            if combined_payload_value == merged_attributes.get("Value", "").strip():
+                continue
             default_spice_tokens = " ".join(
                 value
                 for value in (
+                    defaults.get("Value2", "").strip(),
                     defaults.get("SpiceLine", "").strip(),
                     defaults.get("SpiceLine2", "").strip(),
                 )

@@ -222,12 +222,21 @@ def ltspice_asc_structure_cmp(
     filepath2: str,
     convert_settings: Optional[Mapping[str, object]] = None,
 ) -> StructureCompareResult:
-    first_validation_result = _asc.is_valid_ltspice_asc_file(filepath1)
-    if not first_validation_result[0]:
-        return False, _message_without_line_number(first_validation_result[1]), _line_number_from_message(first_validation_result[1], 0)
-    second_validation_result = _asc.is_valid_ltspice_asc_file(filepath2)
-    if not second_validation_result[0]:
-        return False, _message_without_line_number(second_validation_result[1]), _line_number_from_message(second_validation_result[1], 0)
+    # Structural comparison needs parseable schematic records, not an active
+    # simulation directive.  Many legitimate reference drawings intentionally
+    # omit analysis commands, so validate header and spacing only here.
+    for filepath in (filepath1, filepath2):
+        for validator in (
+            _asc.is_valid_ltspice_asc_header,
+            _asc.is_valid_ltspice_asc_spacing,
+        ):
+            validation_result = validator(filepath)
+            if not validation_result[0]:
+                return (
+                    False,
+                    _message_without_line_number(validation_result[1]),
+                    _line_number_from_message(validation_result[1], 0),
+                )
     effective_convert_settings = convert_settings if convert_settings is not None else _DEFAULT_ASC_COMPARE_CONVERT_SETTINGS
     with tempfile.TemporaryDirectory() as temporary_directory:
         first_netlist_path = Path(temporary_directory) / "first.net"

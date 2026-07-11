@@ -51,6 +51,18 @@ def auto_route_wires(
     if _point_hits_any_obstacle(end_point, obstacle_array):
         raise ValueError("end point must not lie on an obstacle")
 
+    try:
+        simple_route = _route_simple_orthogonal(
+            start_point,
+            end_point,
+            obstacle_array,
+            normalized_grid_x,
+            normalized_grid_y,
+        )
+        if len(simple_route) <= 2:
+            return simple_route
+    except ValueError:
+        pass
     visibility_graph = _build_full_visibility_graph_for_terminals(
         (start_point, end_point),
         obstacle_array,

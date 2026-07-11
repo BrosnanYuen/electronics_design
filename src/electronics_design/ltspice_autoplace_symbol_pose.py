@@ -455,9 +455,12 @@ def _build_pin_connections_by_instance(
         if instance_name not in geometries:
             continue
         geometry = geometries[instance_name]
-        pin_limit = min(len(component.node_names), len(geometry.pins))
         connections: List[PinConnection] = []
-        for net_name, pin in zip(component.node_names[:pin_limit], geometry.pins[:pin_limit]):
+        for pin in geometry.pins:
+            node_index = pin.spice_order - 1
+            if node_index < 0 or node_index >= len(component.node_names):
+                continue
+            net_name = component.node_names[node_index]
             if _is_no_connect_net(net_name):
                 continue
             connections.append(
@@ -704,7 +707,7 @@ def _benefits_from_topology_layout(signal_subgraph: nx.Graph) -> bool:
         return False
     cycle_count = len(nx.cycle_basis(signal_subgraph))
     branch_count = sum(1 for node_name in signal_subgraph if signal_subgraph.degree(node_name) >= 3)
-    return cycle_count > 0 or branch_count >= 2
+    return cycle_count >= 2 or branch_count >= 3
 
 
 def _layout_feedback_group(

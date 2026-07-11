@@ -39,8 +39,9 @@ def _load_json(filepath: Path) -> dict[str, object]:
 
 
 class TestLtspiceAutoplaceSymbolPose(unittest.TestCase):
-    def test_dense_regressions_use_bounded_labelled_wiring(self) -> None:
+    def test_routing_regressions_round_trip_structurally(self) -> None:
         fixture_names = (
+            "555 - Monostable mode",
             "Common-emitter-amplifier-design",
             "Three-phase-naive-supply-system",
         )
