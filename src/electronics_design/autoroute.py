@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
-from dataclasses import field
 import heapq
 from numbers import Integral
 from typing import Dict
 from typing import List
-from typing import Mapping
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
+import networkx as nx
 import numpy as np
 
 from .pathtracing import are_wires_connected
@@ -22,32 +20,6 @@ from .pathtracing import are_wires_intersecting_obstacles_fast
 
 Point = Tuple[int, int]
 Segment = Tuple[int, int, int, int]
-
-
-@dataclass
-class _VisibilityGraph:
-    """Minimal weighted graph used by the orthogonal visibility router."""
-
-    adjacency: Dict[Point, Dict[Point, Dict[str, int]]] = field(default_factory=dict)
-
-    def add_node(self, point: Point) -> None:
-        self.adjacency.setdefault(point, {})
-
-    def add_edge(self, first_point: Point, second_point: Point, **attributes: int) -> None:
-        self.add_node(first_point)
-        self.add_node(second_point)
-        edge_attributes = {str(key): int(value) for key, value in attributes.items()}
-        self.adjacency[first_point][second_point] = dict(edge_attributes)
-        self.adjacency[second_point][first_point] = dict(edge_attributes)
-
-    def __contains__(self, point: object) -> bool:
-        return point in self.adjacency
-
-    def __getitem__(self, point: Point) -> Dict[Point, Dict[str, int]]:
-        return self.adjacency[point]
-
-    def neighbors(self, point: Point) -> Tuple[Point, ...]:
-        return tuple(self.adjacency.get(point, {}))
 
 
 def auto_route_wires(
@@ -187,7 +159,7 @@ def _build_visibility_graph_for_terminals(
     obstacles: np.ndarray,
     grid_x: int,
     grid_y: int,
-) -> _VisibilityGraph:
+) -> nx.Graph:
     candidate_points = _build_candidate_points_for_terminals(terminals, obstacles, grid_x, grid_y)
     return _build_visibility_graph(candidate_points, obstacles)
 
@@ -288,13 +260,13 @@ def _build_full_visibility_graph_for_terminals(
     obstacles: np.ndarray,
     grid_x: int,
     grid_y: int,
-) -> _VisibilityGraph:
+) -> nx.Graph:
     candidate_points = _build_candidate_points_for_terminals(terminals, obstacles, grid_x, grid_y)
     return _build_full_visibility_graph(candidate_points, obstacles)
 
 
-def _build_visibility_graph(candidate_points: Sequence[Point], obstacles: np.ndarray) -> _VisibilityGraph:
-    graph = _VisibilityGraph()
+def _build_visibility_graph(candidate_points: Sequence[Point], obstacles: np.ndarray) -> nx.Graph:
+    graph = nx.Graph()
     for point in candidate_points:
         graph.add_node(point)
     grouped_by_x: Dict[int, List[Point]] = defaultdict(list)
@@ -313,8 +285,8 @@ def _build_visibility_graph(candidate_points: Sequence[Point], obstacles: np.nda
     return graph
 
 
-def _build_full_visibility_graph(candidate_points: Sequence[Point], obstacles: np.ndarray) -> _VisibilityGraph:
-    graph = _VisibilityGraph()
+def _build_full_visibility_graph(candidate_points: Sequence[Point], obstacles: np.ndarray) -> nx.Graph:
+    graph = nx.Graph()
     for point in candidate_points:
         graph.add_node(point)
     grouped_by_x: Dict[int, List[Point]] = defaultdict(list)
@@ -340,7 +312,7 @@ def _maximum_possible_route_length(candidate_points: Sequence[Point]) -> int:
 
 
 def _add_visible_edges(
-    graph: _VisibilityGraph,
+    graph: nx.Graph,
     ordered_points: Sequence[Point],
     obstacles: np.ndarray,
     segment_penalty: int = 0,
@@ -357,7 +329,7 @@ def _add_visible_edges(
 
 
 def _add_full_visible_edges(
-    graph: _VisibilityGraph,
+    graph: nx.Graph,
     ordered_points: Sequence[Point],
     obstacles: np.ndarray,
     segment_penalty: int,
@@ -394,7 +366,7 @@ def _compress_point_path(point_path: Sequence[Point]) -> np.ndarray:
 def _route_with_visibility_graph(
     start_point: Point,
     end_point: Point,
-    visibility_graph: _VisibilityGraph,
+    visibility_graph: nx.Graph,
     obstacles: np.ndarray,
     grid_x: int,
     grid_y: int,
@@ -410,99 +382,24 @@ def _route_with_visibility_graph(
 def _route_with_full_visibility_graph(
     start_point: Point,
     end_point: Point,
-    visibility_graph: _VisibilityGraph,
+    visibility_graph: nx.Graph,
     obstacles: np.ndarray,
     grid_x: int,
     grid_y: int,
 ) -> np.ndarray:
     if start_point not in visibility_graph or end_point not in visibility_graph:
         raise ValueError("no valid route found")
-    point_path = _bidirectional_weighted_point_path(visibility_graph, start_point, end_point)
+    try:
+        point_path = nx.shortest_path(visibility_graph, start_point, end_point, weight="weight")
+    except (nx.NetworkXNoPath, nx.NodeNotFound) as path_error:
+        raise ValueError("no valid route found") from path_error
     wires = _compress_point_path(point_path)
     _validate_generated_route(wires, obstacles, start_point, end_point, grid_x, grid_y)
     return wires
 
 
-def _bidirectional_weighted_point_path(
-    visibility_graph: _VisibilityGraph,
-    start_point: Point,
-    end_point: Point,
-) -> List[Point]:
-    """Find a weighted path with stable bidirectional Dijkstra tie-breaking."""
-
-    if start_point not in visibility_graph or end_point not in visibility_graph:
-        raise ValueError("no valid route found")
-    if start_point == end_point:
-        return [start_point]
-    distances: List[Dict[Point, int]] = [{}, {}]
-    predecessors: List[Dict[Point, Optional[Point]]] = [
-        {start_point: None},
-        {end_point: None},
-    ]
-    fringes: List[List[Tuple[int, int, Point]]] = [[], []]
-    seen: List[Dict[Point, int]] = [{start_point: 0}, {end_point: 0}]
-    counter = 0
-    heapq.heappush(fringes[0], (0, counter, start_point))
-    counter += 1
-    heapq.heappush(fringes[1], (0, counter, end_point))
-    counter += 1
-    final_distance: Optional[int] = None
-    meeting_point: Optional[Point] = None
-    direction = 1
-    while fringes[0] and fringes[1]:
-        direction = 1 - direction
-        distance, _queue_order, point = heapq.heappop(fringes[direction])
-        if point in distances[direction]:
-            continue
-        distances[direction][point] = distance
-        other_direction = 1 - direction
-        if point in distances[other_direction]:
-            if meeting_point is None:
-                raise ValueError("no valid route found")
-            return _reconstruct_bidirectional_path(
-                meeting_point,
-                predecessors,
-            )
-        for neighbor, edge_data in visibility_graph[point].items():
-            edge_cost = int(edge_data.get("weight", 1))
-            next_distance = distance + edge_cost
-            if neighbor in distances[direction]:
-                if next_distance < distances[direction][neighbor]:
-                    raise ValueError("negative edge weight encountered")
-                continue
-            if neighbor not in seen[direction] or next_distance < seen[direction][neighbor]:
-                seen[direction][neighbor] = next_distance
-                counter += 1
-                heapq.heappush(fringes[direction], (next_distance, counter, neighbor))
-                predecessors[direction][neighbor] = point
-                if neighbor in seen[other_direction]:
-                    candidate_distance = next_distance + seen[other_direction][neighbor]
-                    if final_distance is None or final_distance > candidate_distance:
-                        final_distance = candidate_distance
-                        meeting_point = neighbor
-    raise ValueError("no valid route found")
-
-
-def _reconstruct_bidirectional_path(
-    meeting_point: Point,
-    predecessors: Sequence[Mapping[Point, Optional[Point]]],
-) -> List[Point]:
-    forward_path: List[Point] = []
-    current_point: Optional[Point] = meeting_point
-    while current_point is not None:
-        forward_path.append(current_point)
-        current_point = predecessors[0].get(current_point)
-    forward_path.reverse()
-    backward_path: List[Point] = []
-    current_point = predecessors[1].get(meeting_point)
-    while current_point is not None:
-        backward_path.append(current_point)
-        current_point = predecessors[1].get(current_point)
-    return forward_path + backward_path
-
-
 def _shortest_point_path_with_segment_penalty(
-    visibility_graph: _VisibilityGraph,
+    visibility_graph: nx.Graph,
     start_point: Point,
     end_point: Point,
 ) -> List[Point]:

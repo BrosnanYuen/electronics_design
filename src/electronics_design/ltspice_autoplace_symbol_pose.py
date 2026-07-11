@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from dataclasses import field
 import json
 import math
 from pathlib import Path
@@ -17,7 +16,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
-import numpy as np
+import networkx as nx
 
 from . import ltspice_asc as _asc
 from . import ltspice_net as _net
@@ -130,109 +129,6 @@ class PinConnection:
     net_name: str
     pin_name: str
     spice_order: int
-    rail: bool = False
-
-
-@dataclass
-class _TopologyGraph:
-    """Small deterministic undirected weighted graph used by the placer.
-
-    The placement problem only needs a very small subset of graph operations:
-    node attributes, weighted undirected edges, connected components, and
-    breadth-first distances.  Keeping those operations local makes placement
-    deterministic and avoids coupling the schematic generator to a general
-    purpose graph package.
-    """
-
-    nodes: Dict[str, Dict[str, object]] = field(default_factory=dict)
-    adjacency: Dict[str, Dict[str, Dict[str, object]]] = field(default_factory=dict)
-
-    def __iter__(self):
-        return iter(self.nodes)
-
-    def __len__(self) -> int:
-        return len(self.nodes)
-
-    def __contains__(self, node_name: object) -> bool:
-        return node_name in self.nodes
-
-    def add_node(self, node_name: str, **attributes: object) -> None:
-        self.nodes.setdefault(node_name, {}).update(attributes)
-        self.adjacency.setdefault(node_name, {})
-
-    def add_edge(
-        self,
-        first_name: str,
-        second_name: str,
-        *,
-        weight: float = 0.0,
-        signal_weight: float = 0.0,
-        nets: Iterable[str] = (),
-    ) -> None:
-        if first_name == second_name:
-            return
-        self.add_node(first_name)
-        self.add_node(second_name)
-        first_edges = self.adjacency[first_name]
-        second_edges = self.adjacency[second_name]
-        edge_data = first_edges.get(second_name)
-        if edge_data is None:
-            edge_data = {
-                "weight": 0.0,
-                "signal_weight": 0.0,
-                "nets": set(),
-            }
-            first_edges[second_name] = edge_data
-            second_edges[first_name] = edge_data
-        edge_data["weight"] = float(edge_data.get("weight", 0.0)) + float(weight)
-        edge_data["signal_weight"] = float(edge_data.get("signal_weight", 0.0)) + float(signal_weight)
-        edge_nets = edge_data.setdefault("nets", set())
-        if isinstance(edge_nets, set):
-            edge_nets.update(str(net_name) for net_name in nets)
-
-    def edges(self, data: bool = False):
-        for first_name in sorted(self.nodes):
-            for second_name in sorted(self.adjacency.get(first_name, {})):
-                if first_name >= second_name:
-                    continue
-                edge_data = self.adjacency[first_name][second_name]
-                if data:
-                    yield first_name, second_name, edge_data
-                else:
-                    yield first_name, second_name
-
-    def neighbors(self, node_name: str) -> Tuple[str, ...]:
-        return tuple(sorted(self.adjacency.get(node_name, {})))
-
-    def has_edge(self, first_name: str, second_name: str) -> bool:
-        return second_name in self.adjacency.get(first_name, {})
-
-    def degree(self, node_name: str, weight: Optional[str] = None) -> float:
-        neighbor_edges = self.adjacency.get(node_name, {})
-        if weight is None:
-            return float(len(neighbor_edges))
-        return sum(float(edge_data.get(weight, 0.0)) for edge_data in neighbor_edges.values())
-
-    def subgraph(self, node_names: Iterable[str]) -> "_TopologyGraph":
-        selected_names = set(node_names)
-        result = _TopologyGraph()
-        for node_name in sorted(selected_names):
-            if node_name in self.nodes:
-                result.add_node(node_name, **self.nodes[node_name])
-        for first_name, second_name, edge_data in self.edges(data=True):
-            if first_name not in selected_names or second_name not in selected_names:
-                continue
-            result.add_edge(
-                first_name,
-                second_name,
-                weight=float(edge_data.get("weight", 0.0)),
-                signal_weight=float(edge_data.get("signal_weight", 0.0)),
-                nets=tuple(edge_data.get("nets", ())),
-            )
-        return result
-
-    def copy(self) -> "_TopologyGraph":
-        return self.subgraph(self.nodes)
 
 
 def ltspice_autoplace_symbol_pose(
@@ -288,10 +184,7 @@ def ltspice_autoplace_symbol_pose(
         geometry_cache = _GLOBAL_GEOMETRY_CACHE
         try:
             candidate_orientations = {
-                instance_name: _candidate_orientations_for_entry(
-                    original_symbol_data[instance_name],
-                    components[instance_name].node_names,
-                )
+                instance_name: _candidate_orientations_for_entry(original_symbol_data[instance_name])
                 for instance_name in components
             }
             default_geometries = {
@@ -306,12 +199,7 @@ def ltspice_autoplace_symbol_pose(
             }
         except ValueError:
             return _AUTOPLACE_ERROR
-        rail_net_names = _infer_rail_net_names(components)
-        pin_connections_by_instance = _build_pin_connections_by_instance(
-            components,
-            default_geometries,
-            rail_net_names,
-        )
+        pin_connections_by_instance = _build_pin_connections_by_instance(components, default_geometries)
         component_graph = _build_component_graph(pin_connections_by_instance)
         routing_grid = _infer_layout_grid(default_geometries.values(), convert_settings)
         minimum_dist = _resolve_non_negative_integer(convert_settings.get("minimum_dist", 0))
@@ -558,46 +446,9 @@ def _collect_logical_device_lines(lines: Sequence[str]) -> Tuple[Tuple[int, str]
     return tuple(logical_lines)
 
 
-def _infer_rail_net_names(components: Mapping[str, ComponentRecord]) -> Tuple[str, ...]:
-    """Identify shared rails from topology rather than fixture names.
-
-    Ground and conventional supply names are always rails.  A high-fanout net
-    attached to a source is also a likely supply rail, while very high-fanout
-    nets are treated as buses so they do not distort the signal-flow layout.
-    This keeps the heuristic useful for arbitrary net names such as LTspice's
-    generated ``N001`` labels.
-    """
-
-    net_members: Dict[str, List[ComponentRecord]] = {}
-    net_counts: Dict[str, int] = {}
-    for component in components.values():
-        for net_name in component.node_names:
-            clean_name = str(net_name).strip()
-            if clean_name == "" or _is_no_connect_net(clean_name):
-                continue
-            net_counts[clean_name] = net_counts.get(clean_name, 0) + 1
-            net_members.setdefault(clean_name, []).append(component)
-    rail_names: List[str] = []
-    for net_name, count in net_counts.items():
-        uppercase_name = net_name.upper()
-        source_attached = any(
-            member.prefix in {"V", "I"}
-            for member in net_members.get(net_name, ())
-        )
-        if (
-            uppercase_name in _GROUND_NETS
-            or _is_power_net(net_name)
-            or (source_attached and count >= 3)
-            or count >= 7
-        ):
-            rail_names.append(net_name)
-    return tuple(sorted(rail_names))
-
-
 def _build_pin_connections_by_instance(
     components: Mapping[str, ComponentRecord],
     geometries: Mapping[str, OrientationGeometry],
-    rail_net_names: Sequence[str] = (),
 ) -> Dict[str, Tuple[PinConnection, ...]]:
     connections_by_instance: Dict[str, Tuple[PinConnection, ...]] = {}
     for instance_name, component in components.items():
@@ -620,7 +471,6 @@ def _build_pin_connections_by_instance(
                     net_name=net_name,
                     pin_name=pin.pin_name,
                     spice_order=pin.spice_order,
-                    rail=net_name in rail_net_names,
                 )
             )
         connections_by_instance[instance_name] = tuple(connections)
@@ -629,8 +479,8 @@ def _build_pin_connections_by_instance(
 
 def _build_component_graph(
     pin_connections_by_instance: Mapping[str, Sequence[PinConnection]],
-) -> _TopologyGraph:
-    graph = _TopologyGraph()
+) -> nx.Graph:
+    graph = nx.Graph()
     for instance_name, connections in pin_connections_by_instance.items():
         first_connection = connections[0] if connections else None
         graph.add_node(
@@ -644,7 +494,8 @@ def _build_component_graph(
             continue
         net_weight = _net_weight(net_name)
         is_layout_signal = (
-            not any(connection.rail for connection in connections)
+            net_name.upper() not in _GROUND_NETS
+            and not _is_power_net(net_name)
         )
         # A high-fanout signal is still structural.  Scale its clique edges
         # down by fanout so it keeps one functional block together without
@@ -655,20 +506,18 @@ def _build_component_graph(
                 if first_connection.instance_name == second_connection.instance_name:
                     continue
                 if graph.has_edge(first_connection.instance_name, second_connection.instance_name):
-                    graph.add_edge(
-                        first_connection.instance_name,
-                        second_connection.instance_name,
-                        weight=net_weight,
-                        signal_weight=signal_weight if is_layout_signal else 0.0,
-                        nets=(net_name,),
-                    )
+                    edge_data = graph[first_connection.instance_name][second_connection.instance_name]
+                    edge_data["weight"] += net_weight
+                    if is_layout_signal:
+                        edge_data["signal_weight"] += signal_weight
+                    edge_data["nets"].add(net_name)
                 else:
                     graph.add_edge(
                         first_connection.instance_name,
                         second_connection.instance_name,
                         weight=net_weight,
                         signal_weight=signal_weight if is_layout_signal else 0.0,
-                        nets=(net_name,),
+                        nets={net_name},
                     )
     return graph
 
@@ -683,25 +532,18 @@ def _group_connections_by_net(
     return grouped_connections
 
 
-def _signal_flow_subgraph(subgraph: _TopologyGraph) -> _TopologyGraph:
-    signal_graph = _TopologyGraph()
-    for node_name, attributes in subgraph.nodes.items():
-        signal_graph.add_node(node_name, **attributes)
+def _signal_flow_subgraph(subgraph: nx.Graph) -> nx.Graph:
+    signal_graph = nx.Graph()
+    signal_graph.add_nodes_from(subgraph.nodes(data=True))
     for u, v, data in subgraph.edges(data=True):
         signal_weight = float(data.get("signal_weight", 0.0))
         if signal_weight > 0.0:
-            signal_graph.add_edge(
-                u,
-                v,
-                weight=signal_weight,
-                signal_weight=signal_weight,
-                nets=tuple(data.get("nets", ())),
-            )
+            signal_graph.add_edge(u, v, **{**data, "weight": signal_weight})
     return signal_graph
 
 
 def _build_initial_positions(
-    component_graph: _TopologyGraph,
+    component_graph: nx.Graph,
     geometries: Mapping[str, OrientationGeometry],
     minimum_dist: int,
     routing_grid: int,
@@ -717,7 +559,7 @@ def _build_initial_positions(
     # a clique and unrelated components are assigned arbitrary distant layers.
     signal_graph = _signal_flow_subgraph(component_graph)
     group_nodes = sorted(
-        _graph_connected_components(signal_graph),
+        nx.connected_components(signal_graph),
         key=lambda nodes: (
             min(_graph_line_number(component_graph, node_name) for node_name in nodes),
             -len(nodes),
@@ -765,8 +607,8 @@ def _build_initial_positions(
 
 
 def _layout_signal_group(
-    signal_subgraph: _TopologyGraph,
-    component_graph: _TopologyGraph,
+    signal_subgraph: nx.Graph,
+    component_graph: nx.Graph,
     geometries: Mapping[str, OrientationGeometry],
     symbol_gap: int,
     routing_grid: int,
@@ -793,7 +635,7 @@ def _layout_signal_group(
         )
 
     root_node = _choose_root_component(signal_subgraph)
-    layer_map = _shortest_path_lengths(signal_subgraph, root_node)
+    layer_map = dict(nx.single_source_shortest_path_length(signal_subgraph, root_node))
     layers: Dict[int, List[str]] = {}
     for instance_name, layer_index in layer_map.items():
         layers.setdefault(layer_index, []).append(instance_name)
@@ -802,7 +644,7 @@ def _layout_signal_group(
     # provides a deterministic, human-authored tie-break for repeated stages.
     for layer_nodes in layers.values():
         layer_nodes.sort(key=lambda name: (_graph_line_number(component_graph, name), name))
-    for _ in range(2):
+    for _ in range(3):
         previous_order: Dict[str, int] = {}
         for layer_index in sorted(layers):
             layers[layer_index].sort(
@@ -857,21 +699,20 @@ def _layout_signal_group(
     return positions
 
 
-def _benefits_from_topology_layout(signal_subgraph: _TopologyGraph) -> bool:
+def _benefits_from_topology_layout(signal_subgraph: nx.Graph) -> bool:
     """Return whether a signal island is better represented as a 2-D graph."""
 
     node_count = len(signal_subgraph.nodes)
     if node_count < 4:
         return False
-    edge_count = sum(1 for _first_name, _second_name in signal_subgraph.edges())
-    cycle_count = max(edge_count - node_count + 1, 0)
+    cycle_count = len(nx.cycle_basis(signal_subgraph))
     branch_count = sum(1 for node_name in signal_subgraph if signal_subgraph.degree(node_name) >= 3)
-    return cycle_count >= 1 or branch_count >= 2
+    return cycle_count >= 2 or branch_count >= 3
 
 
 def _layout_feedback_group(
-    signal_subgraph: _TopologyGraph,
-    component_graph: _TopologyGraph,
+    signal_subgraph: nx.Graph,
+    component_graph: nx.Graph,
     geometries: Mapping[str, OrientationGeometry],
     symbol_gap: int,
     routing_grid: int,
@@ -879,7 +720,16 @@ def _layout_feedback_group(
     """Lay out a cyclic/branching signal island by electrical proximity."""
 
     node_count = len(signal_subgraph.nodes)
-    raw_positions = _spring_topology_layout(signal_subgraph)
+    ideal_distance = 1.0 / math.sqrt(max(node_count, 1))
+    raw_positions = nx.spring_layout(
+        signal_subgraph,
+        seed=17,
+        k=ideal_distance,
+        iterations=max(200, node_count * 12),
+        weight="weight",
+        scale=1.0,
+        center=(0.0, 0.0),
+    )
     raw_positions = _align_topology_layout(
         raw_positions,
         signal_subgraph,
@@ -931,8 +781,8 @@ def _layout_feedback_group(
 
 def _align_topology_layout(
     raw_positions: Mapping[str, Sequence[float]],
-    signal_subgraph: _TopologyGraph,
-    component_graph: _TopologyGraph,
+    signal_subgraph: nx.Graph,
+    component_graph: nx.Graph,
 ) -> Dict[str, Tuple[float, float]]:
     """Rotate a force-directed layout so its functional flow reads left-to-right.
 
@@ -1009,101 +859,6 @@ def _align_topology_layout(
     return aligned_positions
 
 
-def _spring_topology_layout(signal_subgraph: _TopologyGraph) -> Dict[str, Tuple[float, float]]:
-    """Run a local Fruchterman-Reingold-style layout on the signal graph.
-
-    This is intentionally implemented here rather than delegated to a graph
-    library.  The numerical update follows the standard repulsion/spring
-    model, uses a fixed seed for reproducibility, and keeps the same weighted
-    topology semantics as the rest of this module.
-    """
-
-    node_names = tuple(signal_subgraph.nodes)
-    node_count = len(node_names)
-    if node_count == 0:
-        return {}
-    if node_count == 1:
-        return {node_names[0]: (0.0, 0.0)}
-    node_indices = {node_name: index for index, node_name in enumerate(node_names)}
-    adjacency = np.zeros((node_count, node_count), dtype=float)
-    for first_name, second_name, edge_data in signal_subgraph.edges(data=True):
-        first_index = node_indices[first_name]
-        second_index = node_indices[second_name]
-        edge_weight = float(edge_data.get("weight", 1.0))
-        adjacency[first_index, second_index] = edge_weight
-        adjacency[second_index, first_index] = edge_weight
-    random_state = np.random.RandomState(17)
-    positions = np.asarray(random_state.rand(node_count, 2), dtype=float)
-    ideal_distance = 1.0 / math.sqrt(node_count)
-    temperature = max(
-        float(np.max(positions[:, 0]) - np.min(positions[:, 0])),
-        float(np.max(positions[:, 1]) - np.min(positions[:, 1])),
-    ) * 0.1
-    step_temperature = temperature / (max(200, node_count * 12) + 1)
-    iteration_count = max(200, node_count * 12)
-    for _iteration_index in range(iteration_count):
-        delta = positions[:, np.newaxis, :] - positions[np.newaxis, :, :]
-        distance = np.linalg.norm(delta, axis=-1)
-        np.clip(distance, 0.01, None, out=distance)
-        displacement = np.einsum(
-            "ijk,ij->ik",
-            delta,
-            (ideal_distance * ideal_distance / (distance * distance))
-            - (adjacency * distance / ideal_distance),
-        )
-        displacement_length = np.linalg.norm(displacement, axis=-1)
-        np.clip(displacement_length, 0.01, None, out=displacement_length)
-        delta_position = displacement * (temperature / displacement_length)[:, np.newaxis]
-        positions += delta_position
-        temperature -= step_temperature
-        if float(np.linalg.norm(delta_position) / node_count) < 1e-4:
-            break
-    positions -= positions.mean(axis=0)
-    limit = float(np.abs(positions).max())
-    if limit > 0.0:
-        positions *= 1.0 / limit
-    return {
-        node_name: (float(positions[index, 0]), float(positions[index, 1]))
-        for index, node_name in enumerate(node_names)
-    }
-
-
-def _graph_connected_components(graph: _TopologyGraph) -> Tuple[Tuple[str, ...], ...]:
-    """Return deterministic connected components for a topology graph."""
-
-    unseen = set(graph.nodes)
-    components: List[Tuple[str, ...]] = []
-    while unseen:
-        root_node = min(unseen)
-        unseen.remove(root_node)
-        pending = [root_node]
-        component_nodes: List[str] = []
-        while pending:
-            node_name = pending.pop()
-            component_nodes.append(node_name)
-            for neighbor_name in graph.neighbors(node_name):
-                if neighbor_name in unseen:
-                    unseen.remove(neighbor_name)
-                    pending.append(neighbor_name)
-        components.append(tuple(sorted(component_nodes)))
-    return tuple(components)
-
-
-def _shortest_path_lengths(graph: _TopologyGraph, root_node: str) -> Dict[str, int]:
-    """Compute breadth-first distances without a general-purpose graph package."""
-
-    distances = {root_node: 0}
-    pending = [root_node]
-    while pending:
-        current_node = pending.pop(0)
-        for neighbor_name in graph.neighbors(current_node):
-            if neighbor_name in distances:
-                continue
-            distances[neighbor_name] = distances[current_node] + 1
-            pending.append(neighbor_name)
-    return distances
-
-
 def _layout_bounds(
     positions: Mapping[str, Point],
     geometries: Mapping[str, OrientationGeometry],
@@ -1120,15 +875,15 @@ def _layout_bounds(
     )
 
 
-def _graph_line_number(graph: _TopologyGraph, instance_name: str) -> int:
-    return int(graph.nodes.get(instance_name, {}).get("line_number", 0))
+def _graph_line_number(graph: nx.Graph, instance_name: str) -> int:
+    return int(graph.nodes[instance_name].get("line_number", 0))
 
 
-def _choose_root_component(subgraph: _TopologyGraph) -> str:
+def _choose_root_component(subgraph: nx.Graph) -> str:
     source_nodes = [
         node_name
         for node_name in subgraph.nodes
-        if str(subgraph.nodes[node_name].get("prefix", node_name[:1])).upper() in {"V", "I"}
+        if node_name[:1].upper() in {"V", "I"}
     ]
     candidate_nodes = source_nodes if source_nodes else list(subgraph.nodes)
     return max(
@@ -1142,7 +897,7 @@ def _choose_root_component(subgraph: _TopologyGraph) -> str:
     )
 
 
-def _neighbor_barycenter(node_name: str, previous_layer_order: Mapping[str, int], subgraph: _TopologyGraph) -> float:
+def _neighbor_barycenter(node_name: str, previous_layer_order: Mapping[str, int], subgraph: nx.Graph) -> float:
     neighbor_orders = [
         previous_layer_order[neighbor_name]
         for neighbor_name in subgraph.neighbors(node_name)
@@ -1240,9 +995,7 @@ def _harmonize_shared_rail_orientations(
 
     harmonized = dict(chosen_orientations)
     for net_name, connections in _group_connections_by_net(pin_connections_by_instance).items():
-        if net_name.upper() in _GROUND_NETS or _is_power_net(net_name) or any(
-            connection.rail for connection in connections
-        ):
+        if net_name.upper() in _GROUND_NETS or _is_power_net(net_name):
             continue
         members_by_symbol: Dict[str, List[str]] = {}
         for connection in connections:
@@ -1313,13 +1066,13 @@ def _orientation_score(
         target_x = sum(point[0] for point in other_points) / len(other_points)
         target_y = sum(point[1] for point in other_points) / len(other_points)
         pin_point = local_pin_points[connection.spice_order]
-        net_w = 0.45 if connection.rail else _net_weight(connection.net_name)
+        net_w = _net_weight(connection.net_name)
         score += net_w * (abs(pin_point[0] - target_x) + abs(pin_point[1] - target_y))
         pin_x, pin_y = pin_point
         delta_x = pin_x - center_x
         delta_y = pin_y - center_y
         is_ground = connection.net_name.upper() in _GROUND_NETS
-        is_power = connection.rail or _is_power_net(connection.net_name)
+        is_power = _is_power_net(connection.net_name)
         if is_ground:
             pin_is_vertical = abs(delta_y) >= abs(delta_x)
             if delta_y > 0 and pin_is_vertical:
@@ -1369,7 +1122,6 @@ def _orientation_axis_convention_penalty(
 
     if len(geometry.pins) != 2 or any(
         connection.net_name.upper() in _GROUND_NETS
-        or connection.rail
         or _is_power_net(connection.net_name)
         for connection in connections
     ):
@@ -1431,7 +1183,7 @@ def _relax_positions(
 ) -> Dict[str, Point]:
     net_groups = _group_connections_by_net(pin_connections_by_instance)
     positions = dict(current_positions)
-    for _ in range(3):
+    for _ in range(2):
         absolute_pin_points = _absolute_pin_points(positions, geometries)
         updated_positions = dict(positions)
         for instance_name in sorted(positions):
@@ -1445,8 +1197,8 @@ def _relax_positions(
                     continue
                 # Include power/ground nets at a reduced weight so components
                 # sharing a rail still cluster together instead of drifting.
-                if connection.net_name.upper() in _GROUND_NETS or connection.rail or _is_power_net(connection.net_name):
-                    weight = (0.45 if connection.rail else _net_weight(connection.net_name)) * 0.25
+                if connection.net_name.upper() in _GROUND_NETS or _is_power_net(connection.net_name):
+                    weight = _net_weight(connection.net_name) * 0.25
                 else:
                     weight = _net_weight(connection.net_name)
                 other_points = [
@@ -1760,15 +1512,8 @@ def _geometry_for_orientation(
     return geometry
 
 
-def _candidate_orientations_for_entry(
-    symbol_entry: Mapping[str, object],
-    node_names: Sequence[str] = (),
-) -> Tuple[str, ...]:
+def _candidate_orientations_for_entry(symbol_entry: Mapping[str, object]) -> Tuple[str, ...]:
     symbol_name = str(symbol_entry.get("SYMBOL", "")).strip().lower()
-    if symbol_name == "voltage":
-        if node_names and _is_ground_net(node_names[0]):
-            return ("R270",)
-        return ("R0",)
     if symbol_name in _R0_ONLY_SYMBOL_NAMES:
         return ("R0",)
     if symbol_name in _PREFERRED_ORIENTATIONS:
@@ -1952,10 +1697,6 @@ def _clean_orientation(value: object) -> str:
 
 def _is_no_connect_net(net_name: str) -> bool:
     return net_name.upper().startswith(_NO_CONNECT_PREFIXES)
-
-
-def _is_ground_net(net_name: str) -> bool:
-    return str(net_name).strip().upper() in _GROUND_NETS
 
 
 def _is_power_net(net_name: str) -> bool:
