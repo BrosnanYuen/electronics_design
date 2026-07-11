@@ -730,6 +730,11 @@ def _layout_feedback_group(
         scale=1.0,
         center=(0.0, 0.0),
     )
+    raw_positions = _align_topology_layout(
+        raw_positions,
+        signal_subgraph,
+        component_graph,
+    )
 
     # Give the diagram a landscape aspect ratio and enough room for the
     # largest symbol plus a routing channel.  Scaling from the actual spring
@@ -772,6 +777,86 @@ def _layout_feedback_group(
             routing_grid,
         )
     return positions
+
+
+def _align_topology_layout(
+    raw_positions: Mapping[str, Sequence[float]],
+    signal_subgraph: nx.Graph,
+    component_graph: nx.Graph,
+) -> Dict[str, Tuple[float, float]]:
+    """Rotate a force-directed layout so its functional flow reads left-to-right.
+
+    A spring layout has no preferred rotation.  Stretching its arbitrary X
+    axis into a landscape schematic can therefore turn a mostly linear signal
+    path vertical and lead the orientation optimizer to rotate passives in an
+    equally arbitrary way.  Sources provide the strongest flow cue.  Without
+    a source, netlist order is used as a weak, deterministic proxy for stage
+    progression.  The transform is rigid, so electrical neighborhoods are
+    preserved.
+    """
+
+    node_names = tuple(raw_positions)
+    if len(node_names) < 2:
+        return {
+            node_name: (
+                float(raw_positions[node_name][0]),
+                float(raw_positions[node_name][1]),
+            )
+            for node_name in node_names
+        }
+    center_x = sum(float(raw_positions[name][0]) for name in node_names) / len(node_names)
+    center_y = sum(float(raw_positions[name][1]) for name in node_names) / len(node_names)
+    source_nodes = [
+        name
+        for name in node_names
+        if str(component_graph.nodes[name].get("prefix", "")).upper() in {"V", "I"}
+    ]
+    other_nodes = [name for name in node_names if name not in source_nodes]
+    direction_x = 0.0
+    direction_y = 0.0
+    if source_nodes and other_nodes:
+        source_x = sum(float(raw_positions[name][0]) for name in source_nodes) / len(source_nodes)
+        source_y = sum(float(raw_positions[name][1]) for name in source_nodes) / len(source_nodes)
+        other_x = sum(float(raw_positions[name][0]) for name in other_nodes) / len(other_nodes)
+        other_y = sum(float(raw_positions[name][1]) for name in other_nodes) / len(other_nodes)
+        direction_x = other_x - source_x
+        direction_y = other_y - source_y
+    if math.hypot(direction_x, direction_y) < 1e-9:
+        line_numbers = {
+            name: float(_graph_line_number(component_graph, name))
+            for name in node_names
+        }
+        mean_line_number = sum(line_numbers.values()) / len(line_numbers)
+        direction_x = sum(
+            (line_numbers[name] - mean_line_number)
+            * (float(raw_positions[name][0]) - center_x)
+            for name in node_names
+        )
+        direction_y = sum(
+            (line_numbers[name] - mean_line_number)
+            * (float(raw_positions[name][1]) - center_y)
+            for name in node_names
+        )
+    if math.hypot(direction_x, direction_y) < 1e-9:
+        return {
+            name: (
+                float(raw_positions[name][0]) - center_x,
+                float(raw_positions[name][1]) - center_y,
+            )
+            for name in node_names
+        }
+    rotation_angle = -math.atan2(direction_y, direction_x)
+    cosine = math.cos(rotation_angle)
+    sine = math.sin(rotation_angle)
+    aligned_positions: Dict[str, Tuple[float, float]] = {}
+    for name in node_names:
+        centered_x = float(raw_positions[name][0]) - center_x
+        centered_y = float(raw_positions[name][1]) - center_y
+        aligned_positions[name] = (
+            (centered_x * cosine) - (centered_y * sine),
+            (centered_x * sine) + (centered_y * cosine),
+        )
+    return aligned_positions
 
 
 def _layout_bounds(
@@ -860,6 +945,7 @@ def _choose_orientations(
                 instance_name,
                 positions[instance_name],
                 geometry,
+                original_symbol_data[instance_name],
                 absolute_pin_points,
                 net_groups,
                 pin_connections_by_instance,
@@ -951,6 +1037,7 @@ def _orientation_score(
     instance_name: str,
     origin: Point,
     geometry: OrientationGeometry,
+    symbol_entry: Mapping[str, object],
     absolute_pin_points: Mapping[Tuple[str, int], Point],
     net_groups: Mapping[str, Sequence[PinConnection]],
     pin_connections_by_instance: Mapping[str, Sequence[PinConnection]],
@@ -962,7 +1049,8 @@ def _orientation_score(
         pin.spice_order: (origin[0] + pin.point[0], origin[1] + pin.point[1])
         for pin in geometry.pins
     }
-    for connection in pin_connections_by_instance.get(instance_name, ()):
+    instance_connections = pin_connections_by_instance.get(instance_name, ())
+    for connection in instance_connections:
         if connection.spice_order not in local_pin_points:
             continue
         if _is_no_connect_net(connection.net_name):
@@ -1010,7 +1098,52 @@ def _orientation_score(
                 score -= 18.0
             else:
                 score += 36.0
+    score += _orientation_axis_convention_penalty(
+        geometry,
+        symbol_entry,
+        instance_connections,
+    )
     return score
+
+
+def _orientation_axis_convention_penalty(
+    geometry: OrientationGeometry,
+    symbol_entry: Mapping[str, object],
+    connections: Sequence[PinConnection],
+) -> float:
+    """Prefer conventional axes when a two-pin part is not tied to a rail.
+
+    Rail connections already give the orientation optimizer a strong vertical
+    cue.  Between ordinary signal nodes, passives are conventionally drawn in
+    the left-to-right signal path.  This modest penalty resolves ambiguous
+    force-layout geometry without preventing a clearly vertical local stage
+    from overriding the convention.
+    """
+
+    if len(geometry.pins) != 2 or any(
+        connection.net_name.upper() in _GROUND_NETS
+        or _is_power_net(connection.net_name)
+        for connection in connections
+    ):
+        return 0.0
+    first_pin, second_pin = geometry.pins
+    is_horizontal = abs(first_pin.point[0] - second_pin.point[0]) > abs(
+        first_pin.point[1] - second_pin.point[1]
+    )
+    symbol_name = str(symbol_entry.get("SYMBOL", "")).strip().lower()
+    horizontal_preference = {
+        "res": 48.0,
+        "res2": 48.0,
+        "cap": 88.0,
+        "polcap": 88.0,
+        "ind": 40.0,
+        "ind2": 32.0,
+    }.get(symbol_name, 0.0)
+    if horizontal_preference > 0.0 and not is_horizontal:
+        return horizontal_preference
+    if symbol_name in {"zener", "tvsdiode", "varactor"} and is_horizontal:
+        return 72.0
+    return 0.0
 
 
 def _orientation_tie_break_weight(symbol_entry: Mapping[str, object]) -> float:
