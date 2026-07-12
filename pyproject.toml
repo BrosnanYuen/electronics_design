@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "electronics_design"
-version = "0.1.0"
+version = "0.1.2"
 description = "General-purpose Python utilities for validating LTspice netlists."
 readme = "README.md"
 requires-python = ">=3.10"
