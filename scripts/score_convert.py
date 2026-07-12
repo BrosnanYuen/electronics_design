@@ -70,8 +70,7 @@ def score_file(gt_path: Path, gen_path: Path):
     else:
         nn_acc = 1.0
         dist_acc = 1.0
-    pair_quality = (nn_acc + dist_acc) / 2
-    geo_mean = math.sqrt(orient_acc * pair_quality) if (orient_acc > 0 and pair_quality > 0) else 0.0
+    geo_mean = math.cbrt(orient_acc * nn_acc * dist_acc)
     score = geo_mean * 0.95 + set_fidelity * 0.05
     return {
         "gt": len(gt_keys), "gen": len(gen_keys),
