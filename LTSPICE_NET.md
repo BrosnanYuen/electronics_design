@@ -418,7 +418,26 @@ Public API return contract:
 
 ## 18) Concrete valid vs invalid examples
 
-## 18.1 Valid minimal transient deck
+## 18.1 Voltages valid
+
+VALID V2 voltage of 12V DC from Vcc to ground 0
+```spice
+V2 Vcc 0 12
+```
+
+VALID V1 voltage with a 4V DC and 2V AC from Node IN to ground 0
+```spice
+V1 IN 0 4 AC 2
+```
+
+## 18.2 Voltages invalid
+
+INVALID, Missing DC voltages
+```spice
+V1 IN 0 AC 1
+```
+
+## 18.3 Valid minimal transient deck
 
 ```spice
 * RC step
@@ -429,7 +448,7 @@ C1 out 0 100n
 .end
 ```
 
-## 18.2 Invalid: unknown leading keyword
+## 18.4 Invalid: unknown leading keyword
 
 ```spice
 Y1 a b 1k
@@ -437,7 +456,7 @@ Y1 a b 1k
 
 `Y` is not a valid standard LTspice device prefix.
 
-## 18.3 Invalid intent due to suffix trap
+## 18.5 Invalid intent due to suffix trap
 
 ```spice
 R1 a b 1M
@@ -445,7 +464,7 @@ R1 a b 1M
 
 Parses as 1 milliohm in SPICE semantics, not 1 megaohm.
 
-## 18.4 Invalid hierarchy reference
+## 18.6 Invalid hierarchy reference
 
 ```spice
 X1 a b c MissingSubckt
@@ -455,7 +474,7 @@ X1 a b c MissingSubckt
 
 Fails if `MissingSubckt` is never defined/included.
 
-## 18.5 Potentially valid syntax but semantically bad
+## 18.7 Potentially valid syntax but semantically bad
 
 ```spice
 C1 a b 4Farads
