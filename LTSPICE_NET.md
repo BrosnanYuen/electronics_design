@@ -323,6 +323,11 @@ Risky/invalid patterns:
 - Wrong search path assumptions
 - Broken URL includes/libraries (if using URL forms)
 
+Conversion portability note:
+- A `.lib` reference identifies the simulation library; it does not necessarily identify the `.asy` symbol used to draw an `X...` instance.
+- A subcircuit name and its symbol filename may differ. For example, `level2` can be defined inside `UniversalOpAmp2.lib` while the matching symbol is `UniversalOpAmp2.asy`.
+- If a netlist will be converted back to an `.asc`, preserve LTspice's `ModelFile` comment hint or provide an equivalent symbol mapping through the conversion settings. Do not assume that the `.subckt` name is an `.asy` basename.
+
 ## 16) Scoping and expansion semantics
 
 - `.subckt/.ends` defines local scope.
@@ -415,6 +420,36 @@ Public API return contract:
 - `False, "No permission to read file!"`
 - `False, "Node is not connected correctly! Line <n>"`
 - `True, ""`
+
+### Netlist-to-ASC symbol mapping advice
+
+`ltspice_netlist_to_asc()` uses the public symbol-initial, autoplace, and wiring stages. The netlist must therefore carry enough information to resolve every device to an available `.asy` file.
+
+For ordinary primitives, the mapping is usually direct:
+
+```spice
+R1 in out 1k       ; res.asy
+C1 out 0 100n      ; cap.asy
+```
+
+For `X...` subcircuits, keep the simulation subcircuit name unchanged and preserve the LTspice-generated `ModelFile` hint when the symbol filename differs:
+
+```spice
+XU1 in out VCC VEE out level2 Avol=1Meg
+* Library below included based on ModelFile attribute of instance XU1 (C:\users\user\AppData\Local\LTspice\lib\sym\OpAmps\UniversalOpAmp2.asy)
+.lib C:\users\user\AppData\Local\LTspice\lib\sub\UniversalOpAmp2.lib
+```
+
+The comment is metadata for schematic reconstruction; it does not alter SPICE simulation. The converter extracts the `.asy` basename from the hint and searches the configured `custom_search_paths`, Wine path, and Windows path. The path in the hint may remain Windows-style, but the actual symbol must exist in one of the configured search roots.
+
+Before conversion, check:
+
+1. Every `X...` instance has either a matching `.asy` basename or a `ModelFile` hint.
+2. The hinted `.asy` file exists in a configured search root.
+3. The `.lib` file contains the referenced `.subckt` name and remains available for simulation.
+4. Run `ltspice_netlist_to_symbol_initial()` first and inspect that each `SYMBOL` value names the intended `.asy` file before invoking autoplace.
+
+If symbol geometry cannot be resolved, the current autoplace API reports the generic `AUTOPLACE_FAILED`; inspect the generated symbol-initial JSON to distinguish a missing file from a placement or routing failure.
 
 ## 18) Concrete valid vs invalid examples
 
