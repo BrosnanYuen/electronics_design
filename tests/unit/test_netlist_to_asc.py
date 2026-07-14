@@ -185,3 +185,31 @@ class TestNetlistToAsc(unittest.TestCase):
                 ),
                 (False, "INVALID_CONVERT_SETTINGS", 0),
             )
+
+    def test_missing_x_symbol_reports_instance_and_search_advice(self) -> None:
+        netlist_text = "\n".join(
+            (
+                "V1 in 0 1",
+                "R1 out 0 1k",
+                "XU1 in out missing_symbol",
+                ".op",
+                ".backanno",
+                ".end",
+            )
+        ) + "\n"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_directory_path = Path(temporary_directory)
+            netlist_path = temporary_directory_path / "missing-symbol.net"
+            output_path = temporary_directory_path / "missing-symbol.asc"
+            netlist_path.write_text(netlist_text, encoding="utf-8")
+            result = ltspice_netlist_to_asc(
+                str(netlist_path),
+                str(output_path),
+                _CONVERT_SETTINGS,
+            )
+        self.assertFalse(result[0])
+        self.assertIn("AUTOPLACE_FAILED:", result[1])
+        self.assertIn("instance 'XU1'", result[1])
+        self.assertIn("missing_symbol", result[1])
+        self.assertIn("custom_search_paths", result[1])
+        self.assertIn("ModelFile", result[1])

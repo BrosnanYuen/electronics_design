@@ -30,7 +30,6 @@ Point = Tuple[int, int]
 Rectangle = Tuple[int, int, int, int]
 
 _OK_RESULT: ConversionResult = (True, "OK", 0)
-_AUTOPLACE_ERROR: ConversionResult = (False, "AUTOPLACE_FAILED", 0)
 _DEFAULT_AUTOPLACE_ITERATIONS = 12
 _NO_CONNECT_PREFIXES = ("NC", "NC_", "NC-")
 _GROUND_NETS = {"0", "GND"}
@@ -94,6 +93,18 @@ _PREFERRED_ORIENTATIONS: Dict[str, Tuple[str, ...]] = {
     "lpnp": ("M180", "R180"),
 }
 _GLOBAL_GEOMETRY_CACHE: Dict[Tuple[str, str], "OrientationGeometry"] = {}
+
+
+def _autoplace_failure(detail: str) -> ConversionResult:
+    clean_detail = str(detail).strip()
+    if clean_detail == "":
+        clean_detail = "the placement pipeline did not produce a valid result"
+    if "Advice:" not in clean_detail:
+        clean_detail = (
+            f"{clean_detail} Advice: inspect the symbol-initial JSON and verify that "
+            "all SYMBOL values resolve to available .asy files before retrying."
+        )
+    return False, f"AUTOPLACE_FAILED: {clean_detail}", 0
 
 
 @dataclass(frozen=True)
@@ -177,7 +188,10 @@ def ltspice_autoplace_symbol_pose(
             return False, "NETLIST_READ_ERROR", 0
         components = _collect_component_records(read_result[1])
         if not components:
-            return _AUTOPLACE_ERROR
+            return _autoplace_failure(
+                "no device components were found in the netlist. "
+                "Advice: provide at least one valid device or X-subcircuit line."
+            )
         missing_instances = sorted(instance_name for instance_name in components if instance_name not in original_symbol_data)
         if missing_instances:
             return False, "SYMBOL_JSON_PARSE_ERROR", 0
@@ -197,8 +211,8 @@ def ltspice_autoplace_symbol_pose(
                 )
                 for instance_name in components
             }
-        except ValueError:
-            return _AUTOPLACE_ERROR
+        except ValueError as error:
+            return _autoplace_failure(str(error))
         pin_connections_by_instance = _build_pin_connections_by_instance(components, default_geometries)
         component_graph = _build_component_graph(pin_connections_by_instance)
         routing_grid = _infer_layout_grid(default_geometries.values(), convert_settings)
@@ -242,11 +256,12 @@ def ltspice_autoplace_symbol_pose(
                         current_orientations[instance_name],
                         geometry_cache,
                         convert_settings,
+                        instance_name,
                     )
                     for instance_name in components
                 }
-            except ValueError:
-                return _AUTOPLACE_ERROR
+            except ValueError as error:
+                return _autoplace_failure(str(error))
             current_positions = _resolve_collisions(
                 current_positions,
                 current_geometries,
@@ -341,7 +356,11 @@ def ltspice_autoplace_symbol_pose(
                 return False, "WIRE_READ_ERROR", 0
             break
         if best_attempt_payload is None or best_attempt_wires is None:
-            return _AUTOPLACE_ERROR
+            return _autoplace_failure(
+                "no collision-free placement and wiring result was produced after "
+                f"{autoplace_iter} iteration(s). Advice: reduce minimum_dist or "
+                "wire_pin_out_dist, increase autoplace_iter, or inspect the circuit for disconnected pins."
+            )
         output_symbol_path = Path(_asc._coerce_path(symbol_pose_filepath_out)[1])
         output_wire_path = Path(_asc._coerce_path(wire_filepath_out)[1])
         try:
@@ -924,6 +943,7 @@ def _choose_orientations(
             current_orientations[instance_name],
             geometry_cache,
             convert_settings,
+            instance_name,
         )
         for instance_name in positions
     }
@@ -940,6 +960,7 @@ def _choose_orientations(
                 orientation,
                 geometry_cache,
                 convert_settings,
+                instance_name,
             )
             score = _orientation_score(
                 instance_name,
@@ -969,6 +990,7 @@ def _choose_orientations(
             best_orientation,
             geometry_cache,
             convert_settings,
+            instance_name,
         )
         absolute_pin_points = _absolute_pin_points(positions, current_geometries)
     return _harmonize_shared_rail_orientations(
@@ -1454,7 +1476,13 @@ def _resolve_default_geometry(
     for preferred_orientation in preferred_orientations:
         if preferred_orientation == "":
             continue
-        return _geometry_for_orientation(symbol_entry, preferred_orientation, geometry_cache, convert_settings)
+        return _geometry_for_orientation(
+            symbol_entry,
+            preferred_orientation,
+            geometry_cache,
+            convert_settings,
+            instance_name,
+        )
     raise ValueError(f"Unable to resolve default geometry for {instance_name}")
 
 
@@ -1463,6 +1491,7 @@ def _geometry_for_orientation(
     orientation: str,
     geometry_cache: MutableMapping[Tuple[str, str], OrientationGeometry],
     convert_settings: Mapping[str, object],
+    instance_name: str = "",
 ) -> OrientationGeometry:
     symbol_name = str(symbol_entry.get("SYMBOL", "")).strip()
     cache_key = (symbol_name, orientation)
@@ -1474,14 +1503,22 @@ def _geometry_for_orientation(
     working_entry["ORIENTATION"] = orientation
     working_entry["PINS"] = []
     working_entry["RECTANGLE"] = []
+    geometry_instance_name = instance_name or "U1"
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary_json_path = Path(temporary_directory) / "geometry.json"
-        temporary_json_path.write_text(json.dumps({"U1": working_entry}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        temporary_json_path.write_text(
+            json.dumps({geometry_instance_name: working_entry}, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
         resolve_result = ltspice_resolve_symbol_pose(str(temporary_json_path), convert_settings)
         if not resolve_result[0]:
-            raise ValueError(resolve_result[1])
+            instance_text = f" for instance '{instance_name}'" if instance_name else ""
+            raise ValueError(
+                f"Unable to resolve geometry{instance_text} for symbol '{symbol_name}' "
+                f"at orientation '{orientation}': {resolve_result[1]}"
+            )
         resolved_symbol_json = json.loads(temporary_json_path.read_text(encoding="utf-8"))
-    resolved_entry = resolved_symbol_json["U1"]
+    resolved_entry = resolved_symbol_json[geometry_instance_name]
     rectangle = _parse_rectangle(resolved_entry["RECTANGLE"])
     pins = tuple(
         sorted(

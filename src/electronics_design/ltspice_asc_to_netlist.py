@@ -189,7 +189,14 @@ def get_ltspice_asc_symbol_info(
             raise ValueError(f"Duplicate LTspice ASC symbol InstName '{instance_name}'! Line {symbol_instance.line_number}")
         symbol_filepath = _resolve_symbol_filepath(symbol_instance.symbol_name, symbol_path_lookup)
         if symbol_filepath is None:
-            raise ValueError(f"Unable to locate LTspice symbol file for '{symbol_instance.symbol_name}'! Line {symbol_instance.line_number}")
+            raise ValueError(
+                _missing_symbol_file_message(
+                    symbol_instance.symbol_name,
+                    instance_name,
+                    symbol_instance.line_number,
+                    search_roots,
+                )
+            )
         pins = _asy.get_ltspice_asy_pins(symbol_filepath)
         bounds = _asy.get_ltspice_asy_size(symbol_filepath)
         transformed_pins = [
@@ -1124,7 +1131,11 @@ def _line_number_from_message(message: str, default_line: int) -> int:
 
 def _symbol_info_error_to_conversion_result(message: str) -> ConversionResult:
     if "Unable to locate LTspice symbol file" in message:
-        return False, "UNKNOWN_SYMBOL", _line_number_from_message(message, 0)
+        return (
+            False,
+            f"UNKNOWN_SYMBOL: {_message_without_line_number(message)}",
+            _line_number_from_message(message, 0),
+        )
     if "Unable to parse LTspice ASC file!" in message:
         return False, "ASC_PARSE_ERROR", _line_number_from_message(message, 0)
     return False, "ASC_PARSE_ERROR", _line_number_from_message(message, 0)
@@ -1132,6 +1143,28 @@ def _symbol_info_error_to_conversion_result(message: str) -> ConversionResult:
 
 def _message_without_line_number(message: str) -> str:
     return _LINE_NUMBER_PATTERN.sub("", message).strip()
+
+
+def _missing_symbol_file_message(
+    symbol_name: str,
+    instance_name: str,
+    line_number: int,
+    search_roots: Sequence[str],
+) -> str:
+    normalized_symbol_name = str(symbol_name).strip() or "<empty symbol name>"
+    expected_filename = normalized_symbol_name.replace("\\", "/").rstrip("/").split("/")[-1]
+    if not expected_filename.lower().endswith(".asy"):
+        expected_filename = f"{expected_filename}.asy"
+    roots_text = ", ".join(search_roots) if search_roots else "<none configured>"
+    return (
+        f"Unable to locate LTspice symbol file for '{normalized_symbol_name}' "
+        f"(instance '{instance_name}')! Line {line_number}. "
+        f"Expected a file matching '{expected_filename}'. "
+        f"Searched: {roots_text}. "
+        "Advice: add the directory containing the .asy file to "
+        "convert_settings['custom_search_paths']; for X subcircuits, preserve "
+        "the LTspice ModelFile hint when the .subckt name differs from the .asy filename."
+    )
 
 
 def _coerce_path_success(filepath: str) -> bool:

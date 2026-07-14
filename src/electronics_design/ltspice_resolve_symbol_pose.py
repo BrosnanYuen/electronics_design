@@ -75,7 +75,15 @@ def ltspice_resolve_symbol_pose(
             resolved_symbol_info = get_ltspice_asc_symbol_info(str(temporary_asc_path), convert_settings)
         except ValueError as error:
             line_match = re.search(r"Line (?P<line>\d+)", str(error))
-            return False, "SYMBOL_POSE_RESOLUTION_ERROR", int(line_match.group("line")) if line_match is not None else 0
+            line_number = int(line_match.group("line")) if line_match is not None else 0
+            detail = str(error).strip()
+            if "Advice:" not in detail:
+                detail = (
+                    f"{detail} Advice: verify that every SYMBOL name maps to an .asy file "
+                    "under convert_settings['custom_search_paths'], "
+                    "ltspice_wine_path, or ltspice_windows_path."
+                )
+            return False, f"SYMBOL_POSE_RESOLUTION_ERROR: {detail}", line_number
         for instance_name, resolved_entry in resolved_symbol_info.items():
             if instance_name not in symbol_json or not isinstance(symbol_json[instance_name], dict):
                 return False, "SYMBOL_JSON_PARSE_ERROR", 0
