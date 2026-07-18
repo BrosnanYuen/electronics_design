@@ -179,7 +179,7 @@ No hard-coded paths are permitted in `src/`; all search paths must be supplied t
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install "networkx>=3.6.1" "numpy"
+.venv/bin/python -m pip install "networkx>=3.6.1" "numpy" "Pillow>=10.0.0"
 ```
 
 Run tests:
