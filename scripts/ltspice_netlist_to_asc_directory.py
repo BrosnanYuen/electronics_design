@@ -74,6 +74,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="LTspice file format version used in generated ASC files. Default: 4.1.",
     )
     parser.add_argument(
+        "--voltage-must-have-dc",
+        action="store_true",
+        help="Insert a zero DC value before AC-only voltage-source payloads.",
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=600,
@@ -107,8 +112,10 @@ def _conversion_command(
         str(arguments.grid_size),
         "--ltspice-version",
         str(arguments.ltspice_version),
-        "--custom-search-paths",
     ]
+    if arguments.voltage_must_have_dc:
+        command.append("--voltage-must-have-dc")
+    command.append("--custom-search-paths")
     command.extend(arguments.custom_search_paths)
     return command
 

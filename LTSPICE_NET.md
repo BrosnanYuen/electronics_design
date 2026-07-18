@@ -368,6 +368,7 @@ Important implementation nuance:
 
 - For this project, `Q` lines are treated strictly as needing collector, base, emitter, substrate, and model tokens in order to catch merged-node spacing mistakes such as `Q1 N001N002 0 0 2N3904`.
 - `V` and `I` lines allow the source value to be omitted because LTspice sample decks can use those sources as sweep variables, e.g. `V1 N001 0`.
+- Netlist-to-symbol/ASC conversion accepts `convert_settings["voltage_must_have_dc"]`. Its default is `False`. When set to `True`, an AC-only independent voltage source such as `V1 IN 0 AC 2` is normalized to `V1 IN 0 0 AC 2`; voltage sources that already have a DC/value payload are unchanged.
 
 Public API return contract:
 

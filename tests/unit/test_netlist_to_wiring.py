@@ -29,6 +29,7 @@ _CONVERT_SETTINGS = {
     "minimum_dist": 32,
     "wire_pin_out_dist": 16,
     "grid_size": 16,
+    "voltage_must_have_dc": False,
 }
 
 
@@ -351,6 +352,7 @@ R2 N003 0 5k
                 "minimum_dist": 0,
                 "wire_pin_out_dist": 16,
                 "grid_size": 16,
+                "voltage_must_have_dc": False,
             }
             result = ltspice_netlist_to_wiring(
                 str(netlist_path),
@@ -419,6 +421,7 @@ R1 N001 0 1k
             "minimum_dist": 0,
             "wire_pin_out_dist": 0,
             "grid_size": 16,
+            "voltage_must_have_dc": False,
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary_path = Path(temporary_directory)
@@ -472,6 +475,7 @@ R1 N001 0 1k
             "minimum_dist": 0,
             "wire_pin_out_dist": 0,
             "grid_size": 16,
+            "voltage_must_have_dc": False,
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary_path = Path(temporary_directory)

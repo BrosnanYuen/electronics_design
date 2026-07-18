@@ -73,6 +73,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default=16,
         help="Routing and placement grid spacing. Default: 16.",
     )
+    parser.add_argument(
+        "--voltage-must-have-dc",
+        action="store_true",
+        help="Insert a zero DC value before AC-only voltage-source payloads.",
+    )
     return parser
 
 
@@ -87,6 +92,7 @@ def main() -> int:
         "wire_pin_out_dist": arguments.wire_pin_out_dist,
         "autoplace_iter": arguments.autoplace_iter,
         "grid_size": arguments.grid_size,
+        "voltage_must_have_dc": arguments.voltage_must_have_dc,
     }
     netlist_input = Path(arguments.netlist_filepath)
     if not netlist_input.is_file():

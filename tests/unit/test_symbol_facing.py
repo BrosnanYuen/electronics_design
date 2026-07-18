@@ -15,6 +15,7 @@ _CONVERT_SETTINGS = {
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
     "grid_size": 16,
+    "voltage_must_have_dc": False,
 }
 _EXPECTED_RESULTS = {
     "example_case_01.json": {
@@ -167,4 +168,3 @@ class TestSymbolFacing(unittest.TestCase):
                 result = ltspice_symbol_facing(str(fixture_path), _CONVERT_SETTINGS)
                 self.assertEqual(result, _EXPECTED_RESULTS[fixture_path.name], msg=f"{fixture_path.name} should resolve all pin facings exactly.")
                 self.assertEqual(set(result), set(loaded_fixture), msg=f"{fixture_path.name} should preserve the symbol instance names.")
-

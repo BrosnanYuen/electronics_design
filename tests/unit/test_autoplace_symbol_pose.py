@@ -25,6 +25,7 @@ _CONVERT_SETTINGS = {
     "wire_pin_out_dist": 16,
     "autoplace_iter": 12,
     "grid_size": 16,
+    "voltage_must_have_dc": False,
 }
 _BULK_AUTOPLACE_CONVERT_SETTINGS = {
     **_CONVERT_SETTINGS,

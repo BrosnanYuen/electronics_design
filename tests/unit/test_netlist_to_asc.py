@@ -30,6 +30,7 @@ _CONVERT_SETTINGS = {
     "autoplace_iter": 12,
     "grid_size": 16,
     "ltspice_version": 4.1,
+    "voltage_must_have_dc": False,
 }
 _SELECTED_FIXTURES = (
     "RC-lowpass.net",

@@ -383,6 +383,7 @@ class TestGetLtspiceAscSymbolInfo(unittest.TestCase):
             "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
             "custom_search_paths": [str(_VALID_ASY_DIRECTORY)],
             "grid_size": 16,
+            "voltage_must_have_dc": False,
         }
         for fixture_path in fixture_paths:
             with self.subTest(fixture=fixture_path.name):

@@ -15,6 +15,7 @@ _CONVERT_SETTINGS = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "grid_size": 16,
+    "voltage_must_have_dc": False,
 }
 _EXPECTED_INVALID_LINES = {
     1: 14,

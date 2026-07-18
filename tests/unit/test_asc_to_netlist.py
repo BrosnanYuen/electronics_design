@@ -20,6 +20,7 @@ _CONVERT_SETTINGS = {  # Define the LTspice library settings passed into the con
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "grid_size": 16,
+    "voltage_must_have_dc": False,
 }  # Finish the shared conversion settings dictionary.
 
 

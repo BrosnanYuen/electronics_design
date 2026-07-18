@@ -18,6 +18,6 @@ JUST LOOK THEM UP USING convert_settings
 convert_settings = {
     "ltspice_windows_path": "C:\users\brosnan\AppData\Local\LTspice\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
+    "voltage_must_have_dc": False,
 }
-
 

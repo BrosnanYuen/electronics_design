@@ -77,6 +77,9 @@ def ltspice_netlist_symbol_wire_to_asc(
 ) -> ConversionResult:
     if not isinstance(convert_settings, Mapping):
         return False, "INVALID_CONVERT_SETTINGS", 0
+    voltage_must_have_dc = _net._resolve_voltage_must_have_dc(convert_settings)
+    if voltage_must_have_dc is None:
+        return False, "INVALID_CONVERT_SETTINGS", 0
     if not _coerce_path_success(asc_filepath_out):
         return False, "INVALID_OUTPUT_PATH", 0
     version_text = _resolve_ltspice_version(convert_settings)
@@ -98,7 +101,10 @@ def ltspice_netlist_symbol_wire_to_asc(
     symbol_pose = symbol_pose_result[2]
     search_roots = _asc_to_netlist._resolve_search_roots_for_asc(netlist_filepath, convert_settings)
     symbol_paths = _asc_to_netlist._build_symbol_filepath_lookup(search_roots)
-    instance_payload_attributes = _build_instance_payload_attributes(logical_lines)
+    instance_payload_attributes = _build_instance_payload_attributes(
+        logical_lines,
+        voltage_must_have_dc,
+    )
     try:
         asc_lines = _build_asc_lines(
             version_text,
@@ -453,12 +459,18 @@ def _ordered_attribute_keys(attributes: Mapping[str, str]) -> Tuple[str, ...]:
     return tuple(preferred_keys + remaining_keys)
 
 
-def _build_instance_payload_attributes(logical_lines: Sequence[LogicalLine]) -> Dict[str, Dict[str, str]]:
+def _build_instance_payload_attributes(
+    logical_lines: Sequence[LogicalLine],
+    voltage_must_have_dc: bool,
+) -> Dict[str, Dict[str, str]]:
     attributes_by_instance: Dict[str, Dict[str, str]] = {}
     for logical_line in logical_lines:
         if logical_line.kind != "device":
             continue
-        tokens = logical_line.text.split()
+        tokens = _net._normalize_voltage_source_tokens(
+            logical_line.text.split(),
+            voltage_must_have_dc,
+        )
         if not tokens or tokens[0][0].upper() == "K":
             continue
         instance_name = _normalize_instance_name(tokens[0])

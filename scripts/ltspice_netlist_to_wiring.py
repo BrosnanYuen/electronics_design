@@ -79,6 +79,7 @@ def main() -> int:
         "minimum_dist": arguments.minimum_dist,
         "wire_pin_out_dist": arguments.wire_pin_out_dist,
         "grid_size": arguments.grid_size,
+        "voltage_must_have_dc": False,
     }
     netlist_input = Path(arguments.netlist_filepath)
     if not netlist_input.is_file():

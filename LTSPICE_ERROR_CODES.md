@@ -33,7 +33,7 @@ Some lower-level helpers return a conversion result together with an empty paylo
 
 | Code | Meaning | Recommended advice |
 |---|---|---|
-| `INVALID_CONVERT_SETTINGS` | `convert_settings` is not a mapping, or one of its numeric/path-related settings is invalid. | Pass a dictionary-like mapping. Check `minimum_dist`, `wire_pin_out_dist`, `grid_size`, `autoplace_iter`, `ltspice_version`, and the LTspice search-path values. |
+| `INVALID_CONVERT_SETTINGS` | `convert_settings` is not a mapping, or one of its numeric, boolean, or path-related settings is invalid. | Pass a dictionary-like mapping. Check `minimum_dist`, `wire_pin_out_dist`, `grid_size`, `autoplace_iter`, `ltspice_version`, `voltage_must_have_dc`, and the LTspice search-path values. |
 | `INVALID_OUTPUT_PATH` | The requested output path is not path-like or cannot be accepted by the API. | Pass a writable file path and create or permit its parent directory. |
 | `WRITE_ERROR` | An output file could not be written. | Check the parent directory, permissions, available space, and whether another process has locked the file. |
 | `NETLIST_READ_ERROR` | The netlist could not be read after path validation. | Check that the file still exists, is readable, and uses a supported text encoding. |

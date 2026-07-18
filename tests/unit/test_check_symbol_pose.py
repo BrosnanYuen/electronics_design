@@ -18,6 +18,7 @@ _CONVERT_SETTINGS = {
     "custom_search_paths": ["./valid_asy/"],
     "minimum_dist": 32,
     "grid_size": 16,
+    "voltage_must_have_dc": False,
 }
 _EXPECTED_COLLISIONS = {
     "case_01.json": np.array([[0, 1]], dtype=int),
@@ -69,6 +70,7 @@ class TestLtspiceCheckSymbolPose(unittest.TestCase):
                 "custom_search_paths": ["./valid_asy/"],
                 "minimum_dist": 0,
                 "grid_size": 16,
+                "voltage_must_have_dc": False,
             },
         )
         self.assertEqual(result, (False, None))

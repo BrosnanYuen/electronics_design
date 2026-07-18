@@ -51,6 +51,7 @@ def main() -> int:
         "ltspice_windows_path": arguments.ltspice_windows_path,
         "ltspice_wine_path": arguments.ltspice_wine_path,
         "grid_size": 16,
+        "voltage_must_have_dc": False,
     }
     directory_path = Path(arguments.directory)
     if not directory_path.is_dir():

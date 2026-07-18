@@ -74,6 +74,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default=4.1,
         help="LTspice file format version used in the generated ASC. Default: 4.1.",
     )
+    parser.add_argument(
+        "--voltage-must-have-dc",
+        action="store_true",
+        help="Insert a zero DC value before AC-only voltage-source payloads.",
+    )
     return parser
 
 
@@ -89,6 +94,7 @@ def main() -> int:
         "autoplace_iter": arguments.autoplace_iter,
         "grid_size": arguments.grid_size,
         "ltspice_version": arguments.ltspice_version,
+        "voltage_must_have_dc": arguments.voltage_must_have_dc,
     }
     netlist_input = Path(arguments.netlist_filepath)
     if not netlist_input.is_file():

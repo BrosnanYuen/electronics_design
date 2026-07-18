@@ -26,6 +26,7 @@ _CONVERT_SETTINGS = {
     "autoplace_iter": 12,
     "grid_size": 16,
     "ltspice_version": 4.1,
+    "voltage_must_have_dc": False,
 }
 _INTERESTING_ATTR_KEYS = (
     "Value",
@@ -237,7 +238,10 @@ class TestNetlistSymbolWireToAsc(unittest.TestCase):
                     str(symbol_path),
                     str(wire_path),
                     str(output_path),
-                    {"ltspice_version": ""},
+                    {
+                        "ltspice_version": "",
+                        "voltage_must_have_dc": False,
+                    },
                 ),
                 (False, "INVALID_CONVERT_SETTINGS", 0),
             )

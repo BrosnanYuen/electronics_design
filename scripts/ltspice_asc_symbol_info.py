@@ -57,6 +57,7 @@ def main() -> int:
         "ltspice_windows_path": arguments.ltspice_windows_path,
         "ltspice_wine_path": arguments.ltspice_wine_path,
         "grid_size": 16,
+        "voltage_must_have_dc": False,
     }
     if arguments.out is not None and len(arguments.asc_filepaths) != 1:
         print("--out can only be used with a single input ASC file.", file=sys.stderr)

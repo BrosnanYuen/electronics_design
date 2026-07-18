@@ -54,6 +54,7 @@ def main() -> int:
         "custom_search_paths": arguments.custom_search_paths,
         "ltspice_windows_path": arguments.ltspice_windows_path,
         "ltspice_wine_path": arguments.ltspice_wine_path,
+        "voltage_must_have_dc": False,
     }
 
     matches, message, line_number = ltspice_asc_structure_cmp(

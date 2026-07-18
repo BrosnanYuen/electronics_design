@@ -46,6 +46,7 @@ def _default_asc_compare_convert_settings() -> Mapping[str, object]:
         "ltspice_wine_path": os.environ.get("LTSPICE_WINE_PATH", ""),
         "custom_search_paths": [path for path in custom_search_paths_text.split(os.pathsep) if path.strip() != ""],
         "grid_size": 16,
+        "voltage_must_have_dc": False,
     }
 
 

@@ -11,6 +11,8 @@ import re  # Validate directive spelling and structure with regular expressions.
 import struct  # Encode PNG header fields in network-ordered binary form.
 from typing import Dict  # Type the node-count mapping.
 from typing import List  # Type collections of lines and nodes.
+from typing import Mapping  # Type conversion-setting dictionaries.
+from typing import Optional  # Type setting-resolution failures.
 from typing import Sequence  # Type immutable views over loaded line lists.
 from typing import Set  # Type unique node-name collections extracted from expressions.
 from typing import Tuple  # Type tuple-based helper results.
@@ -252,6 +254,32 @@ class ParsedElement:  # Represent a parsed device line and its connectivity node
     prefix: str  # Store the validated device prefix.
     tokens: List[str]  # Store the whitespace-tokenized line content without comments.
     nodes: List[str]  # Store the extracted connectivity nodes for the element.
+
+
+def _resolve_voltage_must_have_dc(convert_settings: Mapping[str, object]) -> Optional[bool]:
+    """Resolve the opt-in AC-only voltage normalization setting."""
+
+    raw_value = convert_settings.get("voltage_must_have_dc", False)
+    if not isinstance(raw_value, bool):
+        return None
+    return raw_value
+
+
+def _normalize_voltage_source_tokens(
+    tokens: Sequence[str],
+    voltage_must_have_dc: bool,
+) -> Tuple[str, ...]:
+    """Insert a zero DC value before an AC-only voltage-source payload."""
+
+    normalized_tokens = tuple(tokens)
+    if not voltage_must_have_dc or len(normalized_tokens) < 4:
+        return normalized_tokens
+    instance_token = normalized_tokens[0].strip()
+    if instance_token == "" or instance_token[0].upper() != "V":
+        return normalized_tokens
+    if normalized_tokens[3].upper() != "AC":
+        return normalized_tokens
+    return (*normalized_tokens[:3], "0", *normalized_tokens[3:])
 
 
 def is_valid_ltspice_netlist_format(filepath: str) -> ValidationResult:  # Validate line-level LTspice netlist spacing and syntax.

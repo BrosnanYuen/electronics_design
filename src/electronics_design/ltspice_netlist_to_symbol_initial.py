@@ -61,6 +61,9 @@ def ltspice_netlist_to_symbol_initial(
 ) -> ConversionResult:
     if not isinstance(convert_settings, Mapping):
         return False, "INVALID_CONVERT_SETTINGS", 0
+    voltage_must_have_dc = _net._resolve_voltage_must_have_dc(convert_settings)
+    if voltage_must_have_dc is None:
+        return False, "INVALID_CONVERT_SETTINGS", 0
     if not _coerce_path_success(symbol_json_filepath_out):
         return False, "INVALID_OUTPUT_PATH", 0
     _net.is_valid_ltspice_netlist_file(netlist_filepath)
@@ -83,6 +86,7 @@ def ltspice_netlist_to_symbol_initial(
         symbol_path_lookup,
         {},
         comment_symbol_hints,
+        voltage_must_have_dc,
     )
     write_result = _write_symbol_json_file(symbol_json_filepath_out, symbol_initial)
     if not write_result[0]:
@@ -370,12 +374,16 @@ def _build_symbol_initial_records(
     symbol_path_lookup: Mapping[str, str],
     asc_symbol_hints: Mapping[str, Mapping[str, object]],
     comment_symbol_hints: Mapping[str, str],
+    voltage_must_have_dc: bool,
 ) -> Dict[str, Dict[str, object]]:
     symbol_records: Dict[str, Dict[str, object]] = {}
     for logical_line in logical_lines:
         if logical_line.kind != "device":
             continue
-        tokens = logical_line.text.split()
+        tokens = _net._normalize_voltage_source_tokens(
+            logical_line.text.split(),
+            voltage_must_have_dc,
+        )
         if not tokens:
             continue
         prefix = tokens[0][0].upper()

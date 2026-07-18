@@ -170,10 +170,13 @@ convert_settings = {
     "grid_size": 16,
     "autoplace_iter": 12,
     "ltspice_version": 4.1,
+    "voltage_must_have_dc": False,
 }
 ```
 
 No hard-coded paths are permitted in `src/`; all search paths must be supplied through this mapping.
+
+Set `voltage_must_have_dc` to `True` to normalize AC-only independent voltage sources during netlist-to-symbol/ASC conversion. For example, `V1 IN 0 AC 2` is treated as `V1 IN 0 0 AC 2`. The default is `False`, which preserves existing behavior.
 
 ## Install For Local Development
 
@@ -260,6 +263,7 @@ convert_settings = {
     "grid_size": 16,
     "autoplace_iter": 12,
     "ltspice_version": 4.1,
+    "voltage_must_have_dc": False,
 }
 
 # ASC validation
