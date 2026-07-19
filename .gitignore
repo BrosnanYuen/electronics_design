@@ -1,3 +1,5 @@
 *.pyc
 ./src/electronics_design.egg-info/
 ./src/electronics_design.egg-info/*
+./dist/
+./dist/*
