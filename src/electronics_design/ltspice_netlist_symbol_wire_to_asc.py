@@ -136,12 +136,19 @@ def _build_asc_lines(
     wire_lines: List[str] = []
     flag_lines: List[str] = []
     all_points: List[Point] = []
+    net_label_exceptions = _collect_net_label_exception_names(logical_lines)
     for net_name, raw_wire_rows in wire_map.items():
         normalized_wire_rows = _normalize_wire_rows(raw_wire_rows)
         for wire_row in normalized_wire_rows:
             wire_lines.append(f"WIRE {wire_row[0]} {wire_row[1]} {wire_row[2]} {wire_row[3]}")
             all_points.extend(((wire_row[0], wire_row[1]), (wire_row[2], wire_row[3])))
-        flag_lines.extend(_flag_lines_for_net(net_name, normalized_wire_rows))
+        flag_lines.extend(
+            _flag_lines_for_net(
+                net_name,
+                normalized_wire_rows,
+                allow_disconnected_labels=net_name.strip().upper() in net_label_exceptions,
+            )
+        )
     symbol_lines: List[str] = []
     symbol_bounds = _collect_symbol_bounds(symbol_pose)
     all_points.extend(symbol_bounds)
@@ -307,8 +314,12 @@ def _flag_line_for_net(net_name: str, wire_rows: Sequence[WireRow]) -> Optional[
     return f"FLAG {flag_point[0]} {flag_point[1]} {normalized_net_name}"
 
 
-def _flag_lines_for_net(net_name: str, wire_rows: Sequence[WireRow]) -> Tuple[str, ...]:
-    """Return labels needed to make every disconnected wire group one net."""
+def _flag_lines_for_net(
+    net_name: str,
+    wire_rows: Sequence[WireRow],
+    allow_disconnected_labels: bool = False,
+) -> Tuple[str, ...]:
+    """Return net flags while enforcing physical routing for ordinary nets."""
 
     if not wire_rows:
         return ()
@@ -316,6 +327,11 @@ def _flag_lines_for_net(net_name: str, wire_rows: Sequence[WireRow]) -> Tuple[st
     if len(wire_groups) <= 1:
         flag_line = _flag_line_for_net(net_name, wire_rows)
         return (flag_line,) if flag_line is not None else ()
+    if not allow_disconnected_labels:
+        raise ValueError(
+            f"WIRING_GENERATION_ERROR: net '{net_name}' contains disconnected wire groups; "
+            "only voltage-source nets, GND, and 0 may use net-label routing"
+        )
     normalized_net_name = net_name.strip()
     if normalized_net_name == "":
         return ()
@@ -334,6 +350,23 @@ def _flag_lines_for_net(net_name: str, wire_rows: Sequence[WireRow]) -> Tuple[st
             flag_point = min(points, key=lambda point: (point[1], point[0]))
         flag_lines.append(f"FLAG {flag_point[0]} {flag_point[1]} {flag_name}")
     return tuple(flag_lines)
+
+
+def _collect_net_label_exception_names(logical_lines: Sequence[LogicalLine]) -> set[str]:
+    """Return nets allowed to connect disconnected wire groups with FLAG labels."""
+
+    exception_names = {"0", "GND"}
+    for logical_line in logical_lines:
+        if logical_line.kind != "device":
+            continue
+        tokens = logical_line.text.split()
+        if not tokens or tokens[0][0].upper() != "V":
+            continue
+        node_result = _net._extract_nodes(tokens)
+        if not node_result[0]:
+            continue
+        exception_names.update(str(node_name).strip().upper() for node_name in node_result[1])
+    return exception_names
 
 
 def _collect_symbol_bounds(symbol_pose: Mapping[str, Mapping[str, object]]) -> List[Point]:

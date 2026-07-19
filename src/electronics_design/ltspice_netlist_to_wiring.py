@@ -135,63 +135,6 @@ def ltspice_netlist_to_wiring(
     return _OK_RESULT
 
 
-def _write_net_label_stub_wiring(
-    netlist_filepath: str,
-    symbol_pose_filepath: str,
-    wire_filepath_out: str,
-    convert_settings: Mapping[str, object],
-) -> ConversionResult:
-    """Write short pin escapes for a schematic that will connect nets by labels.
-
-    This is the bounded fallback used by automatic placement for dense circuits.
-    Each pin still receives an orthogonal escape wire outside its symbol's
-    buffered rectangle.  The ASC writer recognizes disconnected groups for one
-    logical net and places the same LTspice net label on every group.
-    """
-
-    route_settings = _resolve_route_settings(convert_settings)
-    if route_settings is None:
-        return False, "INVALID_CONVERT_SETTINGS", 0
-    read_result = _net._read_text_file_lines(netlist_filepath)
-    if not read_result[0]:
-        return False, "NETLIST_READ_ERROR", 0
-    symbol_pose_result = _read_symbol_pose_entries(symbol_pose_filepath)
-    if not symbol_pose_result[0]:
-        return symbol_pose_result[1]
-    symbol_pose_entries = symbol_pose_result[2]
-    routing_grid = _infer_routing_grid(
-        symbol_pose_entries,
-        route_settings["minimum_dist"],
-        route_settings["wire_pin_out_dist"],
-        route_settings.get("grid_size"),
-    )
-    attachment_result = _collect_net_pin_attachments(
-        _collect_logical_code_lines(read_result[1]),
-        symbol_pose_entries,
-        route_settings["minimum_dist"],
-        route_settings["wire_pin_out_dist"],
-        routing_grid,
-    )
-    if not attachment_result[0]:
-        return False, attachment_result[1], attachment_result[2]
-    stub_wires_by_net: Dict[str, Tuple[WireRow, ...]] = {}
-    for net_name, attachments in attachment_result[3].items():
-        stub_wires = _dedupe_wire_rows(
-            _stub_wire_for_attachment(attachment)
-            for attachment in attachments
-            if attachment.pin_point != attachment.exit_point
-        )
-        if not stub_wires:
-            return False, "WIRING_GENERATION_ERROR", min(
-                attachment.line_number for attachment in attachments
-            )
-        stub_wires_by_net[net_name] = stub_wires
-    write_result = _write_wire_json_file(wire_filepath_out, stub_wires_by_net)
-    if not write_result[0]:
-        return False, write_result[1], 0
-    return _OK_RESULT
-
-
 def _resolve_route_settings(convert_settings: Mapping[str, object]) -> Optional[Dict[str, int]]:
     minimum_dist = _coerce_non_negative_integer(convert_settings.get("minimum_dist", 0))
     wire_pin_out_dist = _coerce_non_negative_integer(convert_settings.get("wire_pin_out_dist", 0))

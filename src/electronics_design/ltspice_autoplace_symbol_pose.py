@@ -148,12 +148,7 @@ def ltspice_autoplace_symbol_pose(
     wire_filepath_out: str,
     convert_settings: Mapping[str, object],
 ) -> ConversionResult:
-    """Place symbols and produce bounded, readable schematic wiring.
-
-    Sparse circuits are physically routed.  Dense circuits use short pin
-    escapes joined by LTspice net labels, avoiding unbounded global-routing
-    retries and the large wire mazes those retries produced.
-    """
+    """Place symbols and physically route every component-to-component net."""
 
     if not isinstance(convert_settings, Mapping):
         return False, "INVALID_CONVERT_SETTINGS", 0
@@ -161,11 +156,6 @@ def ltspice_autoplace_symbol_pose(
         return False, "INVALID_OUTPUT_PATH", 0
     autoplace_iter = _resolve_autoplace_iterations(convert_settings)
     if autoplace_iter is None:
-        return False, "INVALID_CONVERT_SETTINGS", 0
-    maximum_physical_route_components = _resolve_non_negative_integer(
-        convert_settings.get("autoplace_max_physical_route_components", 32)
-    )
-    if maximum_physical_route_components is None:
         return False, "INVALID_CONVERT_SETTINGS", 0
     format_validation_result = _net.is_valid_ltspice_netlist_format(netlist_filepath)
     if not format_validation_result[0]:
@@ -235,7 +225,6 @@ def ltspice_autoplace_symbol_pose(
         should_attempt_routing = not _resolve_autoplace_skip_routing(convert_settings)
         ordered_instance_names = tuple(instance_name for instance_name in original_symbol_data if instance_name in components)
         working_wire_path = Path(temporary_directory) / "wires.json"
-        use_net_labels = len(components) > maximum_physical_route_components
         physical_route_attempt_limit = autoplace_iter
         best_attempt_payload: Optional[dict[str, dict[str, object]]] = None
         best_attempt_wires: Optional[str] = None
@@ -314,17 +303,6 @@ def ltspice_autoplace_symbol_pose(
             if not should_attempt_routing:
                 best_attempt_wires = "{}\n"
                 break
-            if use_net_labels:
-                wiring_result = _wiring._write_net_label_stub_wiring(
-                    netlist_filepath,
-                    str(working_symbol_pose_path),
-                    str(working_wire_path),
-                    convert_settings,
-                )
-                if not wiring_result[0]:
-                    return wiring_result
-                best_attempt_wires = working_wire_path.read_text(encoding="utf-8")
-                break
             wiring_result = _wiring.ltspice_netlist_to_wiring(
                 netlist_filepath,
                 str(working_symbol_pose_path),
@@ -342,19 +320,7 @@ def ltspice_autoplace_symbol_pose(
                     iteration_index,
                 )
                 continue
-            wiring_result = _wiring._write_net_label_stub_wiring(
-                netlist_filepath,
-                str(working_symbol_pose_path),
-                str(working_wire_path),
-                convert_settings,
-            )
-            if not wiring_result[0]:
-                return wiring_result
-            try:
-                best_attempt_wires = working_wire_path.read_text(encoding="utf-8")
-            except OSError:
-                return False, "WIRE_READ_ERROR", 0
-            break
+            return wiring_result
         if best_attempt_payload is None or best_attempt_wires is None:
             return _autoplace_failure(
                 "no collision-free placement and wiring result was produced after "

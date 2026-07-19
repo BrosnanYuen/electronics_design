@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import numpy as np
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from electronics_design import ltspice_autoplace_symbol_pose
 from electronics_design import ltspice_asc_structure_cmp
 from electronics_design import ltspice_check_symbol_pose
 from electronics_design import ltspice_netlist_symbol_wire_to_asc
+from electronics_design.pathtracing import are_wires_connected
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _VALID_NETLIST_DIRECTORY = _ROOT_DIRECTORY / "valid_convert" / "netlist"
@@ -201,4 +203,32 @@ class TestLtspiceAutoplaceSymbolPose(unittest.TestCase):
                 generated_symbol_pose["Vin"]["ORIENTATION"],
                 "R0",
                 msg="Voltage sources should always resolve to R0 orientation during autoplace.",
+            )
+
+    def test_component_count_setting_cannot_disable_physical_routing(self) -> None:
+        netlist_fixture_path = _VALID_NETLIST_DIRECTORY / "RC-lowpass.net"
+        initial_symbol_path = _VALID_SYMBOL_INITIAL_DIRECTORY / "RC-lowpass.json"
+        convert_settings = {
+            **_CONVERT_SETTINGS,
+            "autoplace_max_physical_route_components": 0,
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_directory_path = Path(temporary_directory)
+            generated_symbol_path = temporary_directory_path / "RC-lowpass.json"
+            generated_wire_path = temporary_directory_path / "RC-lowpass_wires.json"
+            generated_symbol_path.write_text(
+                initial_symbol_path.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            result = ltspice_autoplace_symbol_pose(
+                str(netlist_fixture_path),
+                str(generated_symbol_path),
+                str(generated_wire_path),
+                convert_settings,
+            )
+            self.assertEqual(result, (True, "OK", 0))
+            generated_wires = _load_json(generated_wire_path)
+            self.assertTrue(
+                are_wires_connected(np.asarray(generated_wires["OUT"], dtype=int)),
+                msg="Ordinary nets must remain physically connected regardless of circuit-size settings.",
             )

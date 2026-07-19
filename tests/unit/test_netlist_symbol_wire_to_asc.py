@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -244,6 +245,55 @@ class TestNetlistSymbolWireToAsc(unittest.TestCase):
                     },
                 ),
                 (False, "INVALID_CONVERT_SETTINGS", 0),
+            )
+
+    def test_disconnected_label_groups_are_restricted_to_allowed_nets(self) -> None:
+        netlist_path = _VALID_NETLIST_DIRECTORY / "RC-lowpass.net"
+        symbol_path = _VALID_SYMBOL_DIRECTORY / "RC-lowpass.json"
+        original_wires = json.loads(
+            (_VALID_WIRE_DIRECTORY / "RC-lowpass.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_directory_path = Path(temporary_directory)
+
+            disconnected_signal_wires = dict(original_wires)
+            disconnected_signal_wires["OUT"] = disconnected_signal_wires["OUT"][:2]
+            signal_wire_path = temporary_directory_path / "signal-wires.json"
+            signal_wire_path.write_text(
+                json.dumps(disconnected_signal_wires, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            signal_output_path = temporary_directory_path / "signal.asc"
+            signal_result = ltspice_netlist_symbol_wire_to_asc(
+                str(netlist_path),
+                str(symbol_path),
+                str(signal_wire_path),
+                str(signal_output_path),
+                _CONVERT_SETTINGS,
+            )
+            self.assertFalse(signal_result[0])
+            self.assertIn("WIRING_GENERATION_ERROR", signal_result[1])
+            self.assertIn("OUT", signal_result[1])
+
+            allowed_wires = dict(original_wires)
+            allowed_wires["N001"] = allowed_wires["N001"][:2]
+            allowed_wires["0"] = allowed_wires["0"][:2]
+            allowed_wire_path = temporary_directory_path / "allowed-wires.json"
+            allowed_wire_path.write_text(
+                json.dumps(allowed_wires, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            allowed_output_path = temporary_directory_path / "allowed.asc"
+            self.assertEqual(
+                ltspice_netlist_symbol_wire_to_asc(
+                    str(netlist_path),
+                    str(symbol_path),
+                    str(allowed_wire_path),
+                    str(allowed_output_path),
+                    _CONVERT_SETTINGS,
+                ),
+                (True, "OK", 0),
+                msg="Voltage-source nets and 0 must permit disconnected FLAG routing.",
             )
 
 
