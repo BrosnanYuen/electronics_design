@@ -1,4 +1,7 @@
 *.pyc
+*.nbc
+*.nbi
+__pycache__/
 ./src/electronics_design.egg-info/
 ./src/electronics_design.egg-info/*
 ./dist/

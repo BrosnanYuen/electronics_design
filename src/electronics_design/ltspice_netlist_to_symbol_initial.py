@@ -18,6 +18,7 @@ from typing import Tuple
 from . import ltspice_asc as _asc
 from . import ltspice_asc_to_netlist as _asc_to_netlist
 from . import ltspice_net as _net
+from ._parallel import configure_parallel_workers
 
 ConversionResult = Tuple[bool, str, int]
 
@@ -60,6 +61,8 @@ def ltspice_netlist_to_symbol_initial(
     convert_settings: Mapping[str, object],
 ) -> ConversionResult:
     if not isinstance(convert_settings, Mapping):
+        return False, "INVALID_CONVERT_SETTINGS", 0
+    if not configure_parallel_workers(convert_settings):
         return False, "INVALID_CONVERT_SETTINGS", 0
     voltage_must_have_dc = _net._resolve_voltage_must_have_dc(convert_settings)
     if voltage_must_have_dc is None:

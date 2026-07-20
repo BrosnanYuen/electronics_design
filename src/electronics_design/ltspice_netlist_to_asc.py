@@ -7,6 +7,7 @@ import tempfile
 from typing import Mapping
 from typing import Tuple
 
+from ._parallel import configure_parallel_workers
 from .ltspice_autoplace_symbol_pose import ltspice_autoplace_symbol_pose
 from .ltspice_netlist_symbol_wire_to_asc import ltspice_netlist_symbol_wire_to_asc
 from .ltspice_netlist_to_symbol_initial import ltspice_netlist_to_symbol_initial
@@ -20,6 +21,9 @@ def ltspice_netlist_to_asc(
     convert_settings: Mapping[str, object],
 ) -> ConversionResult:
     """Convert one LTspice netlist into an LTspice ASC file via the public pipeline."""
+
+    if not isinstance(convert_settings, Mapping) or not configure_parallel_workers(convert_settings):
+        return False, "INVALID_CONVERT_SETTINGS", 0
 
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary_directory_path = Path(temporary_directory)

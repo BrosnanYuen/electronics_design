@@ -21,6 +21,7 @@ import networkx as nx
 from . import ltspice_asc as _asc
 from . import ltspice_net as _net
 from . import ltspice_netlist_to_wiring as _wiring
+from ._parallel import configure_parallel_workers
 from .ltspice_netlist_to_symbol_initial import ltspice_netlist_to_symbol_initial
 from .ltspice_resolve_symbol_pose import ltspice_check_symbol_pose
 from .ltspice_resolve_symbol_pose import ltspice_resolve_symbol_pose
@@ -151,6 +152,8 @@ def ltspice_autoplace_symbol_pose(
     """Place symbols and physically route every component-to-component net."""
 
     if not isinstance(convert_settings, Mapping):
+        return False, "INVALID_CONVERT_SETTINGS", 0
+    if not configure_parallel_workers(convert_settings):
         return False, "INVALID_CONVERT_SETTINGS", 0
     if not _coerce_path_success(symbol_pose_filepath_out) or not _coerce_path_success(wire_filepath_out):
         return False, "INVALID_OUTPUT_PATH", 0

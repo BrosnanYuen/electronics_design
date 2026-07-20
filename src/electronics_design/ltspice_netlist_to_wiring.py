@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
 import math
@@ -21,6 +22,8 @@ import numpy as np
 
 from . import ltspice_asc as _asc
 from . import ltspice_net as _net
+from ._parallel import configure_parallel_workers
+from ._parallel import parallel_worker_count
 from .autoroute import _build_visibility_graph_for_terminals
 from .autoroute import _route_simple_orthogonal
 from .autoroute import _route_with_visibility_graph
@@ -72,6 +75,8 @@ def ltspice_netlist_to_wiring(
     convert_settings: Mapping[str, object],
 ) -> ConversionResult:
     if not isinstance(convert_settings, Mapping):
+        return False, "INVALID_CONVERT_SETTINGS", 0
+    if not configure_parallel_workers(convert_settings):
         return False, "INVALID_CONVERT_SETTINGS", 0
     if not _coerce_path_success(wire_filepath_out):
         return False, "INVALID_OUTPUT_PATH", 0
@@ -681,20 +686,39 @@ def _route_net_exit_points_with_obstacles(
             for disconnected_point in disconnected_points
         )
         routed_edge = None
-        for _distance, start_point, end_point in candidate_edges:
-            try:
-                routed_wires = _route_simple_orthogonal(
-                    start_point,
-                    end_point,
-                    obstacle_array,
-                    routing_grid,
-                    routing_grid,
-                    processed_wire_array,
-                )
-            except ValueError:
-                continue
-            routed_edge = tuple(tuple(int(value) for value in row) for row in routed_wires.tolist())
-            if routed_edge:
+        selected_start_point = None
+        selected_end_point = None
+        simple_arguments = [
+            (
+                start_point,
+                end_point,
+                obstacle_array,
+                routing_grid,
+                processed_wire_array,
+            )
+            for _distance, start_point, end_point in candidate_edges
+        ]
+        if simple_arguments:
+            simple_result = _try_simple_candidate_edge(simple_arguments[0])
+            if simple_result is not None:
+                selected_start_point, selected_end_point, routed_edge = simple_result
+        remaining_simple_arguments = simple_arguments[1:] if routed_edge is None else []
+        worker_count = parallel_worker_count(len(remaining_simple_arguments))
+        if remaining_simple_arguments and worker_count > 1:
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                for batch_start in range(0, len(remaining_simple_arguments), worker_count):
+                    batch_arguments = remaining_simple_arguments[batch_start : batch_start + worker_count]
+                    batch_results = executor.map(_try_simple_candidate_edge, batch_arguments)
+                    simple_result = next((result for result in batch_results if result is not None), None)
+                    if simple_result is not None:
+                        selected_start_point, selected_end_point, routed_edge = simple_result
+                        break
+        elif remaining_simple_arguments:
+            for simple_argument in remaining_simple_arguments:
+                simple_result = _try_simple_candidate_edge(simple_argument)
+                if simple_result is None:
+                    continue
+                selected_start_point, selected_end_point, routed_edge = simple_result
                 break
         if routed_edge is None:
             if visibility_graph is None:
@@ -705,32 +729,99 @@ def _route_net_exit_points_with_obstacles(
                     routing_grid,
                     processed_wire_array,
                 )
-            for _distance, start_point, end_point in candidate_edges:
-                try:
-                    routed_wires = _route_with_visibility_graph(
-                        start_point,
-                        end_point,
-                        visibility_graph,
-                        obstacle_array,
-                        routing_grid,
-                        routing_grid,
-                    )
-                except ValueError:
-                    continue
-                routed_edge = tuple(tuple(int(value) for value in row) for row in routed_wires.tolist())
-                if routed_edge:
+            visibility_arguments = [
+                (
+                    start_point,
+                    end_point,
+                    visibility_graph,
+                    obstacle_array,
+                    routing_grid,
+                )
+                for _distance, start_point, end_point in candidate_edges
+            ]
+            if visibility_arguments:
+                visibility_result = _try_visibility_candidate_edge(visibility_arguments[0])
+                if visibility_result is not None:
+                    selected_start_point, selected_end_point, routed_edge = visibility_result
+            remaining_visibility_arguments = visibility_arguments[1:] if routed_edge is None else []
+            worker_count = parallel_worker_count(len(remaining_visibility_arguments))
+            if remaining_visibility_arguments and worker_count > 1:
+                with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                    for batch_start in range(0, len(remaining_visibility_arguments), worker_count):
+                        batch_arguments = remaining_visibility_arguments[
+                            batch_start : batch_start + worker_count
+                        ]
+                        batch_results = executor.map(_try_visibility_candidate_edge, batch_arguments)
+                        visibility_result = next(
+                            (result for result in batch_results if result is not None),
+                            None,
+                        )
+                        if visibility_result is not None:
+                            selected_start_point, selected_end_point, routed_edge = visibility_result
+                            break
+            elif remaining_visibility_arguments:
+                for visibility_argument in remaining_visibility_arguments:
+                    visibility_result = _try_visibility_candidate_edge(visibility_argument)
+                    if visibility_result is None:
+                        continue
+                    selected_start_point, selected_end_point, routed_edge = visibility_result
                     break
         if routed_edge is None:
             return False, "WIRING_GENERATION_ERROR", min(attachment.line_number for attachment in attachments), ()
-        route_segments = list(_split_wire_rows_at_point(route_segments, start_point))
+        if selected_start_point is None or selected_end_point is None:
+            return False, "WIRING_GENERATION_ERROR", min(attachment.line_number for attachment in attachments), ()
+        route_segments = list(_split_wire_rows_at_point(route_segments, selected_start_point))
         route_segments.extend(routed_edge)
         for x1, y1, x2, y2 in routed_edge:
             for route_point in ((x1, y1), (x2, y2)):
                 if route_point not in connected_points:
                     connected_points.append(route_point)
         visibility_graph = None
-        disconnected_points.remove(end_point)
+        disconnected_points.remove(selected_end_point)
     return True, "OK", 0, _dedupe_wire_rows(route_segments)
+
+
+def _try_simple_candidate_edge(
+    route_argument: Tuple[Point, Point, np.ndarray, int, np.ndarray],
+) -> Optional[Tuple[Point, Point, Tuple[WireRow, ...]]]:
+    start_point, end_point, obstacle_array, routing_grid, processed_wire_array = route_argument
+    try:
+        routed_wires = _route_simple_orthogonal(
+            start_point,
+            end_point,
+            obstacle_array,
+            routing_grid,
+            routing_grid,
+            processed_wire_array,
+            parallel_candidates=False,
+        )
+    except ValueError:
+        return None
+    routed_edge = tuple(tuple(int(value) for value in row) for row in routed_wires.tolist())
+    if not routed_edge:
+        return None
+    return start_point, end_point, routed_edge
+
+
+def _try_visibility_candidate_edge(
+    route_argument: Tuple[Point, Point, object, np.ndarray, int],
+) -> Optional[Tuple[Point, Point, Tuple[WireRow, ...]]]:
+    start_point, end_point, visibility_graph, obstacle_array, routing_grid = route_argument
+    try:
+        routed_wires = _route_with_visibility_graph(
+            start_point,
+            end_point,
+            visibility_graph,
+            obstacle_array,
+            routing_grid,
+            routing_grid,
+        )
+    except ValueError:
+        return None
+    routed_edge = tuple(tuple(int(value) for value in row) for row in routed_wires.tolist())
+    if not routed_edge:
+        return None
+    return start_point, end_point, routed_edge
 
 
 def _same_net_junction_candidates(

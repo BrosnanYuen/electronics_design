@@ -20,6 +20,7 @@ import numpy as np
 from . import ltspice_asc as _asc
 from . import ltspice_asc_to_netlist as _asc_to_netlist
 from . import ltspice_net as _net
+from ._parallel import configure_parallel_workers
 from .pathtracing import place_wires_into_groups
 
 ConversionResult = Tuple[bool, str, int]
@@ -76,6 +77,8 @@ def ltspice_netlist_symbol_wire_to_asc(
     convert_settings: Mapping[str, object],
 ) -> ConversionResult:
     if not isinstance(convert_settings, Mapping):
+        return False, "INVALID_CONVERT_SETTINGS", 0
+    if not configure_parallel_workers(convert_settings):
         return False, "INVALID_CONVERT_SETTINGS", 0
     voltage_must_have_dc = _net._resolve_voltage_must_have_dc(convert_settings)
     if voltage_must_have_dc is None:

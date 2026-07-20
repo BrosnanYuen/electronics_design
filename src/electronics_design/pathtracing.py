@@ -12,6 +12,15 @@ from typing import Tuple
 
 import numpy as np
 
+from ._numba_kernels import any_intersection_serial
+from ._numba_kernels import endpoint_group_labels
+from ._numba_kernels import intersection_matrix_parallel
+from ._numba_kernels import intersection_matrix_serial
+from ._numba_kernels import wires_connected
+
+
+_PARALLEL_INTERSECTION_PAIR_THRESHOLD = 4096
+
 
 def get_wire_pos(wires: np.ndarray) -> np.ndarray:
     wires = np.asarray(wires)
@@ -33,29 +42,7 @@ def are_wires_connected(wires: np.ndarray) -> bool:
     wires = np.asarray(wires)
     if wires.ndim != 2 or wires.shape[1] != 4:
         raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
-    n = len(wires)
-    if n <= 1:
-        return True
-    parent = list(range(n))
-
-    def _find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def _union(i: int, j: int) -> None:
-        ri = _find(i)
-        rj = _find(j)
-        if ri != rj:
-            parent[rj] = ri
-
-    for i in range(n):
-        for j in range(i + 1, n):
-            if _wires_share_point(tuple(wires[i]), tuple(wires[j])):
-                _union(i, j)
-    root = _find(0)
-    return all(_find(i) == root for i in range(1, n))
+    return bool(wires_connected(np.ascontiguousarray(wires)))
 
 
 def are_wires_intersecting_obstacles_fast(wires: np.ndarray, obstacles: np.ndarray) -> bool:
@@ -65,7 +52,14 @@ def are_wires_intersecting_obstacles_fast(wires: np.ndarray, obstacles: np.ndarr
         raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
     if obstacles.ndim != 2 or obstacles.shape[1] != 4:
         raise ValueError("obstacles must be a 2D array with 4 columns: X1, Y1, X2, Y2")
-    return bool(np.any(_wire_obstacle_intersection_matrix(wires, obstacles)))
+    if len(wires) == 0 or len(obstacles) == 0:
+        return False
+    return bool(
+        any_intersection_serial(
+            np.ascontiguousarray(wires),
+            np.ascontiguousarray(obstacles),
+        )
+    )
 
 
 def _wire_obstacle_intersection_matrix(wires: np.ndarray, obstacles: np.ndarray) -> np.ndarray:
@@ -73,59 +67,12 @@ def _wire_obstacle_intersection_matrix(wires: np.ndarray, obstacles: np.ndarray)
 
     if len(wires) == 0 or len(obstacles) == 0:
         return np.zeros((len(wires), len(obstacles)), dtype=bool)
-
-    wire_vertical = wires[:, 0] == wires[:, 2]
-    wire_horizontal = wires[:, 1] == wires[:, 3]
-    obstacle_vertical = obstacles[:, 0] == obstacles[:, 2]
-    obstacle_horizontal = obstacles[:, 1] == obstacles[:, 3]
-    if bool(np.all(wire_vertical | wire_horizontal)) and bool(
-        np.all(obstacle_vertical | obstacle_horizontal)
-    ):
-        wire_min_x = np.minimum(wires[:, 0], wires[:, 2])[:, None]
-        wire_max_x = np.maximum(wires[:, 0], wires[:, 2])[:, None]
-        wire_min_y = np.minimum(wires[:, 1], wires[:, 3])[:, None]
-        wire_max_y = np.maximum(wires[:, 1], wires[:, 3])[:, None]
-        obstacle_min_x = np.minimum(obstacles[:, 0], obstacles[:, 2])[None, :]
-        obstacle_max_x = np.maximum(obstacles[:, 0], obstacles[:, 2])[None, :]
-        obstacle_min_y = np.minimum(obstacles[:, 1], obstacles[:, 3])[None, :]
-        obstacle_max_y = np.maximum(obstacles[:, 1], obstacles[:, 3])[None, :]
-
-        vertical_pairs = wire_vertical[:, None] & obstacle_vertical[None, :]
-        vertical_intersections = vertical_pairs & (wires[:, 0, None] == obstacles[None, :, 0]) & (
-            np.maximum(wire_min_y, obstacle_min_y) <= np.minimum(wire_max_y, obstacle_max_y)
-        )
-        horizontal_pairs = wire_horizontal[:, None] & obstacle_horizontal[None, :]
-        horizontal_intersections = horizontal_pairs & (wires[:, 1, None] == obstacles[None, :, 1]) & (
-            np.maximum(wire_min_x, obstacle_min_x) <= np.minimum(wire_max_x, obstacle_max_x)
-        )
-        wire_vertical_crossings = wire_vertical[:, None] & obstacle_horizontal[None, :] & (
-            obstacle_min_x <= wires[:, 0, None]
-        ) & (wires[:, 0, None] <= obstacle_max_x) & (
-            wire_min_y <= obstacles[None, :, 1]
-        ) & (obstacles[None, :, 1] <= wire_max_y)
-        wire_horizontal_crossings = wire_horizontal[:, None] & obstacle_vertical[None, :] & (
-            wire_min_x <= obstacles[None, :, 0]
-        ) & (obstacles[None, :, 0] <= wire_max_x) & (
-            obstacle_min_y <= wires[:, 1, None]
-        ) & (wires[:, 1, None] <= obstacle_max_y)
-        return (
-            vertical_intersections
-            | horizontal_intersections
-            | wire_vertical_crossings
-            | wire_horizontal_crossings
-        )
-
-    # Preserve support for arbitrary non-axis-aligned input.  Autorouting uses
-    # the vectorized orthogonal path above, while this fallback retains the
-    # public helper's prior general segment behavior.
-    intersections = np.zeros((len(wires), len(obstacles)), dtype=bool)
-    for wire_index, wire in enumerate(wires):
-        for obstacle_index, obstacle in enumerate(obstacles):
-            intersections[wire_index, obstacle_index] = _lines_intersect(
-                tuple(wire),
-                tuple(obstacle),
-            )
-    return intersections
+    contiguous_wires = np.ascontiguousarray(wires)
+    contiguous_obstacles = np.ascontiguousarray(obstacles)
+    pair_count = len(wires) * len(obstacles)
+    if pair_count >= _PARALLEL_INTERSECTION_PAIR_THRESHOLD and len(wires) > 1:
+        return intersection_matrix_parallel(contiguous_wires, contiguous_obstacles)
+    return intersection_matrix_serial(contiguous_wires, contiguous_obstacles)
 
 
 def are_wires_intersecting_obstacles_detailed(
@@ -138,14 +85,10 @@ def are_wires_intersecting_obstacles_detailed(
         raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
     if obstacles.ndim != 2 or obstacles.shape[1] != 4:
         raise ValueError("obstacles must be a 2D array with 4 columns: X1, Y1, X2, Y2")
-    intersections: List[List[int]] = []
-    for wire_idx, wire in enumerate(wires):
-        for obstacle_idx, obstacle in enumerate(obstacles):
-            if _lines_intersect(tuple(wire), tuple(obstacle)):
-                intersections.append([wire_idx, obstacle_idx])
-    if not intersections:
+    intersection_indices = np.argwhere(_wire_obstacle_intersection_matrix(wires, obstacles))
+    if len(intersection_indices) == 0:
         return False, None
-    return True, np.array(intersections, dtype=int)
+    return True, np.asarray(intersection_indices, dtype=int)
 
 
 def place_wires_into_groups(wires: np.ndarray) -> List[np.ndarray]:
@@ -155,32 +98,10 @@ def place_wires_into_groups(wires: np.ndarray) -> List[np.ndarray]:
     n = len(wires)
     if n == 0:
         return []
-    parent = list(range(n))
-
-    def _find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def _union(i: int, j: int) -> None:
-        ri = _find(i)
-        rj = _find(j)
-        if ri != rj:
-            parent[rj] = ri
-
-    for i in range(n):
-        xi1, yi1, xi2, yi2 = int(wires[i, 0]), int(wires[i, 1]), int(wires[i, 2]), int(wires[i, 3])
-        for j in range(i + 1, n):
-            xj1, yj1, xj2, yj2 = int(wires[j, 0]), int(wires[j, 1]), int(wires[j, 2]), int(wires[j, 3])
-            if (xi1 == xj1 and yi1 == yj1) or (xi1 == xj2 and yi1 == yj2) or \
-               (xi2 == xj1 and yi2 == yj1) or (xi2 == xj2 and yi2 == yj2):
-                _union(i, j)
-
+    labels = endpoint_group_labels(np.ascontiguousarray(wires))
     groups: Dict[int, List[np.ndarray]] = {}
-    for i in range(n):
-        root = _find(i)
-        groups.setdefault(root, []).append(wires[i])
+    for wire_index, root in enumerate(labels.tolist()):
+        groups.setdefault(int(root), []).append(wires[wire_index])
     return [np.array(group, dtype=int) for group in groups.values()]
 
 

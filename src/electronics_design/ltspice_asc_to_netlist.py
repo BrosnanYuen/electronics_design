@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 import os
 import re
 import tempfile
+from threading import RLock
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -22,6 +25,8 @@ import numpy as np
 from . import ltspice_asc as _asc
 from . import ltspice_asy as _asy
 from . import ltspice_net as _net
+from ._parallel import configure_parallel_workers
+from ._parallel import parallel_worker_count
 from .pathtracing import find_wire_group_index
 from .pathtracing import place_wires_into_groups
 
@@ -37,6 +42,7 @@ _LIBRARY_FILE_SUFFIXES = {".bjt", ".dio", ".jft", ".lib", ".mos", ".sub"}
 _SYMBOL_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, "SymbolDefinition"]] = {}
 _SYMBOL_FILEPATH_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, str]] = {}
 _LIBRARY_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, str]] = {}
+_SYMBOL_CACHE_LOCK = RLock()
 
 
 def _default_asc_compare_convert_settings() -> Mapping[str, object]:
@@ -129,6 +135,8 @@ def ltspice_asc_to_netlist(
 ) -> ConversionResult:
     if not isinstance(convert_settings, Mapping):
         return False, "INVALID_CONVERT_SETTINGS", 0
+    if not configure_parallel_workers(convert_settings):
+        return False, "INVALID_CONVERT_SETTINGS", 0
     if not _coerce_path_success(net_filepath_out):
         return False, "INVALID_OUTPUT_PATH", 0
     asc_validation_result = _asc.is_valid_ltspice_asc_file(asc_filepath)
@@ -173,6 +181,8 @@ def get_ltspice_asc_symbol_info(
 ) -> Dict[str, Dict[str, object]]:
     if not isinstance(convert_settings, Mapping):
         raise ValueError("convert_settings must be a mapping")
+    if not configure_parallel_workers(convert_settings):
+        raise ValueError("parallel_workers must be a positive integer")
     read_result = _asc._read_text_file_lines(asc_filepath)
     if not read_result[0]:
         raise ValueError(read_result[2])
@@ -461,40 +471,83 @@ def _resolve_windows_ltspice_path(convert_settings: Mapping[str, object]) -> str
 
 def _build_symbol_lookup(search_roots: Sequence[str]) -> Dict[str, SymbolDefinition]:
     cache_key = tuple(search_roots)
-    if cache_key in _SYMBOL_LOOKUP_CACHE:
-        return _SYMBOL_LOOKUP_CACHE[cache_key]
+    with _SYMBOL_CACHE_LOCK:
+        cached_lookup = _SYMBOL_LOOKUP_CACHE.get(cache_key)
+    if cached_lookup is not None:
+        return cached_lookup
     lookup: Dict[str, SymbolDefinition] = {}
-    for symbol_root in search_roots:
-        if not os.path.isdir(symbol_root):
-            continue
-        for symbol_path in Path(symbol_root).rglob("*.asy"):
-            relative_path = symbol_path.relative_to(symbol_root).as_posix()
-            definition = _load_symbol_definition(str(symbol_path), relative_path)
-            if definition is not None:
+    symbol_records = _discover_symbol_records(search_roots)
+    worker_count = parallel_worker_count(len(symbol_records))
+    if worker_count > 1 and len(symbol_records) >= 8:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            definitions = executor.map(_load_symbol_record, symbol_records)
+            loaded_records = zip(symbol_records, definitions)
+            for (_filepath, relative_path, filename, _stem), definition in loaded_records:
+                if definition is None:
+                    continue
                 lookup.setdefault(relative_path.lower(), definition)
-                lookup.setdefault(symbol_path.name.lower(), definition)
-    _SYMBOL_LOOKUP_CACHE[cache_key] = lookup
-    return lookup
+                lookup.setdefault(filename.lower(), definition)
+    else:
+        for filepath, relative_path, filename, _stem in symbol_records:
+            definition = _load_symbol_definition(filepath, relative_path)
+            if definition is None:
+                continue
+            lookup.setdefault(relative_path.lower(), definition)
+            lookup.setdefault(filename.lower(), definition)
+    with _SYMBOL_CACHE_LOCK:
+        return _SYMBOL_LOOKUP_CACHE.setdefault(cache_key, lookup)
 
 
 def _build_symbol_filepath_lookup(search_roots: Sequence[str]) -> Dict[str, str]:
     cache_key = tuple(search_roots)
-    if cache_key in _SYMBOL_FILEPATH_LOOKUP_CACHE:
-        return _SYMBOL_FILEPATH_LOOKUP_CACHE[cache_key]
+    with _SYMBOL_CACHE_LOCK:
+        cached_lookup = _SYMBOL_FILEPATH_LOOKUP_CACHE.get(cache_key)
+    if cached_lookup is not None:
+        return cached_lookup
     lookup: Dict[str, str] = {}
-    for symbol_root in search_roots:
-        if not os.path.isdir(symbol_root):
-            continue
-        for symbol_path in Path(symbol_root).rglob("*.asy"):
-            normalized_relative_path = symbol_path.relative_to(symbol_root).as_posix().lower()
-            normalized_filename = symbol_path.name.lower()
-            normalized_stem = symbol_path.stem.lower()
-            symbol_path_string = str(symbol_path)
-            lookup.setdefault(normalized_relative_path, symbol_path_string)
-            lookup.setdefault(normalized_filename, symbol_path_string)
-            lookup.setdefault(normalized_stem, symbol_path_string)
-    _SYMBOL_FILEPATH_LOOKUP_CACHE[cache_key] = lookup
-    return lookup
+    for filepath, relative_path, filename, stem in _discover_symbol_records(search_roots):
+        lookup.setdefault(relative_path.lower(), filepath)
+        lookup.setdefault(filename.lower(), filepath)
+        lookup.setdefault(stem.lower(), filepath)
+    with _SYMBOL_CACHE_LOCK:
+        return _SYMBOL_FILEPATH_LOOKUP_CACHE.setdefault(cache_key, lookup)
+
+
+def _discover_symbol_records(
+    search_roots: Sequence[str],
+) -> List[Tuple[str, str, str, str]]:
+    worker_count = parallel_worker_count(len(search_roots))
+    if worker_count > 1 and len(search_roots) > 1:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            records_by_root = executor.map(_discover_symbol_records_for_root, search_roots)
+            return [record for root_records in records_by_root for record in root_records]
+    return [
+        record
+        for symbol_root in search_roots
+        for record in _discover_symbol_records_for_root(symbol_root)
+    ]
+
+
+def _discover_symbol_records_for_root(symbol_root: str) -> List[Tuple[str, str, str, str]]:
+    if not os.path.isdir(symbol_root):
+        return []
+    records: List[Tuple[str, str, str, str]] = []
+    for symbol_path in Path(symbol_root).rglob("*.asy"):
+        records.append(
+            (
+                str(symbol_path),
+                symbol_path.relative_to(symbol_root).as_posix(),
+                symbol_path.name,
+                symbol_path.stem,
+            )
+        )
+    return records
+
+
+def _load_symbol_record(
+    symbol_record: Tuple[str, str, str, str],
+) -> Optional[SymbolDefinition]:
+    return _load_symbol_definition(symbol_record[0], symbol_record[1])
 
 
 def _build_library_lookup(search_roots: Sequence[str]) -> Dict[str, str]:
@@ -520,6 +573,7 @@ def _build_library_lookup(search_roots: Sequence[str]) -> Dict[str, str]:
     return lookup
 
 
+@lru_cache(maxsize=16384)
 def _load_symbol_definition(filepath: str, relative_path: str) -> Optional[SymbolDefinition]:
     try:
         symbol_text = Path(filepath).read_text(encoding="latin-1")

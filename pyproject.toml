@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "electronics_design"
-version = "0.1.7"
+version = "0.1.9"
 description = "General-purpose Python utilities for validating LTspice netlists."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,7 +20,9 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)"
 ]
 dependencies = [
+  "numba>=0.63.0",
   "networkx>=3.6.1",
+  "numpy>=1.22,<2.5",
   "Pillow>=10.0.0"
 ]
 

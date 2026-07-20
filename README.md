@@ -170,11 +170,17 @@ convert_settings = {
     "grid_size": 16,
     "autoplace_iter": 12,
     "ltspice_version": 4.1,
+    "parallel_workers": 8,
     "voltage_must_have_dc": False,
 }
 ```
 
 No hard-coded paths are permitted in `src/`; all search paths must be supplied through this mapping.
+
+CPU-bound geometry and routing kernels use Numba. Independent route candidates,
+visibility groups, and symbol-file discovery use bounded thread pools. The
+default worker count is the smaller of the available CPU count and eight; set
+the `ELECTRONICS_DESIGN_PARALLEL_WORKERS` environment variable to override it.
 
 Set `voltage_must_have_dc` to `True` to normalize AC-only independent voltage sources during netlist-to-symbol/ASC conversion. For example, `V1 IN 0 AC 2` is treated as `V1 IN 0 0 AC 2`. The default is `False`, which preserves existing behavior.
 
@@ -182,7 +188,7 @@ Set `voltage_must_have_dc` to `True` to normalize AC-only independent voltage so
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install "networkx>=3.6.1" "numpy" "Pillow>=10.0.0"
+.venv/bin/python -m pip install "numba>=0.63.0" "networkx>=3.6.1" "numpy<2.5" "Pillow>=10.0.0"
 ```
 
 Run tests:
@@ -263,6 +269,7 @@ convert_settings = {
     "grid_size": 16,
     "autoplace_iter": 12,
     "ltspice_version": 4.1,
+    "parallel_workers": 8,
     "voltage_must_have_dc": False,
 }
 

@@ -13,8 +13,10 @@ from typing import Tuple
 import zlib
 
 import networkx as nx
+import numpy as np
 
 from . import ltspice_net as _net
+from ._numba_kernels import fill_rgb_buffer_parallel
 
 ValidationResult = _net.ValidationResult
 
@@ -521,11 +523,9 @@ def _bitmap_text_width(text: str, scale: int) -> int:
 
 
 def _fill_canvas(canvas: bytearray, width: int, height: int, color: Tuple[int, int, int]) -> None:
-    red_channel, green_channel, blue_channel = color
-    for pixel_offset in range(0, width * height * 3, 3):
-        canvas[pixel_offset] = red_channel
-        canvas[pixel_offset + 1] = green_channel
-        canvas[pixel_offset + 2] = blue_channel
+    canvas_array = np.frombuffer(canvas, dtype=np.uint8)
+    color_array = np.asarray(color, dtype=np.uint8)
+    fill_rgb_buffer_parallel(canvas_array, color_array)
 
 
 def _set_pixel(
