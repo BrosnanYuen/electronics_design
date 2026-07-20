@@ -536,7 +536,13 @@ def _route_all_nets(
             other_net_exit_points,
         )
         if not route_result[0]:
-            return False, route_result[1], route_result[2], {}, net_name
+            return (
+                False,
+                f"{route_result[1]}: unable to physically route net '{net_name}'",
+                route_result[2],
+                {},
+                net_name,
+            )
         routed_wires[net_name] = route_result[3]
         processed_other_net_wires.extend(route_result[3])
     return True, "OK", 0, routed_wires, None
@@ -654,6 +660,7 @@ def _route_net_exit_points_with_obstacles(
         other_net_exit_points,
     )
     obstacle_array = _wire_rows_to_array((*symbol_obstacles, *other_net_endpoint_obstacles))
+    processed_wire_array = _wire_rows_to_array(processed_other_net_wires)
     visibility_graph = None
     while disconnected_points:
         connected_points = list(
@@ -682,6 +689,7 @@ def _route_net_exit_points_with_obstacles(
                     obstacle_array,
                     routing_grid,
                     routing_grid,
+                    processed_wire_array,
                 )
             except ValueError:
                 continue
@@ -695,6 +703,7 @@ def _route_net_exit_points_with_obstacles(
                     obstacle_array,
                     routing_grid,
                     routing_grid,
+                    processed_wire_array,
                 )
             for _distance, start_point, end_point in candidate_edges:
                 try:

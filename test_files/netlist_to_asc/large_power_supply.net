@@ -1,0 +1,93 @@
+* 80 Vrms 77 Hz input to +17.3 V/4 A and -3.7 V/3 A efficient supply
+* ADI LT4320-1 active bridges and ADI LTC3895 synchronous buck controllers
+* 200 mV input noise is interpreted as peak-to-peak (0.1 V peak at 10 kHz)
+
+* Rated 80 Vrms, 10 A source and series noise source
+VLINE LINE_CORE 0 SINE(0 113.13708499 77 0 0 90) Rser=0.05
+VNOISE PRI_TOP LINE_CORE SINE(0 0.1 10k)
+
+* Isolated 80:18:9 transformer represented by coupled LTspice inductors
+LPRI PRI_TOP 0 10 Rser=0.08
+LSECP SEC_P_A SEC_P_B 0.50625 Rser=0.01
+LSECN SEC_N_A SEC_N_B 0.1265625 Rser=0.005
+KXFMR LPRI LSECP LSECN 0.99999
+
+* Positive-secondary LT4320-1 ideal-diode bridge
+MBRP1 P_BUS P_TGP1 SEC_P_A SEC_P_A IPD220N06L3
+MBRP2 P_BUS P_TGP2 SEC_P_B SEC_P_B IPD220N06L3
+MBRP3 SEC_P_A P_BGP1 0 0 IPD220N06L3
+MBRP4 SEC_P_B P_BGP2 0 0 IPD220N06L3
+XBRIDGEP SEC_P_A P_TGP1 P_BGP2 P_BGP1 0 P_BUS P_TGP2 SEC_P_B LT4320-1
+CBULKP P_BUS 0 22000u Rser=0.01 IC=25.0
+
+* Negative-secondary LT4320-1 bridge; VNEG is its isolated local return
+MBRN1 N_BUS N_TGP1 SEC_N_A SEC_N_A IPD220N06L3
+MBRN2 N_BUS N_TGP2 SEC_N_B SEC_N_B IPD220N06L3
+MBRN3 SEC_N_A N_BGP1 VNEG VNEG IPD220N06L3
+MBRN4 SEC_N_B N_BGP2 VNEG VNEG IPD220N06L3
+XBRIDGEN SEC_N_A N_TGP1 N_BGP2 N_BGP1 VNEG N_BUS N_TGP2 SEC_N_B LT4320-1
+CBULKN N_BUS VNEG 10000u Rser=0.01 IC=12.5
+
+* +17.3 V synchronous buck power train
+MTOPP P_BUS P_TG P_SW P_SW BSC082N10LS
+MBOTP P_SW P_BG 0 0 BSC082N10LS
+LP P_SW P_SENSEP 15u Rser=0.005
+RSENSEP P_SENSEP VOUTP 0.005
+CSENSEP P_SENSEP VOUTP 1n
+COUTP VOUTP 0 2200u Rser=0.001 IC=17.3
+RLOADP VOUTP 0 4.325
+CINP P_BUS 0 0.47u
+CBOOTP P_BOOST P_SW 0.1u IC=5
+RFBUP VOUTP P_FB 752.8125k
+RFBDNP P_FB 0 36.5k
+CFFP VOUTP P_FB 10p
+CSSP P_SS 0 0.01u IC=1
+CITHP P_ITH 0 4.7n Rser=10k Cpar=100p
+RFREQP P_FREQ 0 30.1k
+RDRVSETP 0 P_DRVSET 75k
+CINTVCCP P_INTVCC 0 0.1u IC=5
+RPGOODP P_INTVCC P_PGOOD 511k
+MDRVP P_BUS P_NDRV P_DRVCC P_DRVCC Si4482DY
+CDRVCCP P_DRVCC 0 4.7u IC=5
+XBUCKP 0 NC_P_VPRG P_SENSEP VOUTP P_SS P_FB P_ITH 0 NC_P_09 P_INTVCC NC_P_CLK NC_P_12 0 P_PGOOD NC_P_15 NC_P_16 P_FREQ P_DRVSET 0 P_TG P_SW P_BOOST NC_P_23 P_BG NC_P_25 P_DRVCC NC_P_27 P_NDRV NC_P_29 P_BUS NC_P_31 VOUTP NC_P_33 P_BUS NC_P_35 P_INTVCC NC_P_ILIM P_INTVCC 0 LTC3895
+
+* Floating +3.7 V local buck: tying its positive output to system ground
+* makes its controller/power return VNEG equal to -3.7 V system-referenced.
+MTOPN N_BUS N_TG N_SW N_SW BSC082N10LS
+MBOTN N_SW N_BG VNEG VNEG BSC082N10LS
+LN N_SW N_SENSEP 10u Rser=0.005
+RSENSEN N_SENSEP 0 0.008
+CSENSEN N_SENSEP 0 1n
+COUTN 0 VNEG 3300u Rser=0.001 IC=3.7
+RLOADN 0 VNEG 1.23333333333
+CINN N_BUS VNEG 0.47u
+CBOOTN N_BOOST N_SW 0.1u IC=5
+RFBUN 0 N_FB 132.3125k
+RFBDNN N_FB VNEG 36.5k
+CFFN 0 N_FB 10p
+CSSN N_SS VNEG 0.01u IC=1
+CITHN N_ITH VNEG 4.7n Rser=10k Cpar=100p
+RFREQN N_FREQ VNEG 30.1k
+RDRVSETN VNEG N_DRVSET 75k
+CINTVCCN N_INTVCC VNEG 0.1u IC=5
+RPGOODN N_INTVCC N_PGOOD 511k
+MDRVN N_BUS N_NDRV N_DRVCC N_DRVCC Si4482DY
+CDRVCCN N_DRVCC VNEG 4.7u IC=5
+XBUCKN VNEG NC_N_VPRG N_SENSEP 0 N_SS N_FB N_ITH VNEG NC_N_09 N_INTVCC NC_N_CLK NC_N_12 VNEG N_PGOOD NC_N_15 NC_N_16 N_FREQ N_DRVSET VNEG N_TG N_SW N_BOOST NC_N_23 N_BG NC_N_25 N_DRVCC NC_N_27 N_NDRV NC_N_29 N_BUS NC_N_31 0 NC_N_33 N_BUS NC_N_35 N_INTVCC NC_N_ILIM N_INTVCC VNEG LTC3895
+
+* Installed LTspice/Analog Devices library models only
+.model NMOS NMOS
+.model PMOS PMOS
+.lib C:\users\brosnan\AppData\Local\LTspice\lib\cmp\standard.mos
+* Library below included based on ModelFile attribute of instance XBRIDGEP (C:\users\user\AppData\Local\LTspice\lib\sym\SpecialFunctions\LT4320-1.asy)
+* Library below included based on ModelFile attribute of instance XBRIDGEN (C:\users\user\AppData\Local\LTspice\lib\sym\SpecialFunctions\LT4320-1.asy)
+.lib LT4320-1.sub
+* Library below included based on ModelFile attribute of instance XBUCKP (C:\users\user\AppData\Local\LTspice\lib\sym\PowerProducts\LTC3895.asy)
+* Library below included based on ModelFile attribute of instance XBUCKN (C:\users\user\AppData\Local\LTspice\lib\sym\PowerProducts\LTC3895.asy)
+.lib LTC3895.sub
+
+.options plotwinsize=0 numdgt=7 method=gear reltol=0.003 trtol=10
+.save V(PRI_TOP) V(P_BUS) V(N_BUS,VNEG) V(VOUTP) V(VNEG) I(VLINE)
+.tran 0 0.9m 0.7m 0.2u uic
+.backanno
+.end

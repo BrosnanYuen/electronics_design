@@ -17,6 +17,7 @@ import numpy as np
 from .pathtracing import are_wires_connected
 from .pathtracing import are_wires_horizontal_or_vertical
 from .pathtracing import are_wires_intersecting_obstacles_fast
+from .pathtracing import _wire_obstacle_intersection_matrix
 
 Point = Tuple[int, int]
 Segment = Tuple[int, int, int, int]
@@ -159,8 +160,17 @@ def _build_visibility_graph_for_terminals(
     obstacles: np.ndarray,
     grid_x: int,
     grid_y: int,
+    forbidden_point_obstacles: Optional[np.ndarray] = None,
 ) -> nx.Graph:
     candidate_points = _build_candidate_points_for_terminals(terminals, obstacles, grid_x, grid_y)
+    if forbidden_point_obstacles is not None and len(forbidden_point_obstacles) > 0:
+        terminal_points = set(terminals)
+        candidate_points = [
+            point
+            for point in candidate_points
+            if point in terminal_points
+            or not _point_hits_any_obstacle(point, forbidden_point_obstacles)
+        ]
     return _build_visibility_graph(candidate_points, obstacles)
 
 
@@ -170,6 +180,7 @@ def _route_simple_orthogonal(
     obstacles: np.ndarray,
     grid_x: int,
     grid_y: int,
+    forbidden_point_obstacles: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Try direct, L, and three-segment channel routes before graph search.
 
@@ -248,7 +259,19 @@ def _route_simple_orthogonal(
             )
         except ValueError:
             continue
+        if forbidden_point_obstacles is not None and _route_points_hit_any_obstacle(
+            wires,
+            forbidden_point_obstacles,
+        ):
+            continue
         route_length = sum(_segment_length(tuple(int(value) for value in row)) for row in wires)
+        # A direct route is globally optimal.  A valid one-bend route is also
+        # globally optimal when the endpoints are on different axes: every
+        # orthogonal route has at least two segments and at least the same
+        # Manhattan length.  Avoid evaluating hundreds of obstacle-derived
+        # tracks after either optimum has already been found.
+        if len(wires) <= 2:
+            return wires
         valid_routes.append((len(wires), route_length, wires))
     if not valid_routes:
         raise ValueError("no simple orthogonal route found")
@@ -320,11 +343,29 @@ def _add_visible_edges(
     # Add edges between consecutive visible collinear points.  Edges that
     # cross an obstacle are skipped so the graph still connects around it
     # via other collinear points.
-    for first_point, second_point in zip(ordered_points, ordered_points[1:]):
-        segment = (first_point[0], first_point[1], second_point[0], second_point[1])
-        if _segment_hits_any_obstacle(segment, obstacles):
+    point_pairs = list(zip(ordered_points, ordered_points[1:]))
+    if not point_pairs:
+        return
+    segments = np.asarray(
+        [
+            (first_point[0], first_point[1], second_point[0], second_point[1])
+            for first_point, second_point in point_pairs
+        ],
+        dtype=int,
+    )
+    blocked_segments = np.any(
+        _wire_obstacle_intersection_matrix(segments, obstacles),
+        axis=1,
+    )
+    for (first_point, second_point), segment, is_blocked in zip(
+        point_pairs,
+        segments,
+        blocked_segments,
+    ):
+        if is_blocked:
             continue
-        segment_len = _segment_length(segment)
+        segment_row = tuple(int(value) for value in segment)
+        segment_len = _segment_length(segment_row)
         graph.add_edge(first_point, second_point, length=segment_len, weight=segment_penalty + segment_len)
 
 
@@ -478,10 +519,36 @@ def _validate_generated_route(
 
 
 def _point_hits_any_obstacle(point: Point, obstacles: np.ndarray) -> bool:
-    for obstacle in obstacles:
-        if _point_on_segment(point, (int(obstacle[0]), int(obstacle[1]), int(obstacle[2]), int(obstacle[3]))):
-            return True
-    return False
+    if len(obstacles) == 0:
+        return False
+    point_x, point_y = point
+    vertical = obstacles[:, 0] == obstacles[:, 2]
+    horizontal = obstacles[:, 1] == obstacles[:, 3]
+    minimum_x = np.minimum(obstacles[:, 0], obstacles[:, 2])
+    maximum_x = np.maximum(obstacles[:, 0], obstacles[:, 2])
+    minimum_y = np.minimum(obstacles[:, 1], obstacles[:, 3])
+    maximum_y = np.maximum(obstacles[:, 1], obstacles[:, 3])
+    return bool(
+        np.any(
+            (vertical & (obstacles[:, 0] == point_x) & (minimum_y <= point_y) & (point_y <= maximum_y))
+            | (horizontal & (obstacles[:, 1] == point_y) & (minimum_x <= point_x) & (point_x <= maximum_x))
+        )
+    )
+
+
+def _route_points_hit_any_obstacle(wires: np.ndarray, obstacles: np.ndarray) -> bool:
+    """Return whether any generated route endpoint lies on an obstacle."""
+
+    if len(obstacles) == 0:
+        return False
+    route_points = {
+        (int(row[0]), int(row[1]))
+        for row in wires
+    } | {
+        (int(row[2]), int(row[3]))
+        for row in wires
+    }
+    return any(_point_hits_any_obstacle(point, obstacles) for point in route_points)
 
 
 def _point_on_segment(point: Point, segment: Segment) -> bool:
@@ -493,10 +560,10 @@ def _point_on_segment(point: Point, segment: Segment) -> bool:
 
 
 def _segment_hits_any_obstacle(segment: Segment, obstacles: np.ndarray) -> bool:
-    for obstacle in obstacles:
-        if _segments_intersect(segment, (int(obstacle[0]), int(obstacle[1]), int(obstacle[2]), int(obstacle[3]))):
-            return True
-    return False
+    return are_wires_intersecting_obstacles_fast(
+        np.asarray([segment], dtype=int),
+        obstacles,
+    )
 
 
 def _segments_intersect(first_segment: Segment, second_segment: Segment) -> bool:

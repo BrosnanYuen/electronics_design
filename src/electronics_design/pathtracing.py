@@ -65,11 +65,67 @@ def are_wires_intersecting_obstacles_fast(wires: np.ndarray, obstacles: np.ndarr
         raise ValueError("wires must be a 2D array with 4 columns: X1, Y1, X2, Y2")
     if obstacles.ndim != 2 or obstacles.shape[1] != 4:
         raise ValueError("obstacles must be a 2D array with 4 columns: X1, Y1, X2, Y2")
-    for wire in wires:
-        for obstacle in obstacles:
-            if _lines_intersect(tuple(wire), tuple(obstacle)):
-                return True
-    return False
+    return bool(np.any(_wire_obstacle_intersection_matrix(wires, obstacles)))
+
+
+def _wire_obstacle_intersection_matrix(wires: np.ndarray, obstacles: np.ndarray) -> np.ndarray:
+    """Return one inclusive intersection flag for every wire/obstacle pair."""
+
+    if len(wires) == 0 or len(obstacles) == 0:
+        return np.zeros((len(wires), len(obstacles)), dtype=bool)
+
+    wire_vertical = wires[:, 0] == wires[:, 2]
+    wire_horizontal = wires[:, 1] == wires[:, 3]
+    obstacle_vertical = obstacles[:, 0] == obstacles[:, 2]
+    obstacle_horizontal = obstacles[:, 1] == obstacles[:, 3]
+    if bool(np.all(wire_vertical | wire_horizontal)) and bool(
+        np.all(obstacle_vertical | obstacle_horizontal)
+    ):
+        wire_min_x = np.minimum(wires[:, 0], wires[:, 2])[:, None]
+        wire_max_x = np.maximum(wires[:, 0], wires[:, 2])[:, None]
+        wire_min_y = np.minimum(wires[:, 1], wires[:, 3])[:, None]
+        wire_max_y = np.maximum(wires[:, 1], wires[:, 3])[:, None]
+        obstacle_min_x = np.minimum(obstacles[:, 0], obstacles[:, 2])[None, :]
+        obstacle_max_x = np.maximum(obstacles[:, 0], obstacles[:, 2])[None, :]
+        obstacle_min_y = np.minimum(obstacles[:, 1], obstacles[:, 3])[None, :]
+        obstacle_max_y = np.maximum(obstacles[:, 1], obstacles[:, 3])[None, :]
+
+        vertical_pairs = wire_vertical[:, None] & obstacle_vertical[None, :]
+        vertical_intersections = vertical_pairs & (wires[:, 0, None] == obstacles[None, :, 0]) & (
+            np.maximum(wire_min_y, obstacle_min_y) <= np.minimum(wire_max_y, obstacle_max_y)
+        )
+        horizontal_pairs = wire_horizontal[:, None] & obstacle_horizontal[None, :]
+        horizontal_intersections = horizontal_pairs & (wires[:, 1, None] == obstacles[None, :, 1]) & (
+            np.maximum(wire_min_x, obstacle_min_x) <= np.minimum(wire_max_x, obstacle_max_x)
+        )
+        wire_vertical_crossings = wire_vertical[:, None] & obstacle_horizontal[None, :] & (
+            obstacle_min_x <= wires[:, 0, None]
+        ) & (wires[:, 0, None] <= obstacle_max_x) & (
+            wire_min_y <= obstacles[None, :, 1]
+        ) & (obstacles[None, :, 1] <= wire_max_y)
+        wire_horizontal_crossings = wire_horizontal[:, None] & obstacle_vertical[None, :] & (
+            wire_min_x <= obstacles[None, :, 0]
+        ) & (obstacles[None, :, 0] <= wire_max_x) & (
+            obstacle_min_y <= wires[:, 1, None]
+        ) & (wires[:, 1, None] <= obstacle_max_y)
+        return (
+            vertical_intersections
+            | horizontal_intersections
+            | wire_vertical_crossings
+            | wire_horizontal_crossings
+        )
+
+    # Preserve support for arbitrary non-axis-aligned input.  Autorouting uses
+    # the vectorized orthogonal path above, while this fallback retains the
+    # public helper's prior general segment behavior.
+    intersections = np.zeros((len(wires), len(obstacles)), dtype=bool)
+    for wire_index, wire in enumerate(wires):
+        for obstacle_index, obstacle in enumerate(obstacles):
+            intersections[wire_index, obstacle_index] = _lines_intersect(
+                tuple(wire),
+                tuple(obstacle),
+            )
+    return intersections
 
 
 def are_wires_intersecting_obstacles_detailed(

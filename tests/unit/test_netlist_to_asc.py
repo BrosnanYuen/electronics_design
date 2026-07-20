@@ -21,11 +21,24 @@ _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 _VALID_CONVERT_DIRECTORY = _ROOT_DIRECTORY / "valid_convert"
 _VALID_NETLIST_DIRECTORY = _VALID_CONVERT_DIRECTORY / "netlist"
 _VALID_ASC_GEN_DIRECTORY = _VALID_CONVERT_DIRECTORY / "asc_gen"
+_NETLIST_TO_ASC_FIXTURE_DIRECTORY = _ROOT_DIRECTORY / "test_files" / "netlist_to_asc"
 _CONVERT_SETTINGS = {
     "ltspice_windows_path": "C:\\users\\brosnan\\AppData\\Local\\LTspice\\",
     "ltspice_wine_path": "~/.wine/drive_c/users/brosnan/AppData/Local/LTspice/",
     "custom_search_paths": ["./valid_asy/"],
     "minimum_dist": 16,
+    "wire_pin_out_dist": 16,
+    "autoplace_iter": 12,
+    "grid_size": 16,
+    "ltspice_version": 4.1,
+    "voltage_must_have_dc": False,
+}
+_LARGE_POWER_SUPPLY_CONVERT_SETTINGS = {
+    "custom_search_paths": [
+        str(_ROOT_DIRECTORY / "valid_asy"),
+        str(_NETLIST_TO_ASC_FIXTURE_DIRECTORY / "symbols"),
+    ],
+    "minimum_dist": 32,
     "wire_pin_out_dist": 16,
     "autoplace_iter": 12,
     "grid_size": 16,
@@ -65,6 +78,31 @@ def _wire_group_signatures(wire_groups: list[np.ndarray]) -> set[frozenset[tuple
 
 
 class TestNetlistToAsc(unittest.TestCase):
+    def test_large_power_supply_routes_without_external_ltspice_paths(self) -> None:
+        netlist_path = _NETLIST_TO_ASC_FIXTURE_DIRECTORY / "large_power_supply.net"
+        self.assertTrue(netlist_path.is_file())
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "large_power_supply.asc"
+            result = ltspice_netlist_to_asc(
+                str(netlist_path),
+                str(output_path),
+                _LARGE_POWER_SUPPLY_CONVERT_SETTINGS,
+            )
+
+            self.assertEqual(
+                result,
+                (True, "OK", 0),
+                msg="The large multi-controller supply should place and physically route every net.",
+            )
+            self.assertEqual(is_valid_ltspice_asc_file(str(output_path)), (True, ""))
+            asc_lines = output_path.read_text(encoding="latin-1").splitlines()
+            self.assertEqual(sum(line.startswith("SYMBOL ") for line in asc_lines), 59)
+            self.assertGreater(
+                sum(line.startswith("WIRE ") for line in asc_lines),
+                100,
+                msg="The regression must emit physical wires rather than disconnected label stubs.",
+            )
+
     def test_selected_valid_convert_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             for fixture_name in _SELECTED_FIXTURES:

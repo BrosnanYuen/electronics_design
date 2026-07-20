@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 import unittest
+from unittest import mock
 
 import numpy as np
 
+from electronics_design import autoroute
 from electronics_design import auto_route_wires
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
@@ -77,6 +79,40 @@ def _path_matches_flags(wires: np.ndarray, start_point: tuple[int, int], end_poi
 
 
 class TestAutoRouteWires(unittest.TestCase):
+    def test_simple_route_avoids_forbidden_junction_points(self) -> None:
+        result = autoroute._route_simple_orthogonal(
+            (0, 0),
+            (64, 64),
+            np.empty((0, 4), dtype=int),
+            _GRID_X,
+            _GRID_Y,
+            np.array([[64, -16, 64, 16]], dtype=int),
+        )
+
+        np.testing.assert_array_equal(
+            result,
+            np.array([[0, 0, 0, 64], [0, 64, 64, 64]], dtype=int),
+        )
+
+    def test_direct_route_stops_after_first_optimal_candidate(self) -> None:
+        with mock.patch.object(
+            autoroute,
+            "_validate_generated_route",
+            wraps=autoroute._validate_generated_route,
+        ) as validate_route:
+            result = auto_route_wires(
+                0,
+                0,
+                64,
+                0,
+                np.array([[0, 32, 64, 32]], dtype=int),
+                _GRID_X,
+                _GRID_Y,
+            )
+
+        np.testing.assert_array_equal(result, np.array([[0, 0, 64, 0]], dtype=int))
+        self.assertEqual(validate_route.call_count, 1)
+
     def test_valid_route_fixtures(self) -> None:
         for fixture_path in sorted(_VALID_DIRECTORY.glob("*.txt")):
             with self.subTest(fixture=fixture_path.name):
