@@ -9,6 +9,10 @@ from electronics_design import is_valid_ltspice_asc_file  # Import the public AS
 from electronics_design import is_valid_ltspice_asc_footer  # Import the public ASC footer validator.
 from electronics_design import is_valid_ltspice_asc_header  # Import the public ASC header validator.
 from electronics_design import is_valid_ltspice_asc_spacing  # Import the public ASC spacing validator.
+from electronics_design import is_valid_kicad_sch_file  # Import the public KiCad schematic whole-file validator.
+from electronics_design import is_valid_kicad_sch_footer  # Import the public KiCad schematic footer validator.
+from electronics_design import is_valid_kicad_sch_header  # Import the public KiCad schematic header validator.
+from electronics_design import is_valid_kicad_sch_spacing  # Import the public KiCad schematic spacing validator.
 from electronics_design import is_ltspice_netlist_structure_connected  # Import the public connectivity validator.
 from electronics_design import is_valid_ltspice_netlist_file  # Import the public whole-file validator.
 from electronics_design import is_valid_ltspice_netlist_footer  # Import the public footer validator.
@@ -30,6 +34,10 @@ class TestApiErrors(unittest.TestCase):  # Group filesystem error-path tests tog
             is_valid_ltspice_netlist_footer,
             is_ltspice_netlist_structure_connected,
             is_valid_ltspice_netlist_file,
+            is_valid_kicad_sch_header,
+            is_valid_kicad_sch_spacing,
+            is_valid_kicad_sch_footer,
+            is_valid_kicad_sch_file,
         ):
             result = validator("does_not_exist.net")  # Execute the validator against a missing path.
             self.assertEqual(result, (False, "File not found!"))  # Assert that the validator returns the required missing-file response.
@@ -42,9 +50,10 @@ class TestApiErrors(unittest.TestCase):  # Group filesystem error-path tests tog
         compare_result = ltspice_netlist_structure_cmp("does_not_exist.net", "does_not_exist_too.net")  # Execute the comparison helper against missing source paths.
         self.assertFalse(compare_result)  # Assert that the comparison helper returns False when validation cannot proceed.
 
+    @mock.patch("electronics_design.kicad_sch.os.access", return_value=False)  # Force a read-permission failure for the KiCad schematic validators.
     @mock.patch("electronics_design.ltspice.os.access", return_value=False)  # Force a read-permission failure after existence succeeds.
     @mock.patch("electronics_design.ltspice.os.path.exists", return_value=True)  # Force the existence check to pass for the mocked path.
-    def test_permission_error_returns_expected_message(self, _mock_exists: mock.Mock, _mock_access: mock.Mock) -> None:  # Verify that all public validators map permission failures consistently.
+    def test_permission_error_returns_expected_message(self, _mock_exists: mock.Mock, _mock_access: mock.Mock, _mock_kicad_access: mock.Mock) -> None:  # Verify that all public validators map permission failures consistently.
         for validator in (  # Walk every public validator that returns the shared tuple contract.
             is_valid_ltspice_asc_header,
             is_valid_ltspice_asc_spacing,
@@ -54,6 +63,10 @@ class TestApiErrors(unittest.TestCase):  # Group filesystem error-path tests tog
             is_valid_ltspice_netlist_footer,
             is_ltspice_netlist_structure_connected,
             is_valid_ltspice_netlist_file,
+            is_valid_kicad_sch_header,
+            is_valid_kicad_sch_spacing,
+            is_valid_kicad_sch_footer,
+            is_valid_kicad_sch_file,
         ):
             result = validator("permission_denied.net")  # Execute the validator against the mocked path.
             self.assertEqual(result, (False, "No permission to read file!"))  # Assert that the validator returns the required permission response.

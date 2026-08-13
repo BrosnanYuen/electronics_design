@@ -16,11 +16,16 @@ from . import ltspice_netlist_to_wiring as _netlist_to_wiring  # Import the netl
 from . import ltspice_resolve_symbol_pose as _resolve_symbol_pose  # Import the symbol-pose resolution module.
 from . import ltspice_symbol_estimate as _symbol_estimate  # Import the supporting-symbol estimate module.
 from . import pathtracing as _pathtracing  # Import the path tracing GUI module.
+from . import kicad_sch as _kicad_sch  # Import the KiCad schematic validation module.
 
 is_valid_ltspice_asc_header = _asc.is_valid_ltspice_asc_header  # Re-export the ASC header validator.
 is_valid_ltspice_asc_spacing = _asc.is_valid_ltspice_asc_spacing  # Re-export the ASC spacing validator.
 is_valid_ltspice_asc_footer = _asc.is_valid_ltspice_asc_footer  # Re-export the ASC footer validator.
 is_valid_ltspice_asc_file = _asc.is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
+is_valid_kicad_sch_header = _kicad_sch.is_valid_kicad_sch_header  # Re-export the KiCad schematic header validator.
+is_valid_kicad_sch_spacing = _kicad_sch.is_valid_kicad_sch_spacing  # Re-export the KiCad schematic spacing validator.
+is_valid_kicad_sch_footer = _kicad_sch.is_valid_kicad_sch_footer  # Re-export the KiCad schematic footer validator.
+is_valid_kicad_sch_file = _kicad_sch.is_valid_kicad_sch_file  # Re-export the KiCad schematic whole-file validator.
 ltspice_asc_to_netlist = _asc_to_netlist.ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 ltspice_asc_structure_cmp = _asc_to_netlist.ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
 ltspice_autoplace_symbol_pose = _autoplace_symbol_pose.ltspice_autoplace_symbol_pose  # Re-export the symbol autoplace helper.
@@ -63,6 +68,10 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "is_valid_ltspice_asc_spacing",  # Export the ASC spacing validator.
     "is_valid_ltspice_asc_footer",  # Export the ASC footer validator.
     "is_valid_ltspice_asc_file",  # Export the ASC whole-file validator.
+    "is_valid_kicad_sch_header",  # Export the KiCad schematic header validator.
+    "is_valid_kicad_sch_spacing",  # Export the KiCad schematic spacing validator.
+    "is_valid_kicad_sch_footer",  # Export the KiCad schematic footer validator.
+    "is_valid_kicad_sch_file",  # Export the KiCad schematic whole-file validator.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper.
     "ltspice_autoplace_symbol_pose",  # Export the symbol autoplace helper.

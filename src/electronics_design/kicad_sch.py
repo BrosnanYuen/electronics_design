@@ -40,7 +40,7 @@ def is_valid_kicad_sch_header(filepath: str) -> ValidationResult:  # Validate th
         return False, read_result[2]  # Propagate the exact file access error message.
     parse_result = _parse_sch_text("\n".join(read_result[1]))  # Parse the schematic text into an S-expression tree.
     if not parse_result[0]:  # Stop when the file is not even valid S-expression syntax.
-        return False, _format_line_message("Header information is invalid!", parse_result[2])  # Report the parse failure line as a header problem.
+        return False, _format_line_message("Line format/spacing is invalid!", parse_result[2])  # Report the parse failure so callers fix syntax before header checks.
     root = parse_result[1]  # Read the parsed root node.
     header_result = _validate_sch_header_nodes(root)  # Validate the root node header structure.
     if not header_result[0]:  # Stop when a header problem is detected.

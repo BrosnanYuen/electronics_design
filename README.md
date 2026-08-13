@@ -1,6 +1,6 @@
 # electronics_design
 
-Python library for validating, converting, plotting, and comparing LTspice schematic (`.asc`), symbol (`.asy`), and netlist (`.net`) files.  Also supports symbol-pose resolution, automatic symbol placement, and orthogonal wire routing from netlists.
+Python library for validating, converting, plotting, and comparing LTspice schematic (`.asc`), symbol (`.asy`), and netlist (`.net`) files, plus KiCad schematic (`.kicad_sch`) validation.  Also supports symbol-pose resolution, automatic symbol placement, and orthogonal wire routing from netlists.
 
 ## API Reference
 
@@ -19,6 +19,24 @@ Python library for validating, converting, plotting, and comparing LTspice schem
 - **Whole-file** composes header, spacing, and footer validators.
 
 Error messages: `"File not found!"`, `"No permission to read file!"`, or `"<type> information is invalid! Line <n>"`.
+
+### KiCad Schematic Validation
+
+| Function | Returns |
+|---|---|
+| `is_valid_kicad_sch_header(filepath)` | `(bool, str)` |
+| `is_valid_kicad_sch_spacing(filepath)` | `(bool, str)` |
+| `is_valid_kicad_sch_footer(filepath)` | `(bool, str)` |
+| `is_valid_kicad_sch_file(filepath)` | `(bool, str)` |
+
+Validators for KiCad s-expression schematic files, per the KiCad schematic file format (see `kicad_docs/sexpr-schematic.md`).  Parsing uses a vendored S-expression parser copied from the MIT-licensed `kicad-tools` project (Copyright (c) 2024 RJ Walters); the validation profile mirrors the minimal schematic shape produced by the MIT-licensed `KiCAD-MCP-Server` project.
+
+- **Header** requires the root to be `kicad_sch` with exactly one `version` (YYYYMMDD date format), `generator`, `uuid`, and `paper` section.  Files that do not parse as valid S-expressions report a spacing error instead.
+- **Spacing** validates the whole file as well-formed KiCad S-expressions (balanced parentheses, terminated quoted strings, no trailing content).
+- **Footer** requires the closing region: a `sheet_instances` section with at least one `path` entry beginning with `/`, and a final nonblank line ending with the root's closing `)`.
+- **Whole-file** composes header, spacing, and footer validators.
+
+Error messages follow the same contract as ASC validation: `"File not found!"`, `"No permission to read file!"`, or `"<type> information is invalid! Line <n>"`.
 
 ### Netlist Validation
 
@@ -236,6 +254,10 @@ from electronics_design import is_valid_ltspice_asc_footer
 from electronics_design import is_valid_ltspice_asc_header
 from electronics_design import is_valid_ltspice_asc_spacing
 from electronics_design import is_valid_ltspice_asy
+from electronics_design import is_valid_kicad_sch_file
+from electronics_design import is_valid_kicad_sch_footer
+from electronics_design import is_valid_kicad_sch_header
+from electronics_design import is_valid_kicad_sch_spacing
 from electronics_design import is_valid_ltspice_netlist_file
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_valid_ltspice_netlist_format
@@ -284,6 +306,12 @@ fmt_ok, _ = is_valid_ltspice_netlist_format("example.net")
 net_footer_ok, _ = is_valid_ltspice_netlist_footer("example.net")
 conn_ok, _ = is_ltspice_netlist_structure_connected("example.net")
 net_ok, _ = is_valid_ltspice_netlist_file("example.net")
+
+# KiCad schematic validation
+kicad_header_ok, _ = is_valid_kicad_sch_header("example.kicad_sch")
+kicad_spacing_ok, _ = is_valid_kicad_sch_spacing("example.kicad_sch")
+kicad_footer_ok, _ = is_valid_kicad_sch_footer("example.kicad_sch")
+kicad_sch_ok, _ = is_valid_kicad_sch_file("example.kicad_sch")
 
 # ASY
 asy_ok, _ = is_valid_ltspice_asy("example.asy")
@@ -342,6 +370,8 @@ path = auto_route_wires(0, 0, 128, 128, obstacles, 16, 16)
 src/electronics_design/
     __init__.py
     autoroute.py
+    kicad_sch.py
+    kicad_sexp_parser.py
     ltspice.py
     ltspice_asc.py
     ltspice_asc_to_netlist.py
