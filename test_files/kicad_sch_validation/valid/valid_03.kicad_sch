@@ -1,0 +1,16 @@
+(kicad_sch
+	(version 20260101)
+	(generator "eeschema")
+	(uuid "3416f9e7-1696-480f-8bf9-d011824c3cf0")
+	(paper "A4")
+	; a comment line inside the schematic
+	(lib_symbols
+		(symbol "Device:C"
+			(property "Description" "Cap\nwith\ttab")
+		)
+	)
+	# another comment line
+	(sheet_instances
+		(path "/" (page "1"))
+	)
+)

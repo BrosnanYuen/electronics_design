@@ -1,0 +1,9 @@
+(kicad_pcb
+	(version 20231120)
+	(generator "eeschema")
+	(uuid "3416f9e7-1696-480f-8bf9-d011824c3cf0")
+	(paper "A4")
+	(sheet_instances
+		(path "/" (page "1"))
+	)
+)
