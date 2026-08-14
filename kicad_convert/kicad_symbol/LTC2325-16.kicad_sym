@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_DFN_QFN:QFN-52-1EP_7x8mm_P0.5mm_EP5.41x6.45mm_ThermalVias"
-			(at -1.27 -55.88 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/232516fa.pdf"
-			(at -6.35 60.96 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Quad, 16-Bit, 5Msps/Ch Simultaneous Sampling ADC, LVDS/CMOS interface, QFN-52"
 			(at 0 0 0)
 			(show_name no)

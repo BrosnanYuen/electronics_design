@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_SO:MSOP-16-1EP_3x4.039mm_P0.5mm_EP1.651x2.845mm"
-			(at 34.29 21.59 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/231116fa.pdf"
-			(at 48.26 19.05 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "16-Bit, 5Msps Differential Input ADC with Wide Input Common Mode Range, LVDS/CMOS interface, MSOP-16"
 			(at 0 0 0)
 			(show_name no)

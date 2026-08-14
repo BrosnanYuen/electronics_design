@@ -31,28 +31,6 @@
 				)
 			)
 		)
-		(property "Footprint" ""
-			(at -20.32 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/lt1152.pdf"
-			(at -20.32 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Rail-to-Rail Input, Rail-to-Rail Output, Zero-Drift Op Amp, DIP-8, SOIC-8"
 			(at 0 0 0)
 			(show_name no)

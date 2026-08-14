@@ -30,28 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_CSP:Analog_LFCSP-16-1EP_4x4mm_P0.65mm_EP2.1x2.1mm"
-			(at 0 -21.59 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/ad8231.pdf"
-			(at 0 -24.13 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Zero Drift, Digitally programmable instrumentation amplifier, 2.7MHz bandwidth, LFCSP-16"
 			(at 0 -26.67 0)
 			(show_name no)

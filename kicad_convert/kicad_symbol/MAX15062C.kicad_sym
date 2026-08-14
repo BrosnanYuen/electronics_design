@@ -30,29 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_DFN_QFN:DFN-8_2x2mm_P0.5mm"
-			(at 0 13.97 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/max15062.pdf"
-			(at 0 -1.27 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "60V, 300mA, synchronous step-down dc-dc converter, 3.3V fixed output voltage, DFN-8 / WSON-8"
 			(at 0 0 0)
 			(show_name no)
@@ -294,29 +271,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-			)
-		)
-		(property "Footprint" "Package_DFN_QFN:DFN-8_2x2mm_P0.5mm"
-			(at 0 13.97 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/max15062.pdf"
-			(at 0 -1.27 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
 			)
 		)
 		(property "Description" "60V, 300mA, synchronous step-down dc-dc converter, adjustable output voltage, DFN-8 / WSON-8"

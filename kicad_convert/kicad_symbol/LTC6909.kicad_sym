@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_SO:MSOP-16_3x4.039mm_P0.5mm"
-			(at 0 13.97 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/6909fa.pdf"
-			(at -6.35 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Multiphase oscillator, spread spectrum frequency modulation, MSOP-16"
 			(at 0 0 0)
 			(show_name no)

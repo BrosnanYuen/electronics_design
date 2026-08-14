@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_BGA:Analog_BGA-28_4x6.25mm_Layout4x7_P0.8mm"
-			(at 20.32 -12.7 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/8063fa.pdf"
-			(at 22.86 19.05 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "40VIN, 2A Silent Switcher µModule Regulator, BGA-28"
 			(at 0 0 0)
 			(show_name no)

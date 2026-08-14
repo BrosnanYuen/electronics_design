@@ -33,29 +33,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
-			(at 0 -6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/ADA4807-1_4807-2_4807-4.pdf"
-			(at 0 -8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
 		(property "Description" "Single Rail-to-Rail Input/Output Amplifiers, with disable, SC-70-6/SOT-23-6"
 			(at 0 0 0)
 			(show_name no)

@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_CSP:LFCSP-24-1EP_4x4mm_P0.5mm_EP0.5x0.5mm"
-			(at 0 -29.972 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/ad7380-4.pdf"
-			(at 0 -27.94 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Differential Input, Quad, External Reference Simultaneous Sampling, 16-bit resolution, SAR ADC, SNR = 92 dB at VREF=3.3V, UQFN-24 (LFCSP-24)"
 			(at 0 -26.162 0)
 			(show_name no)

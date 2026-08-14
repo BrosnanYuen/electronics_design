@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_BGA:Analog_BGA-209_9.5x16mm_Layout11x19_P0.8mm"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/LTM4671.pdf"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Quad DC/DC uModule Regulator with Configurable Dual 0.6-3.3V/12A, Dual 0.6-5.5V/5A Output Array, 3.1-20Vin (BGA-209)"
 			(at 0 0 0)
 			(show_name no)

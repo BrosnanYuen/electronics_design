@@ -31,28 +31,6 @@
 				)
 			)
 		)
-		(property "Footprint" ""
-			(at 0 -2.54 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/1249fbs.pdf"
-			(at 0 -5.08 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Power Factor Controller, DIP-8/SOIC-8"
 			(at 0 0 0)
 			(show_name no)

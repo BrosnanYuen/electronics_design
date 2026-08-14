@@ -30,29 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_SO:TSSOP-16-1EP_4.4x5mm_P0.65mm"
-			(at 3.81 -13.97 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/3439fs.pdf"
-			(at 2.54 -2.54 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "1A Slew Rate Controlled Ultralow Noise Isolated DC/DC Transformer Driver, TSSOP-16"
 			(at 0 0 0)
 			(show_name no)

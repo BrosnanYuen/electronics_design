@@ -30,29 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_SO:TSSOP-14-1EP_4.4x5mm_P0.65mm"
-			(at 1.27 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/34301fa.pdf"
-			(at 0 -2.54 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "3A High Voltage 200kHz Step-Down Switching Regulator, TSSOP-16"
 			(at 0 0 0)
 			(show_name no)

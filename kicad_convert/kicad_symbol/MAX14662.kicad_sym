@@ -30,28 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_DFN_QFN:WQFN-28-1EP_4x4mm_P0.4mm_EP2.7x2.7mm"
-			(at 0 -45.72 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/MAX14662.pdf"
-			(at 0 -48.26 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Analog Switch, beyond-the-Rails 8xSPST, I²C/SPI interface, 1.6..5.5V supply, 0.425Ohm Ron, WQFN-28"
 			(at 0 0 0)
 			(show_name no)

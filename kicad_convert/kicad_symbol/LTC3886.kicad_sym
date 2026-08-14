@@ -28,29 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_DFN_QFN:Linear_UGK52_QFN-46-52"
-			(at 7.62 -80.01 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/LTC3886-3886-1.pdf"
-			(at 0 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "60V dual output buck output with digital power system management, UKG52(46)"
 			(at 0 0 0)
 			(show_name no)

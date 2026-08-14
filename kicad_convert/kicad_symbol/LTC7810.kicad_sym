@@ -30,29 +30,6 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Package_QFP:LQFP-48-1EP_7x7mm_P0.5mm_EP3.6x3.6mm"
-			(at 8.89 -24.13 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/LTC7810.pdf"
-			(at 0 29.21 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "150V dual 2-phase synchronous step-down DC/DC controller, LQPF-48"
 			(at 0 0 0)
 			(show_name no)

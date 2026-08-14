@@ -29,28 +29,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_SO:MSOP-16-1EP_3x4.039mm_P0.5mm_EP1.651x2.845mm_ThermalVias"
-			(at -2.54 -12.7 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/lt8610ac-8610ac-1.pdf"
-			(at 0 -16.51 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "42V, 3.5A Synchronous Step-Down Regulator with 2.5uA Quiescent Current, 0.8V Feedback Voltage, 3.0V Minimum Vin, MSOP-16"
 			(at 0 0 0)
 			(show_name no)

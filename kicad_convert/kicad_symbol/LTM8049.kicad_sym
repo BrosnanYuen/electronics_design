@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_BGA:Analog_BGA-77_9x15mm_Layout7x11_P1.27mm"
-			(at 0 -33.02 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/LTM8049.pdf"
-			(at 0 -35.56 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Dual SEPIC or Inverting μModule DC/DC Converter, 2.6 to 20V input, 2.5V to 24V or -2.5V to -24V output, 1A @ 5V output current per converter, BGA-77 package."
 			(at 0 0 0)
 			(show_name no)

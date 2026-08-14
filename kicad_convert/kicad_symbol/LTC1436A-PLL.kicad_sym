@@ -30,28 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_SO:SSOP-24_3.9x8.7mm_P0.635mm"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/14367afb.pdf"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "High Efficiency Low Noise Synchronous Step-Down Switching Regulators, SSOP-24"
 			(at 0 0 0)
 			(show_name no)

@@ -30,29 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
-			(at 0 5.08 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://datasheets.maximintegrated.com/en/ds/MAX333A.pdf"
-			(at 3.048 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
 		(property "Description" "Quad SPDT CMOS Analog Switch, 17Ohm Ron, DIP-20/SOIC-20/SSOP-20/TSSOP-20"
 			(at 0 0 0)
 			(show_name no)

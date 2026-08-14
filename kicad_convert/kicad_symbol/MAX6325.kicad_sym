@@ -30,30 +30,6 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
-			(at 30.48 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-			)
-		)
-		(property "Datasheet" "http://datasheets.maximintegrated.com/en/ds/MAX6325-MAX6350.pdf"
-			(at 2.54 -10.16 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-			)
-		)
 		(property "Description" "0.5ppm/°C Low-Noise +5V Voltage Reference, SO-8/DIP-8"
 			(at 0 0 0)
 			(show_name no)
@@ -276,30 +252,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-			)
-		)
-		(property "Footprint" ""
-			(at 30.48 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-			)
-		)
-		(property "Datasheet" "http://datasheets.maximintegrated.com/en/ds/MAX6325-MAX6350.pdf"
-			(at 2.54 -10.16 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
 			)
 		)
 		(property "Description" "0.5ppm/°C Low-Noise +2.5V Voltage Reference, SO-8/DIP-8"

@@ -28,28 +28,6 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_BGA:Analog_BGA-49_6.25x6.25mm_Layout7x7_P0.8mm"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://www.analog.com/media/en/technical-documentation/data-sheets/ltm4638.pdf"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "Description" "Analog Devices 20VIN, 15A Step-Down DC/DC uModule Regulator, BGA-49"
 			(at 0 0 0)
 			(show_name no)
