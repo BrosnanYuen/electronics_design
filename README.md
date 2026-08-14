@@ -38,6 +38,21 @@ Validators for KiCad s-expression schematic files, per the KiCad schematic file 
 
 Error messages follow the same contract as ASC validation: `"File not found!"`, `"No permission to read file!"`, or `"<type> information is invalid! Line <n>"`.
 
+### KiCad Symbol Validation
+
+| Function | Returns |
+|---|---|
+| `is_valid_kicad_symbol_file(filepath)` | `(bool, str)` |
+
+Validator for KiCad s-expression symbol library (`.kicad_sym`) files, per the KiCad symbol library file format (see `kicad_docs/sexpr-symbol-lib.md`).  Parsing uses the same vendored S-expression parser as the schematic validators; the validation profile mirrors the symbol shape produced by the MIT-licensed `kicad-tools` project (`kicad_tools.schema.library`) and the MIT-licensed `KiCAD-MCP-Server` project (`SymbolCreator`).
+
+- **Header** requires the root to be `kicad_symbol_lib` with exactly one `version` (YYYYMMDD date format) and exactly one `generator` section.
+- **Spacing** validates the whole file as well-formed KiCad S-expressions (balanced parentheses, terminated quoted strings, no trailing content).
+- **Symbols** requires at least one top-level `symbol`; each symbol must carry a nonempty name, `in_bom` and `on_board` flags set to `yes` or `no`, and the mandatory `Reference`, `Value`, `Footprint`, and `Datasheet` properties.  Every `pin` must have a valid electrical type and graphic style, an `at` position (X/Y plus optional angle), a numeric `length`, and `name`/`number` labels.
+- **Footer** requires the final nonblank line to end with the root's closing `)`.
+
+Error messages follow the same contract as ASC validation: `"File not found!"`, `"No permission to read file!"`, `"Header information is invalid! Line <n>"`, `"Line format/spacing is invalid! Line <n>"`, `"Symbol information is invalid! Line <n>"`, or `"Footer information is invalid! Line <n>"`.
+
 ### Netlist Validation
 
 | Function | Returns |
@@ -258,6 +273,7 @@ from electronics_design import is_valid_kicad_sch_file
 from electronics_design import is_valid_kicad_sch_footer
 from electronics_design import is_valid_kicad_sch_header
 from electronics_design import is_valid_kicad_sch_spacing
+from electronics_design import is_valid_kicad_symbol_file
 from electronics_design import is_valid_ltspice_netlist_file
 from electronics_design import is_valid_ltspice_netlist_footer
 from electronics_design import is_valid_ltspice_netlist_format
@@ -312,6 +328,9 @@ kicad_header_ok, _ = is_valid_kicad_sch_header("example.kicad_sch")
 kicad_spacing_ok, _ = is_valid_kicad_sch_spacing("example.kicad_sch")
 kicad_footer_ok, _ = is_valid_kicad_sch_footer("example.kicad_sch")
 kicad_sch_ok, _ = is_valid_kicad_sch_file("example.kicad_sch")
+
+# KiCad symbol validation
+kicad_symbol_ok, _ = is_valid_kicad_symbol_file("example.kicad_sym")
 
 # ASY
 asy_ok, _ = is_valid_ltspice_asy("example.asy")
@@ -372,6 +391,7 @@ src/electronics_design/
     autoroute.py
     kicad_sch.py
     kicad_sexp_parser.py
+    kicad_symbol.py
     ltspice.py
     ltspice_asc.py
     ltspice_asc_to_netlist.py

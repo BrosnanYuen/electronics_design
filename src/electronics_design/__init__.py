@@ -5,6 +5,7 @@ from .kicad_sch import is_valid_kicad_sch_file  # Re-export the KiCad schematic 
 from .kicad_sch import is_valid_kicad_sch_footer  # Re-export the KiCad schematic footer validator.
 from .kicad_sch import is_valid_kicad_sch_header  # Re-export the KiCad schematic header validator.
 from .kicad_sch import is_valid_kicad_sch_spacing  # Re-export the KiCad schematic spacing validator.
+from .kicad_symbol import is_valid_kicad_symbol_file  # Re-export the KiCad symbol library whole-file validator.
 from .ltspice import get_wire_pos  # Re-export the wire-position extraction helper.
 from .ltspice import is_valid_ltspice_asc_file  # Re-export the ASC whole-file validator.
 from .pathtracing import are_wires_intersecting_obstacles_detailed  # Re-export the detailed intersection helper.
@@ -50,6 +51,7 @@ __all__ = [  # Define the supported public API surface.
     "is_valid_kicad_sch_spacing",  # Export the KiCad schematic spacing validator name.
     "is_valid_kicad_sch_footer",  # Export the KiCad schematic footer validator name.
     "is_valid_kicad_sch_file",  # Export the KiCad schematic whole-file validator name.
+    "is_valid_kicad_symbol_file",  # Export the KiCad symbol library whole-file validator name.
     "is_valid_ltspice_asy",  # Export the ASY validator name.
     "get_ltspice_asy_size",  # Export the ASY size helper name.
     "get_ltspice_asy_pins",  # Export the ASY pin extraction helper name.

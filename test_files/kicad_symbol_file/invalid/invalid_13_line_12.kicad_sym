@@ -1,0 +1,15 @@
+(kicad_symbol_lib
+	(version 20231120)
+	(generator "kicad_tools")
+	(symbol "R"
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R" (at 0 0 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "1k" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Datasheet" "~" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(symbol "R_1_1"
+			(pin passive line (at -5.08) (length 2.54) (name "1" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+		)
+	)
+)

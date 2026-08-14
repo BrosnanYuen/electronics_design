@@ -13,6 +13,7 @@ from electronics_design import is_valid_kicad_sch_file  # Import the public KiCa
 from electronics_design import is_valid_kicad_sch_footer  # Import the public KiCad schematic footer validator.
 from electronics_design import is_valid_kicad_sch_header  # Import the public KiCad schematic header validator.
 from electronics_design import is_valid_kicad_sch_spacing  # Import the public KiCad schematic spacing validator.
+from electronics_design import is_valid_kicad_symbol_file  # Import the public KiCad symbol library whole-file validator.
 from electronics_design import is_ltspice_netlist_structure_connected  # Import the public connectivity validator.
 from electronics_design import is_valid_ltspice_netlist_file  # Import the public whole-file validator.
 from electronics_design import is_valid_ltspice_netlist_footer  # Import the public footer validator.
@@ -38,6 +39,7 @@ class TestApiErrors(unittest.TestCase):  # Group filesystem error-path tests tog
             is_valid_kicad_sch_spacing,
             is_valid_kicad_sch_footer,
             is_valid_kicad_sch_file,
+            is_valid_kicad_symbol_file,
         ):
             result = validator("does_not_exist.net")  # Execute the validator against a missing path.
             self.assertEqual(result, (False, "File not found!"))  # Assert that the validator returns the required missing-file response.
@@ -67,6 +69,7 @@ class TestApiErrors(unittest.TestCase):  # Group filesystem error-path tests tog
             is_valid_kicad_sch_spacing,
             is_valid_kicad_sch_footer,
             is_valid_kicad_sch_file,
+            is_valid_kicad_symbol_file,
         ):
             result = validator("permission_denied.net")  # Execute the validator against the mocked path.
             self.assertEqual(result, (False, "No permission to read file!"))  # Assert that the validator returns the required permission response.
