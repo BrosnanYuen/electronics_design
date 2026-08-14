@@ -1,101 +1,88 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "TLINE"
-
-		(pin_numbers
-			(hide yes)
-		)
+	(symbol "tline"
 		(exclude_from_sim no)
-		(in_bom no)
-		(on_board no)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
+		(in_bom yes)
+		(on_board yes)
 		(property "Reference" "T"
-			(at 0 7.62 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 3.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "TLINE"
-			(at 0 5.08 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Lossless transmission line, for simulation only"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Sim.Device" "TLINE"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Sim.Pins" "1=1+ 2=1- 3=2+ 4=2-"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Sim.Params" "z0=50 td=10n"
+		(property "Value" "Td=50n Z0=50"
 			(at 0 2.54 0)
-			(show_name no)
-			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(symbol "TLINE_0_1"
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Ideal Lossless Transmission Line"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "tline_0_1"
 			(polyline
 				(pts
-					(xy -5.08 -1.27) (xy 3.81 -1.27)
+					(xy -3.81 -1.27) (xy 3.81 -1.27)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
 					(type none)
 				)
 			)
-			(rectangle
-				(start -3.81 1.27)
-				(end 3.81 -1.27)
+			(polyline
+				(pts
+					(xy -2.54 -0.635) (xy 2.54 -0.635)
+				)
 				(stroke
-					(width -0.0001)
+					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type background)
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 0.635) (xy 2.54 0.635)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
 				)
 			)
 			(polyline
@@ -103,64 +90,7 @@
 					(xy -3.81 1.27) (xy 3.81 1.27)
 				)
 				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(circle
-				(center -3.81 0)
-				(radius 1.27)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(circle
-				(center -3.81 0)
-				(radius 1.27)
-				(stroke
-					(width -0.0001)
-					(type default)
-				)
-				(fill
-					(type background)
-				)
-			)
-			(polyline
-				(pts
-					(xy -3.81 0) (xy -5.08 0)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(circle
-				(center 3.81 0)
-				(radius 1.27)
-				(stroke
-					(width -0.0001)
-					(type default)
-				)
-				(fill
-					(type background)
-				)
-			)
-			(arc
-				(start 3.8776 1.27)
-				(mid 5.0818 0)
-				(end 3.8776 -1.27)
-				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -169,10 +99,46 @@
 			)
 			(polyline
 				(pts
-					(xy 5.08 -1.27) (xy 3.81 -1.27)
+					(xy -3.81 -1.27) (xy -2.54 -0.635)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -3.81 1.27) (xy -2.54 0.635)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 3.81 -1.27) (xy 2.54 -0.635)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 3.81 1.27) (xy 2.54 0.635)
+				)
+				(stroke
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -180,11 +146,11 @@
 				)
 			)
 		)
-		(symbol "TLINE_1_1"
+		(symbol "tline_1_1"
 			(pin passive line
-				(at -7.62 0 0)
+				(at -3.81 1.27 0)
 				(length 2.54)
-				(name ""
+				(name "I1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -200,9 +166,9 @@
 				)
 			)
 			(pin passive line
-				(at -5.08 -2.54 90)
-				(length 1.27)
-				(name ""
+				(at -3.81 -1.27 0)
+				(length 2.54)
+				(name "R1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -218,9 +184,9 @@
 				)
 			)
 			(pin passive line
-				(at 7.62 0 180)
+				(at 3.81 1.27 180)
 				(length 2.54)
-				(name ""
+				(name "I2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -236,9 +202,9 @@
 				)
 			)
 			(pin passive line
-				(at 5.08 -2.54 90)
-				(length 1.27)
-				(name ""
+				(at 3.81 -1.27 180)
+				(length 2.54)
+				(name "R2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -254,6 +220,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

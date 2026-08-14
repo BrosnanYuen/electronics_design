@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LTC6909"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -6.35 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 22.86 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,41 +14,44 @@
 			)
 		)
 		(property "Value" "LTC6909"
-			(at 5.08 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 21.59 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Multiphase oscillator, spread spectrum frequency modulation, MSOP-16"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*3x4.039mm*P0.5mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "1 to 8 Output, Multiphase Silicon Oscillator with Spread Spectrum Modulation"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LTC6909_0_1"
 			(rectangle
-				(start -7.62 10.16)
-				(end 7.62 -12.7)
+				(start -10.16 20.32)
+				(end 10.16 -20.32)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -64,8 +62,8 @@
 			)
 		)
 		(symbol "LTC6909_1_1"
-			(pin power_in line
-				(at -2.54 12.7 270)
+			(pin passive line
+				(at -10.16 7.62 0)
 				(length 2.54)
 				(name "V+A"
 					(effects
@@ -83,7 +81,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -15.24 90)
+				(at -10.16 12.7 0)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -100,8 +98,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 0 0)
+			(pin passive line
+				(at -10.16 2.54 0)
 				(length 2.54)
 				(name "PH0"
 					(effects
@@ -118,7 +116,7 @@
 					)
 				)
 			)
-			(pin input line
+			(pin passive line
 				(at -10.16 -2.54 0)
 				(length 2.54)
 				(name "PH1"
@@ -136,8 +134,8 @@
 					)
 				)
 			)
-			(pin tri_state line
-				(at 10.16 7.62 180)
+			(pin output line
+				(at 10.16 17.78 180)
 				(length 2.54)
 				(name "OUT1"
 					(effects
@@ -154,8 +152,8 @@
 					)
 				)
 			)
-			(pin tri_state line
-				(at 10.16 5.08 180)
+			(pin output line
+				(at 10.16 12.7 180)
 				(length 2.54)
 				(name "OUT2"
 					(effects
@@ -172,8 +170,8 @@
 					)
 				)
 			)
-			(pin tri_state line
-				(at 10.16 2.54 180)
+			(pin output line
+				(at 10.16 7.62 180)
 				(length 2.54)
 				(name "OUT3"
 					(effects
@@ -190,8 +188,8 @@
 					)
 				)
 			)
-			(pin tri_state line
-				(at 10.16 0 180)
+			(pin output line
+				(at 10.16 2.54 180)
 				(length 2.54)
 				(name "OUT4"
 					(effects
@@ -208,7 +206,7 @@
 					)
 				)
 			)
-			(pin tri_state line
+			(pin output line
 				(at 10.16 -2.54 180)
 				(length 2.54)
 				(name "OUT5"
@@ -226,8 +224,8 @@
 					)
 				)
 			)
-			(pin tri_state line
-				(at 10.16 -5.08 180)
+			(pin output line
+				(at 10.16 -7.62 180)
 				(length 2.54)
 				(name "OUT6"
 					(effects
@@ -244,8 +242,8 @@
 					)
 				)
 			)
-			(pin tri_state line
-				(at 10.16 -7.62 180)
+			(pin output line
+				(at 10.16 -12.7 180)
 				(length 2.54)
 				(name "OUT7"
 					(effects
@@ -262,8 +260,8 @@
 					)
 				)
 			)
-			(pin tri_state line
-				(at 10.16 -10.16 180)
+			(pin output line
+				(at 10.16 -17.78 180)
 				(length 2.54)
 				(name "OUT8"
 					(effects
@@ -280,8 +278,8 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 0 12.7 270)
+			(pin passive line
+				(at -10.16 17.78 0)
 				(length 2.54)
 				(name "V+D"
 					(effects
@@ -299,7 +297,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 -10.16 0)
+				(at -10.16 -17.78 0)
 				(length 2.54)
 				(name "MOD"
 					(effects
@@ -316,8 +314,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 -5.08 0)
+			(pin passive line
+				(at -10.16 -7.62 0)
 				(length 2.54)
 				(name "PH2"
 					(effects
@@ -335,7 +333,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 2.54 0)
+				(at -10.16 -12.7 0)
 				(length 2.54)
 				(name "SET"
 					(effects
@@ -353,6 +351,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

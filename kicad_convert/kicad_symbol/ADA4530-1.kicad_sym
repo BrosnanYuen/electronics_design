@@ -2,78 +2,71 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "ADA4530-1"
-
-		(pin_names
-			(offset 0.127)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 3.81 5.08 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "ADA4530-1"
-			(at 3.81 3.175 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "Femtoampere Input Bias Current Electrometer Amplifier, SOIC-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 3.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Femtoampere Input Bias Current Electrometer Amplifier"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "ADA4530-1_0_1"
 			(polyline
 				(pts
-					(xy -5.08 5.08) (xy 5.08 0) (xy -5.08 -5.08) (xy -5.08 5.08)
+					(xy -2.54 0) (xy -2.54 -2.61937)
 				)
 				(stroke
 					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type background)
+					(type none)
 				)
 			)
 			(polyline
 				(pts
-					(xy -3.81 0) (xy -5.08 0)
+					(xy -2.54 2.46062) (xy -2.54 0)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -82,10 +75,10 @@
 			)
 			(polyline
 				(pts
-					(xy -3.81 -0.635) (xy -3.81 0.635) (xy -2.54 0) (xy -3.81 -0.635)
+					(xy 2.54 0) (xy -2.54 2.46062)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -94,10 +87,10 @@
 			)
 			(polyline
 				(pts
-					(xy -2.54 0) (xy 0 0)
+					(xy -2.54 -2.61937) (xy 2.54 0)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -106,33 +99,118 @@
 			)
 			(polyline
 				(pts
-					(xy 0 2.54) (xy 0 -2.54)
+					(xy -1.27 2.54) (xy -1.27 1.82563)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
 					(type none)
 				)
 			)
-			(circle
-				(center 0 0)
-				(radius 0.3556)
+			(polyline
+				(pts
+					(xy -1.27 -1.98438) (xy -1.27 -2.54)
+				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type outline)
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.5875 1.27) (xy -2.30187 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.50812 -1.27) (xy -2.30187 -1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.905 -1.66688) (xy -1.905 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.15875 2.06375) (xy -0.9525 2.06375)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.555625 1.66688) (xy -0.555625 2.46062)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -0.635) (xy 1.27 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.15875 -2.14312) (xy -0.873125 -2.14312)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
 				)
 			)
 		)
 		(symbol "ADA4530-1_1_1"
 			(pin input line
-				(at -7.62 2.54 0)
+				(at -2.54 -1.27 0)
 				(length 2.54)
-				(name "+"
+				(name "In+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -147,10 +225,10 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 0 7.62 270)
-				(length 5.08)
-				(name ""
+			(pin input line
+				(at -2.54 1.27 0)
+				(length 2.54)
+				(name "In-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -165,10 +243,10 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 2.54 -7.62 90)
-				(length 6.35)
-				(name "IC"
+			(pin power_in line
+				(at -1.27 2.54 270)
+				(length 2.54)
+				(name "V+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -184,8 +262,8 @@
 				)
 			)
 			(pin power_in line
-				(at -2.54 -7.62 90)
-				(length 3.81)
+				(at -1.27 -2.54 90)
+				(length 2.54)
 				(name "V-"
 					(effects
 						(font
@@ -201,10 +279,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at -2.54 7.62 270)
-				(length 3.81)
-				(name "V+"
+			(pin output line
+				(at 2.54 0 180)
+				(length 2.54)
+				(name "OUT"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -219,10 +297,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 7.62 0 180)
+			(pin passive line
+				(at 1.27 -2.54 90)
 				(length 2.54)
-				(name ""
+				(name "GDR"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -237,43 +315,6 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 0 -7.62 90)
-				(length 5.08)
-				(name ""
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -7.62 -2.54 0)
-				(length 2.54)
-				(name "-"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "8"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
 		)
-		(embedded_fonts no)
 	)
 )

@@ -2,60 +2,56 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LTC1437A"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 3.81 29.21 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 36.83 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "LTC1437A"
-			(at 3.81 26.67 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "High Efficiency Low Noise Synchronous Step-Down Switching Regulators, SSOP-28"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "SSOP*5.3x10.2mm*P0.65mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "High Efficiency Low Noise Synchronous Step-Down Switching Regulator"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LTC1437A_0_1"
 			(rectangle
-				(start -12.7 -25.4)
-				(end 12.7 25.4)
+				(start -20.32 34.29)
+				(end 20.32 -33.02)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -67,9 +63,9 @@
 		)
 		(symbol "LTC1437A_1_1"
 			(pin passive line
-				(at -15.24 -5.08 0)
+				(at -20.32 29.21 0)
 				(length 2.54)
-				(name "PLLLPF"
+				(name "PLL LPF"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -85,9 +81,9 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -17.78 0)
+				(at -20.32 -8.89 0)
 				(length 2.54)
-				(name "COSC"
+				(name "Cosc"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -103,9 +99,9 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -20.32 0)
+				(at 20.32 -27.94 180)
 				(length 2.54)
-				(name "RUN/SS"
+				(name "Run/SS"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -120,8 +116,8 @@
 					)
 				)
 			)
-			(pin open_collector line
-				(at -15.24 0 0)
+			(pin passive line
+				(at -20.32 -2.54 0)
 				(length 2.54)
 				(name "LBO"
 					(effects
@@ -138,8 +134,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 2.54 0)
+			(pin passive line
+				(at -20.32 3.81 0)
 				(length 2.54)
 				(name "LBI"
 					(effects
@@ -157,9 +153,9 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -22.86 0)
+				(at -20.32 16.51 0)
 				(length 2.54)
-				(name "ITH"
+				(name "Ith"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -175,7 +171,7 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 17.78 0)
+				(at -20.32 22.86 0)
 				(length 2.54)
 				(name "SFB"
 					(effects
@@ -192,8 +188,8 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at -2.54 -27.94 90)
+			(pin passive line
+				(at -8.89 -33.02 90)
 				(length 2.54)
 				(name "SGND"
 					(effects
@@ -210,10 +206,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 -12.7 0)
+			(pin passive line
+				(at -20.32 10.16 0)
 				(length 2.54)
-				(name "VPROG"
+				(name "Vprog"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -228,10 +224,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 -22.86 180)
+			(pin passive line
+				(at 20.32 -21.59 180)
 				(length 2.54)
-				(name "VOSENSE"
+				(name "Vosense"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -246,29 +242,10 @@
 					)
 				)
 			)
-			(pin no_connect line
-				(at 0 25.4 270)
+			(pin passive line
+				(at 20.32 -15.24 180)
 				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "11"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at 15.24 -17.78 180)
-				(length 2.54)
-				(name "SENSE-"
+				(name "Sense-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -283,10 +260,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 -12.7 180)
+			(pin passive line
+				(at 20.32 -8.89 180)
 				(length 2.54)
-				(name "SENSE+"
+				(name "Sense+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -301,8 +278,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 7.62 0)
+			(pin passive line
+				(at -20.32 -27.94 0)
 				(length 2.54)
 				(name "AUXON"
 					(effects
@@ -319,8 +296,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 12.7 0)
+			(pin passive line
+				(at -20.32 -21.59 0)
 				(length 2.54)
 				(name "AUXFB"
 					(effects
@@ -337,8 +314,8 @@
 					)
 				)
 			)
-			(pin open_collector line
-				(at -15.24 22.86 0)
+			(pin passive line
+				(at -20.32 -15.24 0)
 				(length 2.54)
 				(name "AUXDR"
 					(effects
@@ -355,10 +332,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at -2.54 27.94 270)
+			(pin passive line
+				(at -5.08 34.29 270)
 				(length 2.54)
-				(name "EXTVCC"
+				(name "ExtVcc"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -373,8 +350,8 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 2.54 -27.94 90)
+			(pin passive line
+				(at 8.89 -33.02 90)
 				(length 2.54)
 				(name "PGND"
 					(effects
@@ -391,8 +368,8 @@
 					)
 				)
 			)
-			(pin output line
-				(at 15.24 -7.62 180)
+			(pin passive line
+				(at 20.32 -2.54 180)
 				(length 2.54)
 				(name "BG"
 					(effects
@@ -409,10 +386,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 15.24 2.54 180)
+			(pin passive line
+				(at 5.08 34.29 270)
 				(length 2.54)
-				(name "DRVCC"
+				(name "DRVcc"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -427,10 +404,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 15.24 7.62 180)
+			(pin input line
+				(at 15.24 34.29 270)
 				(length 2.54)
-				(name "INTVCC"
+				(name "IntVcc"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -446,9 +423,9 @@
 				)
 			)
 			(pin power_in line
-				(at 2.54 27.94 270)
+				(at -15.24 34.29 270)
 				(length 2.54)
-				(name "VIN"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -463,8 +440,8 @@
 					)
 				)
 			)
-			(pin output line
-				(at 15.24 17.78 180)
+			(pin passive line
+				(at 20.32 16.51 180)
 				(length 2.54)
 				(name "TGS"
 					(effects
@@ -482,7 +459,7 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 12.7 180)
+				(at 20.32 3.81 180)
 				(length 2.54)
 				(name "SW"
 					(effects
@@ -499,8 +476,8 @@
 					)
 				)
 			)
-			(pin output line
-				(at 15.24 22.86 180)
+			(pin passive line
+				(at 20.32 10.16 180)
 				(length 2.54)
 				(name "TGL"
 					(effects
@@ -518,9 +495,9 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 -2.54 180)
+				(at 20.32 22.86 180)
 				(length 2.54)
-				(name "BOOST"
+				(name "Boost"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -535,26 +512,8 @@
 					)
 				)
 			)
-			(pin open_collector line
-				(at -15.24 -10.16 0)
-				(length 2.54)
-				(name "POR"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "27"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 -2.54 0)
+			(pin passive line
+				(at 20.32 29.21 180)
 				(length 2.54)
 				(name "PLLIN"
 					(effects
@@ -572,6 +531,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

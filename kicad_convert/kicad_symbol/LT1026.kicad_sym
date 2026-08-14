@@ -2,66 +2,122 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT1026"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -7.62 10.16 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 12.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left bottom)
 			)
 		)
 		(property "Value" "LT1026"
-			(at 7.62 10.16 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right bottom)
-			)
-		)
-		(property "Description" "voltage doubler and inverter"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 11.43 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "DIP*W7.62mm* SOIC*3.9x4.9mm*P1.27mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Switched Capacitor Voltage Converter"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT1026_0_1"
+			(polyline
+				(pts
+					(xy -1.5875 10.16) (xy -1.5875 8.89)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.5875 10.16) (xy 1.5875 8.89)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.635 7.9375) (xy 0.635 7.9375)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
 			(rectangle
-				(start -7.62 10.16)
-				(end 7.62 -10.16)
+				(start -10.16 10.16)
+				(end 10.16 -10.16)
 				(stroke
 					(width 0.254)
 					(type default)
 				)
 				(fill
 					(type background)
+				)
+			)
+			(arc
+				(start -1.5875 8.89)
+				(mid 0.038519 9.56352)
+				(end -0.635 7.9375)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start 0.635 7.9375)
+				(mid -0.038519 9.56352)
+				(end 1.5875 8.89)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
 				)
 			)
 		)
@@ -85,7 +141,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 -2.54 0)
+				(at -10.16 2.54 0)
 				(length 2.54)
 				(name "C2+"
 					(effects
@@ -103,7 +159,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 -7.62 0)
+				(at -10.16 -2.54 0)
 				(length 2.54)
 				(name "C2-"
 					(effects
@@ -120,8 +176,8 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 10.16 -7.62 180)
+			(pin passive line
+				(at -10.16 -7.62 0)
 				(length 2.54)
 				(name "-Vout"
 					(effects
@@ -139,7 +195,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -12.7 90)
+				(at 10.16 -7.62 180)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -157,7 +213,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 12.7 270)
+				(at 10.16 -2.54 180)
 				(length 2.54)
 				(name "Vin"
 					(effects
@@ -175,7 +231,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 2.54 0)
+				(at 10.16 2.54 180)
 				(length 2.54)
 				(name "C1+"
 					(effects
@@ -192,7 +248,7 @@
 					)
 				)
 			)
-			(pin power_out line
+			(pin passive line
 				(at 10.16 7.62 180)
 				(length 2.54)
 				(name "+Vout"
@@ -211,6 +267,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

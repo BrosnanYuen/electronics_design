@@ -1,63 +1,57 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "LT1117-2.85"
-
-		(pin_names
-			(offset 0.254)
-		)
+	(symbol "LT1117-3.3"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -3.81 3.175 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 8.89 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "LT1117-2.85"
-			(at 0 3.175 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "LT1117-3.3"
+			(at 0 7.62 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Description" "800mA Low-Dropout Linear Regulator, 2.85V fixed output, SOT-223/TO-263"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "SOT?223* TO?263*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "LT1117-2.85_0_1"
+		(property "Description" "800mA Low Dropout Positive Regulators, Fixed 3.3V Output"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "LT1117-3.3_0_1"
 			(rectangle
-				(start -5.08 -5.08)
-				(end 5.08 1.905)
+				(start -10.16 6.35)
+				(end 10.16 -6.35)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -67,9 +61,9 @@
 				)
 			)
 		)
-		(symbol "LT1117-2.85_1_1"
+		(symbol "LT1117-3.3_1_1"
 			(pin power_in line
-				(at 0 -7.62 90)
+				(at 0 -6.35 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -86,10 +80,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 7.62 0 180)
+			(pin output line
+				(at 10.16 1.27 180)
 				(length 2.54)
-				(name "VO"
+				(name "OUT"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -104,10 +98,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at -7.62 0 0)
+			(pin input line
+				(at -10.16 1.27 0)
 				(length 2.54)
-				(name "VI"
+				(name "IN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -123,56 +117,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
-	)
-	(symbol "LT1117-3.3"
-		(extends "LT1117-2.85")
-		(in_bom yes)
-		(on_board yes)
-
-		(property "Reference" "U"
-			(at -3.81 3.175 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "LT1117-3.3"
-			(at 0 3.175 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "800mA Low-Dropout Linear Regulator, 3.3V fixed output, SOT-223/TO-263"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_fp_filters" "SOT?223* TO?263*"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(embedded_fonts no)
 	)
 )

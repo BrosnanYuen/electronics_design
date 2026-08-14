@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT1790-1.25"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -3.81 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 8.89 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,41 +14,44 @@
 			)
 		)
 		(property "Value" "LT1790-1.25"
-			(at 6.35 -6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 7.62 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "1.25V Voltage Reference, Low Dropout, Micropower, TSOT-23-6"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "TSOT?23?6*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "µPower SOT-23 Low Dropout 1.25V Reference"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT1790-1.25_0_1"
 			(rectangle
-				(start 2.54 5.08)
-				(end -2.54 -5.08)
+				(start -10.16 6.35)
+				(end 10.16 -6.35)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -64,13 +62,13 @@
 			)
 		)
 		(symbol "LT1790-1.25_1_1"
-			(pin power_in line
-				(at 0 -7.62 90)
+			(pin input line
+				(at -10.16 2.54 0)
 				(length 2.54)
-				(name "GND"
+				(name "IN"
 					(effects
 						(font
-							(size 1.016 1.016)
+							(size 1.27 1.27)
 						)
 					)
 				)
@@ -82,14 +80,13 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 0 -7.62 90)
+			(pin power_in line
+				(at 0 -6.35 90)
 				(length 2.54)
-				(hide yes)
 				(name "GND"
 					(effects
 						(font
-							(size 1.016 1.016)
+							(size 1.27 1.27)
 						)
 					)
 				)
@@ -101,11 +98,10 @@
 					)
 				)
 			)
-			(pin no_connect line
-				(at -2.54 2.54 0)
+			(pin output line
+				(at 10.16 2.54 180)
 				(length 2.54)
-				(hide yes)
-				(name "NC"
+				(name "OUT"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -120,62 +116,6 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 0 7.62 270)
-				(length 2.54)
-				(name "Vin"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at -2.54 -2.54 0)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "5"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 5.08 0 180)
-				(length 2.54)
-				(name "Vout"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
 		)
-		(embedded_fonts no)
 	)
 )

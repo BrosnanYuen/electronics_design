@@ -2,22 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "FerriteBead"
-
-		(pin_numbers
-			(hide yes)
-		)
-		(pin_names
-			(offset 0)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
-		(property "Reference" "FB"
-			(at -3.81 0.635 90)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Reference" "L"
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -25,44 +14,47 @@
 			)
 		)
 		(property "Value" "FerriteBead"
-			(at 3.81 0 90)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 3.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Ferrite bead"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "Inductor_* L_* *Ferrite*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "A Ferrite Bead"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "FerriteBead_0_1"
 			(polyline
 				(pts
-					(xy -2.7686 0.4064) (xy -1.7018 2.2606) (xy 2.7686 -0.3048) (xy 1.6764 -2.159) (xy -2.7686 0.4064)
+					(xy -1.27 -0.635) (xy -1.27 0.635)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -71,10 +63,10 @@
 			)
 			(polyline
 				(pts
-					(xy 0 1.27) (xy 0 1.2954)
+					(xy 0 0.635) (xy 0 2.54)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -83,10 +75,56 @@
 			)
 			(polyline
 				(pts
-					(xy 0 -1.27) (xy 0 -1.2192)
+					(xy 0 -0.9525) (xy 0 -2.54)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -0.635) (xy 1.27 0.635)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 0 0.635)
+				(radius 1.27)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 0 0.635)
+				(radius 0.555625)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -1.27 -0.635)
+				(mid -0 0.635)
+				(end 1.27 -0.635)
+				(stroke
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -96,9 +134,9 @@
 		)
 		(symbol "FerriteBead_1_1"
 			(pin passive line
-				(at 0 3.81 270)
+				(at 0 2.54 270)
 				(length 2.54)
-				(name ""
+				(name "A"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -113,10 +151,10 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 0 -3.81 90)
+			(pin input line
+				(at 0 -2.54 90)
 				(length 2.54)
-				(name ""
+				(name "B"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -132,6 +170,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

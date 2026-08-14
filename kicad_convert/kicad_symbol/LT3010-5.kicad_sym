@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT3010-5"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -6.35 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 11.43 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,42 +14,44 @@
 			)
 		)
 		(property "Value" "LT3010-5"
-			(at 0 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "50mA 3-80V Micropower Low Dropout Regulator, fixed output 5V, MSOP-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 10.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*3x3mm*P0.65mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "50mA, 3V to 80V Low Dropout µPower Linear Regulator, Fixed 5V Output"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT3010-5_0_1"
 			(rectangle
-				(start -7.62 5.08)
-				(end 7.62 -5.08)
+				(start -11.43 8.89)
+				(end 11.43 -7.62)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -65,8 +62,8 @@
 			)
 		)
 		(symbol "LT3010-5_1_1"
-			(pin power_out line
-				(at 10.16 2.54 180)
+			(pin output line
+				(at 11.43 5.08 180)
 				(length 2.54)
 				(name "OUT"
 					(effects
@@ -84,9 +81,9 @@
 				)
 			)
 			(pin passive line
-				(at 10.16 0 180)
+				(at 11.43 -2.54 180)
 				(length 2.54)
-				(name "SENSE"
+				(name "Sense"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -94,25 +91,6 @@
 					)
 				)
 				(number "2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at -7.62 -2.54 0)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "3"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -138,10 +116,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 0 0)
+			(pin passive line
+				(at -11.43 -2.54 0)
 				(length 2.54)
-				(name "~{SHDN}"
+				(name "_SHDN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -156,48 +134,10 @@
 					)
 				)
 			)
-			(pin no_connect line
-				(at 7.62 -2.54 180)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at 2.54 -5.08 90)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
 			(pin power_in line
-				(at -10.16 2.54 0)
+				(at -11.43 5.08 0)
 				(length 2.54)
-				(name "IN"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -212,26 +152,6 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 0 -7.62 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "9"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
 		)
-		(embedded_fonts no)
 	)
 )

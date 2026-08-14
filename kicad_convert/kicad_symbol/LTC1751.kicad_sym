@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LTC1751"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -6.35 12.7 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 15.24 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,41 +14,44 @@
 			)
 		)
 		(property "Value" "LTC1751"
-			(at 5.08 12.7 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 13.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "100mA charge-pump, MSOP-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*3x3mm*P0.65*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "µPower, Regulated Charge Pump DC/DC Converter"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LTC1751_0_1"
 			(rectangle
-				(start -7.62 10.16)
-				(end 7.62 -10.16)
+				(start -10.16 12.7)
+				(end 10.16 -11.43)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -64,10 +62,10 @@
 			)
 		)
 		(symbol "LTC1751_1_1"
-			(pin output line
-				(at 10.16 5.08 180)
+			(pin passive line
+				(at 10.16 3.81 180)
 				(length 2.54)
-				(name "PGOOD/FB"
+				(name "FB"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -82,10 +80,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 10.16 7.62 180)
+			(pin passive line
+				(at 10.16 10.16 180)
 				(length 2.54)
-				(name "VOUT"
+				(name "Vout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -101,9 +99,9 @@
 				)
 			)
 			(pin power_in line
-				(at -10.16 7.62 0)
+				(at -10.16 10.16 0)
 				(length 2.54)
-				(name "VIN"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -119,7 +117,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -12.7 90)
+				(at -10.16 -8.89 0)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -136,8 +134,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 -7.62 180)
+			(pin passive line
+				(at 10.16 -8.89 180)
 				(length 2.54)
 				(name "C-"
 					(effects
@@ -154,8 +152,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 0 180)
+			(pin passive line
+				(at 10.16 -2.54 180)
 				(length 2.54)
 				(name "C+"
 					(effects
@@ -172,10 +170,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 0 0)
+			(pin passive line
+				(at -10.16 3.81 0)
 				(length 2.54)
-				(name "~{SHDN}"
+				(name "_SHDN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -190,8 +188,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 -5.08 0)
+			(pin passive line
+				(at -10.16 -2.54 0)
 				(length 2.54)
 				(name "SS"
 					(effects
@@ -209,6 +207,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

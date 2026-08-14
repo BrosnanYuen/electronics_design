@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT8610"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -8.89 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 21.59 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,41 +14,44 @@
 			)
 		)
 		(property "Value" "LT8610"
-			(at 6.858 8.636 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 20.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "42V, 2.5A Synchronous Step-Down Regulator with 2.5uA Quiescent Current, MSOP-16"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*16*1EP*3x4.039mm*P0.5mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "42V, 2.5A Synchronous Step-Down Regulator with 2.5µA Quiescent Current\\n\\nNote: Sync function is not modeled."
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT8610_0_1"
 			(rectangle
-				(start -10.16 7.62)
-				(end 10.16 -7.62)
+				(start -11.43 19.05)
+				(end 11.43 -19.05)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -64,8 +62,8 @@
 			)
 		)
 		(symbol "LT8610_1_1"
-			(pin input line
-				(at -12.7 0 0)
+			(pin passive line
+				(at -11.43 7.62 0)
 				(length 2.54)
 				(name "SYNC"
 					(effects
@@ -82,8 +80,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -12.7 -2.54 0)
+			(pin passive line
+				(at -11.43 -7.62 0)
 				(length 2.54)
 				(name "TR/SS"
 					(effects
@@ -101,7 +99,7 @@
 				)
 			)
 			(pin passive line
-				(at -12.7 -5.08 0)
+				(at -11.43 -15.24 0)
 				(length 2.54)
 				(name "RT"
 					(effects
@@ -118,8 +116,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -12.7 5.08 0)
+			(pin passive line
+				(at -11.43 15.24 0)
 				(length 2.54)
 				(name "EN/UV"
 					(effects
@@ -137,7 +135,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 10.16 270)
+				(at 0 19.05 270)
 				(length 2.54)
 				(name "VIN"
 					(effects
@@ -155,10 +153,9 @@
 				)
 			)
 			(pin passive line
-				(at 0 10.16 270)
+				(at 11.43 -15.24 180)
 				(length 2.54)
-				(hide yes)
-				(name "VIN"
+				(name "FB"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -173,10 +170,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 0 -10.16 90)
+			(pin passive line
+				(at 11.43 -7.62 180)
 				(length 2.54)
-				(name "GND"
+				(name "SW"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -192,10 +189,9 @@
 				)
 			)
 			(pin passive line
-				(at 0 -10.16 90)
+				(at -11.43 0 0)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "PG"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -210,10 +206,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 12.7 -2.54 180)
+			(pin power_in line
+				(at -5.08 -19.05 90)
 				(length 2.54)
-				(name "SW"
+				(name "GND"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -229,10 +225,9 @@
 				)
 			)
 			(pin passive line
-				(at 12.7 -2.54 180)
+				(at 11.43 7.62 180)
 				(length 2.54)
-				(hide yes)
-				(name "SW"
+				(name "BIAS"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -247,11 +242,10 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 12.7 -2.54 180)
+			(pin input line
+				(at 11.43 15.24 180)
 				(length 2.54)
-				(hide yes)
-				(name "SW"
+				(name "INTVcc"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -266,8 +260,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 12.7 0 180)
+			(pin passive line
+				(at 11.43 0 180)
 				(length 2.54)
 				(name "BST"
 					(effects
@@ -285,9 +279,9 @@
 				)
 			)
 			(pin passive line
-				(at 12.7 2.54 180)
+				(at 5.08 -19.05 90)
 				(length 2.54)
-				(name "INTVcc"
+				(name "PGND"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -302,80 +296,6 @@
 					)
 				)
 			)
-			(pin input line
-				(at 12.7 5.08 180)
-				(length 2.54)
-				(name "BIAS"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "14"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin open_collector line
-				(at -12.7 2.54 0)
-				(length 2.54)
-				(name "PG"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "15"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at 12.7 -5.08 180)
-				(length 2.54)
-				(name "FB"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "16"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -10.16 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "17"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
 		)
-		(embedded_fonts no)
 	)
 )

@@ -2,60 +2,56 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LTC3892-1"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -15.24 24.13 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 45.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "LTC3892-1"
-			(at 17.78 24.13 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Description" "60V dual 2-phase synchronous step-down DC/DC controller, forced continuous conduction mode, TSSOP-28"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 44.45 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "TSSOP*1EP*4.4x9.7mm*P0.65mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "60V Low Iq, Dual, 2-Phase Synchronous Step-Down DC/DC Controller"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LTC3892-1_0_1"
 			(rectangle
-				(start -15.24 22.86)
-				(end 15.24 -22.86)
+				(start -17.78 43.18)
+				(end 17.78 -43.18)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -67,9 +63,9 @@
 		)
 		(symbol "LTC3892-1_1_1"
 			(pin passive line
-				(at -17.78 -17.78 0)
+				(at -17.78 -7.62 0)
 				(length 2.54)
-				(name "ITH1"
+				(name "SENSE1-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -84,10 +80,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -17.78 2.54 0)
+			(pin passive line
+				(at 17.78 -38.1 180)
 				(length 2.54)
-				(name "VFB1"
+				(name "FREQ"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -102,28 +98,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -17.78 7.62 0)
+			(pin passive line
+				(at 11.43 -43.18 90)
 				(length 2.54)
-				(name "SENSE1+"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -17.78 5.08 0)
-				(length 2.54)
-				(name "SENSE1-"
+				(name "DRVCC"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -138,10 +116,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -17.78 -10.16 0)
+			(pin passive line
+				(at -17.78 -38.1 0)
 				(length 2.54)
-				(name "FREQ"
+				(name "PLLIN/MODE"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -156,10 +134,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -17.78 -7.62 0)
+			(pin passive line
+				(at 3.81 -43.18 90)
 				(length 2.54)
-				(name "PLLIN/MODE"
+				(name "DRVUV"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -174,10 +152,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 2.54 25.4 270)
+			(pin passive line
+				(at -17.78 38.1 0)
 				(length 2.54)
-				(name "INTVcc"
+				(name "RUN1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -192,10 +170,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -17.78 0 0)
+			(pin passive line
+				(at 17.78 38.1 180)
 				(length 2.54)
-				(name "RUN1"
+				(name "RUN2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -210,10 +188,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 17.78 0 180)
+			(pin passive line
+				(at 17.78 -7.62 180)
 				(length 2.54)
-				(name "RUN2"
+				(name "SENSE2-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -228,10 +206,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 17.78 5.08 180)
+			(pin passive line
+				(at 17.78 0 180)
 				(length 2.54)
-				(name "SENSE2-"
+				(name "SENSE2+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -246,10 +224,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 17.78 7.62 180)
+			(pin passive line
+				(at 17.78 -15.24 180)
 				(length 2.54)
-				(name "SENSE2+"
+				(name "VFB2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -264,10 +242,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 17.78 2.54 180)
+			(pin passive line
+				(at 17.78 -22.86 180)
 				(length 2.54)
-				(name "VFB2"
+				(name "ITH2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -283,9 +261,9 @@
 				)
 			)
 			(pin passive line
-				(at 17.78 -17.78 180)
+				(at 17.78 -30.48 180)
 				(length 2.54)
-				(name "ITH2"
+				(name "TRACK/SS2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -300,28 +278,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 17.78 -12.7 180)
+			(pin passive line
+				(at 17.78 30.48 180)
 				(length 2.54)
-				(name "DRVUV"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "14"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at 17.78 -10.16 180)
-				(length 2.54)
-				(name "DRVSET"
+				(name "TG2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -336,10 +296,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 17.78 -20.32 180)
+			(pin passive line
+				(at 17.78 15.24 180)
 				(length 2.54)
-				(name "TRACK/SS2"
+				(name "SW2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -354,10 +314,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 17.78 20.32 180)
+			(pin passive line
+				(at 17.78 22.86 180)
 				(length 2.54)
-				(name "TG2"
+				(name "BOOST2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -372,10 +332,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 17.78 15.24 180)
+			(pin passive line
+				(at 17.78 7.62 180)
 				(length 2.54)
-				(name "SW2"
+				(name "BG2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -390,10 +350,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 17.78 17.78 180)
+			(pin input line
+				(at 0 43.18 270)
 				(length 2.54)
-				(name "BOOST2"
+				(name "INTVCC"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -408,10 +368,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 17.78 12.7 180)
+			(pin passive line
+				(at 11.43 43.18 270)
 				(length 2.54)
-				(name "BG2"
+				(name "EXTVCC"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -426,10 +386,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 5.08 25.4 270)
+			(pin passive line
+				(at -3.81 -43.18 90)
 				(length 2.54)
-				(name "DRVcc"
+				(name "DRVSET"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -445,9 +405,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 25.4 270)
+				(at -11.43 43.18 270)
 				(length 2.54)
-				(name "EXTVcc"
+				(name "VIN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -462,10 +422,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at -5.08 25.4 270)
+			(pin passive line
+				(at -17.78 7.62 0)
 				(length 2.54)
-				(name "Vin"
+				(name "BG1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -480,10 +440,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -17.78 12.7 0)
+			(pin passive line
+				(at -17.78 22.86 0)
 				(length 2.54)
-				(name "BG1"
+				(name "BOOST1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -498,10 +458,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -17.78 17.78 0)
+			(pin passive line
+				(at -17.78 15.24 0)
 				(length 2.54)
-				(name "BOOST1"
+				(name "SW1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -516,10 +476,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -17.78 15.24 0)
+			(pin passive line
+				(at -17.78 30.48 0)
 				(length 2.54)
-				(name "SW1"
+				(name "TG1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -534,46 +494,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -17.78 20.32 0)
-				(length 2.54)
-				(name "TG1"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "27"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -17.78 -20.32 0)
+			(pin passive line
+				(at -17.78 -30.48 0)
 				(length 2.54)
 				(name "TRACK/SS1"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "28"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_in line
-				(at 0 -25.4 90)
-				(length 2.54)
-				(name "GND"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -588,7 +512,78 @@
 					)
 				)
 			)
+			(pin passive line
+				(at -17.78 -22.86 0)
+				(length 2.54)
+				(name "ITH1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "30"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -17.78 -15.24 0)
+				(length 2.54)
+				(name "VFB1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "31"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -17.78 0 0)
+				(length 2.54)
+				(name "SENSE1+"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "32"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin power_in line
+				(at -11.43 -43.18 90)
+				(length 2.54)
+				(name "GND"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "33"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
 		)
-		(embedded_fonts no)
 	)
 )

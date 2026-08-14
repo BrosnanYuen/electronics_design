@@ -1,64 +1,57 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "LT1641-1"
-
-		(pin_names
-			(offset 1.016)
-		)
+	(symbol "LT1641-2"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -5.08 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 12.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify right)
 			)
 		)
-		(property "Value" "LT1641-1"
-			(at 3.81 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "LT1641-2"
+			(at 0 11.43 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Description" "High voltage hot swap controller, +9V to +80V, with latching feature, SOIC-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "LT1641-1_0_1"
+		(property "Description" "Positive High Voltage Hot Swap Controller"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "LT1641-2_0_1"
 			(rectangle
-				(start 7.62 7.62)
-				(end -7.62 -10.16)
+				(start -10.16 10.16)
+				(end 10.16 -11.43)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -68,29 +61,9 @@
 				)
 			)
 		)
-		(symbol "LT1641-1_1_0"
-			(pin power_in line
-				(at 2.54 -12.7 90)
-				(length 2.54)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-		)
-		(symbol "LT1641-1_1_1"
-			(pin input line
-				(at -10.16 -2.54 0)
+		(symbol "LT1641-2_1_1"
+			(pin passive line
+				(at -10.16 5.08 0)
 				(length 2.54)
 				(name "ON"
 					(effects
@@ -107,8 +80,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 0 180)
+			(pin passive line
+				(at 10.16 -1.27 180)
 				(length 2.54)
 				(name "FB"
 					(effects
@@ -125,10 +98,10 @@
 					)
 				)
 			)
-			(pin open_collector line
-				(at 10.16 -2.54 180)
+			(pin passive line
+				(at 10.16 -7.62 180)
 				(length 2.54)
-				(name "PWRGD"
+				(name "PwrGD"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -143,10 +116,28 @@
 					)
 				)
 			)
-			(pin input line
+			(pin power_in line
+				(at 0 -11.43 90)
+				(length 2.54)
+				(name "GND"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "4"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
 				(at -10.16 -7.62 0)
 				(length 2.54)
-				(name "TIMER"
+				(name "Timer"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -161,8 +152,8 @@
 					)
 				)
 			)
-			(pin output line
-				(at 2.54 10.16 270)
+			(pin passive line
+				(at 10.16 5.08 180)
 				(length 2.54)
 				(name "GATE"
 					(effects
@@ -179,8 +170,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -2.54 10.16 270)
+			(pin passive line
+				(at 5.08 10.16 270)
 				(length 2.54)
 				(name "Sense"
 					(effects
@@ -198,7 +189,7 @@
 				)
 			)
 			(pin power_in line
-				(at -5.08 10.16 270)
+				(at -6.35 10.16 270)
 				(length 2.54)
 				(name "Vcc"
 					(effects
@@ -216,57 +207,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
-	)
-	(symbol "LT1641-2"
-		(extends "LT1641-1")
-		(in_bom yes)
-		(on_board yes)
-
-		(property "Reference" "U"
-			(at -5.08 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Value" "LT1641-2"
-			(at 3.81 -11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "High voltage hot swap controller, +9V to +80V operation, with auto-retry feature"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm*"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(embedded_fonts no)
 	)
 )

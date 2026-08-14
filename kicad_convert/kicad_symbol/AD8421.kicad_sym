@@ -1,77 +1,204 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "AD8236"
-
-		(pin_names
-			(offset 0.127)
-		)
+	(symbol "AD8421"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 3.81 7.62 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 10.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "AD8236"
-			(at 3.81 5.08 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "AD8421"
+			(at 0 8.89 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Single 40 μA Micropower Instrumentation Amplifier with Zero Crossover Distortion, MSOP-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm* MSOP*3x3mm*P0.65mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "AD8236_0_1"
+		(property "Description" "3 nV/√Hz, Low Power In-Amp"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "AD8421_0_1"
 			(polyline
 				(pts
-					(xy -7.62 7.62) (xy -7.62 -7.62) (xy 7.62 0) (xy -7.62 7.62)
+					(xy -7.62 7.62) (xy 6.35 0)
 				)
 				(stroke
 					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type background)
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -7.62 -7.62) (xy 6.35 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -7.62 7.62) (xy -7.62 -7.62)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -7.06438 -6.35) (xy -6.42938 -6.35)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -7.06438 6.35) (xy -6.42938 6.35)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -6.74688 6.0325) (xy -6.74688 6.6675)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -5.08 7.62) (xy -5.08 6.19125)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -5.08 -7.62) (xy -5.08 -6.19125)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -4.7625 6.6675) (xy -4.1275 6.6675)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -4.445 6.985) (xy -4.445 6.35)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -4.7625 -6.6675) (xy -4.1275 -6.6675)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -5.08) (xy 1.27 -2.77813)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
 				)
 			)
 		)
-		(symbol "AD8236_1_1"
+		(symbol "AD8421_1_1"
 			(pin input line
-				(at -10.16 5.08 0)
+				(at -7.62 -6.35 0)
 				(length 2.54)
-				(name "-"
+				(name "IN-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -87,9 +214,9 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 2.54 0)
+				(at -7.62 3.81 0)
 				(length 2.54)
-				(name "Rg"
+				(name "RG1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -105,9 +232,9 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 -2.54 0)
+				(at -7.62 -3.81 0)
 				(length 2.54)
-				(name "Rg"
+				(name "RG2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -123,9 +250,9 @@
 				)
 			)
 			(pin input line
-				(at -10.16 -5.08 0)
+				(at -7.62 6.35 0)
 				(length 2.54)
-				(name "+"
+				(name "IN+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -141,9 +268,9 @@
 				)
 			)
 			(pin power_in line
-				(at -2.54 -7.62 90)
+				(at -5.08 -7.62 90)
 				(length 2.54)
-				(name "Vs-"
+				(name "VEE"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -159,9 +286,9 @@
 				)
 			)
 			(pin passive line
-				(at 2.54 -7.62 90)
-				(length 5.08)
-				(name "Ref"
+				(at 1.27 -5.08 90)
+				(length 2.54)
+				(name "REF"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -177,9 +304,9 @@
 				)
 			)
 			(pin output line
-				(at 10.16 0 180)
+				(at 6.35 0 180)
 				(length 2.54)
-				(name ""
+				(name "OUT"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -195,9 +322,9 @@
 				)
 			)
 			(pin power_in line
-				(at -2.54 7.62 270)
+				(at -5.08 7.62 270)
 				(length 2.54)
-				(name "Vs+"
+				(name "VCC"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -213,55 +340,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
-	)
-	(symbol "AD8421"
-		(extends "AD8236")
-		(in_bom yes)
-		(on_board yes)
-
-		(property "Reference" "U"
-			(at 3.81 7.62 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "AD8421"
-			(at 3.81 5.08 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Single Low Power Instrumentation Amplifier, SOIC-8/MSOP-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm* MSOP*3x3mm*P0.65mm*"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(embedded_fonts no)
 	)
 )

@@ -2,82 +2,56 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "MAX15062A"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -10.16 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 19.05 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "MAX15062A"
-			(at -10.16 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "60V, 300mA, synchronous step-down dc-dc converter, 3.3V fixed output voltage, DFN-8 / WSON-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 17.78 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property private "KLC_S4.2_V_{CC}" "Internal LDO Power Output."
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name yes)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property private "KLC_S4.4_V_{CC}" "This pin is NOT Power Input, ignore."
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name yes)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "*DFN*2x2mm?P0.5mm*"
+		(property "Description" "60V, 300mA, Ultra-Small, High-Efficiency, Synchronous Step-Down DC-DC Converters (3.3V Vout)"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
 		(symbol "MAX15062A_0_1"
 			(rectangle
-				(start -10.16 7.62)
-				(end 10.16 -7.62)
+				(start -11.43 16.51)
+				(end 11.43 -17.78)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -88,10 +62,10 @@
 			)
 		)
 		(symbol "MAX15062A_1_1"
-			(pin power_in line
-				(at -12.7 5.08 0)
+			(pin passive line
+				(at 11.43 12.7 180)
 				(length 2.54)
-				(name "V_{IN}"
+				(name "LX"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -106,10 +80,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -12.7 2.54 0)
+			(pin power_in line
+				(at 11.43 3.81 180)
 				(length 2.54)
-				(name "EN/UVLO"
+				(name "GND"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -124,10 +98,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at -12.7 -5.08 0)
+			(pin passive line
+				(at 11.43 -13.97 180)
 				(length 2.54)
-				(name "V_{CC}"
+				(name "_RESET"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -142,10 +116,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 12.7 0 180)
+			(pin passive line
+				(at -11.43 -13.97 0)
 				(length 2.54)
-				(name "FB/V_{OUT}"
+				(name "MODE"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -160,10 +134,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -12.7 -2.54 0)
+			(pin power_in line
+				(at -11.43 12.7 0)
 				(length 2.54)
-				(name "MODE"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -178,10 +152,10 @@
 					)
 				)
 			)
-			(pin open_collector line
-				(at 12.7 -5.08 180)
+			(pin passive line
+				(at 11.43 -5.08 180)
 				(length 2.54)
-				(name "~{RESET}"
+				(name "VOUT"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -197,9 +171,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -10.16 90)
+				(at -11.43 -5.08 0)
 				(length 2.54)
-				(name "GND"
+				(name "VCC"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -214,10 +188,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 12.7 5.08 180)
+			(pin passive line
+				(at -11.43 3.81 0)
 				(length 2.54)
-				(name "LX"
+				(name "EN/UVLO"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -233,6 +207,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

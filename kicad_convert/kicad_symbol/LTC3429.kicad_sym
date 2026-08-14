@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LTC3429"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -6.35 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 12.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,41 +14,44 @@
 			)
 		)
 		(property "Value" "LTC3429"
-			(at 5.08 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 11.43 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "600mA, 500kHz Micropower Synchronous Boost Converter with Output Disconnect, TSOT-23-6"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "TSOT?23*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "600mA, 500KHz µPower Synchronous Boost Converter with Output Disconnect"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LTC3429_0_1"
 			(rectangle
-				(start -7.62 5.08)
-				(end 7.62 -5.08)
+				(start -11.43 10.16)
+				(end 11.43 -8.89)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -64,8 +62,8 @@
 			)
 		)
 		(symbol "LTC3429_1_1"
-			(pin input line
-				(at 10.16 2.54 180)
+			(pin passive line
+				(at 0 10.16 270)
 				(length 2.54)
 				(name "SW"
 					(effects
@@ -83,7 +81,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -7.62 90)
+				(at 0 -8.89 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -100,8 +98,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 -2.54 180)
+			(pin passive line
+				(at 11.43 -3.81 180)
 				(length 2.54)
 				(name "FB"
 					(effects
@@ -118,10 +116,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 0 0)
+			(pin passive line
+				(at -11.43 -3.81 0)
 				(length 2.54)
-				(name "~{SHDN}"
+				(name "_SHDN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -136,10 +134,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 10.16 0 180)
+			(pin passive line
+				(at 11.43 5.08 180)
 				(length 2.54)
-				(name "VOUT"
+				(name "Vout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -155,9 +153,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 7.62 270)
+				(at -11.43 5.08 0)
 				(length 2.54)
-				(name "VIN"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -173,6 +171,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

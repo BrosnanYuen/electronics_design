@@ -1,182 +1,57 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "Battery"
-
-		(pin_numbers
-			(hide yes)
-		)
-		(pin_names
-			(offset 0)
-			(hide yes)
-		)
+	(symbol "battery"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
-		(property "Reference" "BT"
-			(at 2.54 2.54 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Reference" "V"
+			(at 0 6.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Value" "Battery"
-			(at 2.54 0 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "V"
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Description" "Multiple-cell battery"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "Sim.Device" "V"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "Sim.Type" "DC"
+		(property "Description" "Voltage Source, either DC, AC, PULSE, SINE, PWL, EXP, or SFFM"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "Sim.Pins" "1=+ 2=-"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(symbol "Battery_0_1"
-			(rectangle
-				(start -2.286 1.778)
-				(end 2.286 1.524)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(rectangle
-				(start -2.286 -1.27)
-				(end 2.286 -1.524)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(rectangle
-				(start -1.524 1.016)
-				(end 1.524 0.508)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(rectangle
-				(start -1.524 -2.032)
-				(end 1.524 -2.54)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
+		(symbol "battery_0_1"
 			(polyline
 				(pts
-					(xy 0 1.778) (xy 0 2.54)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 0 0) (xy 0 0.254)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 0 -0.508) (xy 0 -0.254)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 0 -1.016) (xy 0 -0.762)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 0.762 3.048) (xy 1.778 3.048)
+					(xy -2.54 2.2225) (xy 2.54 2.2225)
 				)
 				(stroke
 					(width 0.254)
@@ -188,7 +63,7 @@
 			)
 			(polyline
 				(pts
-					(xy 1.27 3.556) (xy 1.27 2.54)
+					(xy -2.54 0.3175) (xy 2.54 0.3175)
 				)
 				(stroke
 					(width 0.254)
@@ -198,10 +73,80 @@
 					(type none)
 				)
 			)
+			(polyline
+				(pts
+					(xy 0 -2.54) (xy 0 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 3.81) (xy 0 2.2225)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.5875 3.175) (xy -0.9525 3.175)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 3.4925) (xy -1.27 2.8575)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(rectangle
+				(start -1.27 1.5875)
+				(end 1.27 0.9525)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type background)
+				)
+			)
+			(rectangle
+				(start -1.27 -0.3175)
+				(end 1.27 -0.9525)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type background)
+				)
+			)
 		)
-		(symbol "Battery_1_1"
-			(pin passive line
-				(at 0 5.08 270)
+		(symbol "battery_1_1"
+			(pin power_in line
+				(at 0 3.81 270)
 				(length 2.54)
 				(name "+"
 					(effects
@@ -218,8 +163,8 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 0 -5.08 90)
+			(pin power_in line
+				(at 0 -2.54 90)
 				(length 2.54)
 				(name "-"
 					(effects
@@ -237,6 +182,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

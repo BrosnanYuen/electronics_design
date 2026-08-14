@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LTM4668"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 0 24.13 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 34.29 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,60 +14,83 @@
 			)
 		)
 		(property "Value" "LTM4668"
-			(at 0 21.59 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 33.02 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Quad DC/DC μModule Regulator with Configurable 1.2A Output Array"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "Analog*BGA*6.25x6.25mm*Layout7x7*P0.8mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "LTM4668_1_1"
+		(property "Description" "Quad DC/DC µModule™ Regulator with Configurable 1.2A Output Array"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "LTM4668_0_1"
 			(rectangle
-				(start -12.7 20.32)
-				(end 12.7 -20.32)
+				(start -11.43 31.75)
+				(end 11.43 -31.75)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
 					(type background)
 				)
 			)
-			(pin power_out line
-				(at 15.24 17.78 180)
+		)
+		(symbol "LTM4668_1_1"
+			(pin passive line
+				(at -5.08 -31.75 90)
 				(length 2.54)
-				(name "VOUT1"
+				(name "Mode"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "A1"
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin input line
+				(at 5.08 31.75 270)
+				(length 2.54)
+				(name "INTVcc"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -81,16 +99,16 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -22.86 90)
+				(at -5.08 31.75 270)
 				(length 2.54)
-				(name "GND"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "A2"
+				(number "3"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -99,17 +117,70 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at -11.43 26.67 0)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Run1"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "A3"
+				(number "4"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -11.43 -3.81 0)
+				(length 2.54)
+				(name "Run2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "5"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 11.43 26.67 180)
+				(length 2.54)
+				(name "Run3"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "6"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 11.43 -3.81 180)
+				(length 2.54)
+				(name "Run4"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "7"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -118,27 +189,8 @@
 				)
 			)
 			(pin power_in line
-				(at -15.24 17.78 0)
+				(at 5.08 -31.75 90)
 				(length 2.54)
-				(name "VIN"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "A4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
 				(name "GND"
 					(effects
 						(font
@@ -146,7 +198,7 @@
 						)
 					)
 				)
-				(number "A5"
+				(number "8"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -155,35 +207,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at 11.43 3.81 180)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Pgood3"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "A6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_out line
-				(at 15.24 7.62 180)
-				(length 2.54)
-				(name "VOUT2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "A7"
+				(number "9"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -192,17 +225,16 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 17.78 180)
+				(at 11.43 -26.67 180)
 				(length 2.54)
-				(hide yes)
-				(name "VOUT1"
+				(name "Pgood4"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "B1"
+				(number "10"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -211,17 +243,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at -11.43 19.05 0)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Vout1"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "B2"
+				(number "11"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -230,102 +261,7 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "B3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at -15.24 17.78 0)
-				(length 2.54)
-				(hide yes)
-				(name "VIN"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "B4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "B5"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "B6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 15.24 7.62 180)
-				(length 2.54)
-				(hide yes)
-				(name "VOUT2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "B7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 15.24 15.24 180)
+				(at -11.43 11.43 0)
 				(length 2.54)
 				(name "FB1"
 					(effects
@@ -334,7 +270,7 @@
 						)
 					)
 				)
-				(number "C1"
+				(number "12"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -343,71 +279,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at -11.43 -11.43 0)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Vout2"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "C2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 7.62 0)
-				(length 2.54)
-				(name "RUN1"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "C3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at -15.24 -7.62 0)
-				(length 2.54)
-				(name "INTVCC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "C4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 5.08 0)
-				(length 2.54)
-				(name "RUN2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "C5"
+				(number "13"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -416,26 +297,7 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "C6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 15.24 5.08 180)
+				(at -11.43 -19.05 0)
 				(length 2.54)
 				(name "FB2"
 					(effects
@@ -444,43 +306,7 @@
 						)
 					)
 				)
-				(number "C7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin open_collector line
-				(at 15.24 -17.78 180)
-				(length 2.54)
-				(name "PGOOD4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "D1"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin open_collector line
-				(at 15.24 12.7 180)
-				(length 2.54)
-				(name "PGOOD1"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "D2"
+				(number "14"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -489,17 +315,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at 11.43 19.05 180)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Vout3"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "D3"
+				(number "15"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -508,191 +333,7 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "D4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "D5"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin open_collector line
-				(at 15.24 2.54 180)
-				(length 2.54)
-				(name "PGOOD2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "D6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin open_collector line
-				(at 15.24 -7.62 180)
-				(length 2.54)
-				(name "PGOOD3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "D7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 15.24 -15.24 180)
-				(length 2.54)
-				(name "FB4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "E1"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "E2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 0 0)
-				(length 2.54)
-				(name "RUN4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "E3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 -12.7 0)
-				(length 2.54)
-				(name "MODE/SYNC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "E4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 2.54 0)
-				(length 2.54)
-				(name "RUN3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "E5"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "E6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 15.24 -5.08 180)
+				(at 11.43 11.43 180)
 				(length 2.54)
 				(name "FB3"
 					(effects
@@ -701,25 +342,7 @@
 						)
 					)
 				)
-				(number "E7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_out line
-				(at 15.24 -12.7 180)
-				(length 2.54)
-				(name "VOUT4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "F1"
+				(number "16"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -728,17 +351,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at 11.43 -11.43 180)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Vout4"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "F2"
+				(number "17"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -747,35 +369,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at 11.43 -19.05 180)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "FB4"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "F3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_in line
-				(at -15.24 15.24 0)
-				(length 2.54)
-				(name "VIN"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "F4"
+				(number "18"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -784,17 +387,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at -11.43 3.81 0)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Pgood1"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "F5"
+				(number "19"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -803,168 +405,16 @@
 				)
 			)
 			(pin passive line
-				(at 0 -22.86 90)
+				(at -11.43 -26.67 0)
 				(length 2.54)
-				(hide yes)
-				(name "GND"
+				(name "Pgood2"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "F6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_out line
-				(at 15.24 -2.54 180)
-				(length 2.54)
-				(name "VOUT3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "F7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 15.24 -12.7 180)
-				(length 2.54)
-				(hide yes)
-				(name "VOUT4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "G1"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "G2"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "G3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at -15.24 15.24 0)
-				(length 2.54)
-				(hide yes)
-				(name "VIN"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "G4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "G5"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 0 -22.86 90)
-				(length 2.54)
-				(hide yes)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "G6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at 15.24 -2.54 180)
-				(length 2.54)
-				(hide yes)
-				(name "VOUT3"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "G7"
+				(number "20"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -973,6 +423,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

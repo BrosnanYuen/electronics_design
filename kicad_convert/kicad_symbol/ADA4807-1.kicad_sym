@@ -2,78 +2,287 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "ADA4807-1"
-
-		(pin_names
-			(offset 0.127)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 1.27 3.81 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "ADA4807-1"
-			(at 1.27 -3.81 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "Single Rail-to-Rail Input/Output Amplifiers, with disable, SC-70-6/SOT-23-6"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 3.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "*SC*70* SOT?23*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "3.1nV/√Hz, 1mA, 180MHz, Rail-to-Rail Input/Output Amplifier"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "ADA4807-1_0_1"
 			(polyline
 				(pts
-					(xy -5.08 5.08) (xy 5.08 0) (xy -5.08 -5.08) (xy -5.08 5.08)
+					(xy -2.54 0) (xy -2.54 -2.61937)
 				)
 				(stroke
 					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type background)
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 2.46062) (xy -2.54 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.54 0) (xy -2.54 2.46062)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 -2.61937) (xy 2.54 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.635 -1.34937) (xy 1.03188 -1.34937)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.635 -1.66688) (xy 0.635 -1.34937)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.03188 -1.66688) (xy 0.635 -1.66688)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.03188 -2.06375) (xy 1.03188 -1.66688)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.635 -2.06375) (xy 1.03188 -2.06375)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 2.54) (xy -1.27 1.82563)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 -1.98438) (xy -1.27 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.5875 1.27) (xy -2.30187 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.50812 -1.27) (xy -2.30187 -1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.905 -1.66688) (xy -1.905 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.15875 2.06375) (xy -0.9525 2.06375)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.555625 1.66688) (xy -0.555625 2.46062)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -0.635) (xy 1.27 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.15875 -2.14312) (xy -0.873125 -2.14312)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.635 -1.11125) (xy 1.03188 -1.11125)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
 				)
 			)
 		)
 		(symbol "ADA4807-1_1_1"
-			(pin output line
-				(at 7.62 0 180)
+			(pin passive line
+				(at -2.54 -1.27 0)
 				(length 2.54)
-				(name ""
+				(name "100"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -88,10 +297,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at -2.54 -7.62 90)
-				(length 3.81)
-				(name "V-"
+			(pin passive line
+				(at -2.54 1.27 0)
+				(length 2.54)
+				(name "101"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -106,10 +315,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -7.62 2.54 0)
+			(pin passive line
+				(at -1.27 2.54 270)
 				(length 2.54)
-				(name "+"
+				(name "102"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -124,10 +333,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -7.62 -2.54 0)
+			(pin passive line
+				(at -1.27 -2.54 90)
 				(length 2.54)
-				(name "-"
+				(name "103"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -142,13 +351,13 @@
 					)
 				)
 			)
-			(pin input line
-				(at 0 -7.62 90)
-				(length 5.08)
-				(name "~{DISABLE}"
+			(pin passive line
+				(at 2.54 0 180)
+				(length 2.54)
+				(name "104"
 					(effects
 						(font
-							(size 0.508 0.508)
+							(size 1.27 1.27)
 						)
 					)
 				)
@@ -160,10 +369,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at -2.54 7.62 270)
-				(length 3.81)
-				(name "V+"
+			(pin passive line
+				(at 1.27 -2.54 90)
+				(length 2.54)
+				(name "106"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -179,6 +388,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

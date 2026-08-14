@@ -2,60 +2,56 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT3988"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -9.525 27.305 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 24.13 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify right)
 			)
 		)
 		(property "Value" "LT3988"
-			(at -3.81 24.765 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Description" "Dual 1A Switching Buck Regulator with Internal Switches"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 22.86 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*16*1EP*3x4.039mm*P0.5mm*EP1.651x2.845mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Dual 60v Monolithic 1A Step-Down Switching Regulator"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT3988_0_1"
 			(rectangle
-				(start -12.7 22.86)
-				(end 12.7 -22.86)
+				(start -16.51 21.59)
+				(end 16.51 -20.32)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -67,7 +63,7 @@
 		)
 		(symbol "LT3988_1_1"
 			(pin passive line
-				(at -15.24 -15.24 0)
+				(at -16.51 -2.54 0)
 				(length 2.54)
 				(name "DA1"
 					(effects
@@ -85,7 +81,7 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -10.16 0)
+				(at -16.51 3.81 0)
 				(length 2.54)
 				(name "SW1"
 					(effects
@@ -103,9 +99,9 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -2.54 0)
+				(at -16.51 10.16 0)
 				(length 2.54)
-				(name "BOOST1"
+				(name "Boost1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -120,8 +116,8 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 15.24 0 180)
+			(pin passive line
+				(at 16.51 16.51 180)
 				(length 2.54)
 				(name "BD"
 					(effects
@@ -138,8 +134,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 17.78 0)
+			(pin passive line
+				(at -16.51 16.51 0)
 				(length 2.54)
 				(name "EN/UVLO"
 					(effects
@@ -157,9 +153,9 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 -2.54 180)
+				(at 16.51 10.16 180)
 				(length 2.54)
-				(name "BOOST2"
+				(name "Boost2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -175,7 +171,7 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 -10.16 180)
+				(at 16.51 3.81 180)
 				(length 2.54)
 				(name "SW2"
 					(effects
@@ -193,7 +189,7 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 -15.24 180)
+				(at 16.51 -2.54 180)
 				(length 2.54)
 				(name "DA2"
 					(effects
@@ -211,9 +207,9 @@
 				)
 			)
 			(pin power_in line
-				(at 2.54 25.4 270)
+				(at 5.08 21.59 270)
 				(length 2.54)
-				(name "VIN2"
+				(name "Vin2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -229,9 +225,9 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 15.24 180)
+				(at 16.51 -15.24 180)
 				(length 2.54)
-				(name "TRACK/SS2"
+				(name "Track/SS2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -246,8 +242,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 -17.78 180)
+			(pin passive line
+				(at 16.51 -8.89 180)
 				(length 2.54)
 				(name "FB2"
 					(effects
@@ -264,28 +260,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 5.08 0)
+			(pin passive line
+				(at 5.08 -20.32 90)
 				(length 2.54)
-				(name "SYNC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "12"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at 15.24 5.08 180)
-				(length 2.54)
-				(name "RT"
+				(name "Rt"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -300,8 +278,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 -17.78 0)
+			(pin passive line
+				(at -16.51 -8.89 0)
 				(length 2.54)
 				(name "FB1"
 					(effects
@@ -319,9 +297,9 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 15.24 0)
+				(at -16.51 -15.24 0)
 				(length 2.54)
-				(name "TRACK/SS1"
+				(name "Track/SS1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -337,9 +315,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 25.4 270)
+				(at -5.08 21.59 270)
 				(length 2.54)
-				(name "VIN1"
+				(name "Vin1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -355,7 +333,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -25.4 90)
+				(at -5.08 -20.32 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -373,6 +351,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

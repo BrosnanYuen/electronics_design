@@ -2,60 +2,56 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT3439"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -7.62 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 15.24 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "LT3439"
-			(at 3.81 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "1A Slew Rate Controlled Ultralow Noise Isolated DC/DC Transformer Driver, TSSOP-16"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 13.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "TSSOP*EP*4.4x5mm*P0.65mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Ultralow Noise 1A Isolated DC/DC Transformer Driver"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT3439_0_1"
 			(rectangle
-				(start -7.62 10.16)
-				(end 10.16 -12.7)
+				(start -11.43 12.7)
+				(end 11.43 -12.7)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -66,8 +62,8 @@
 			)
 		)
 		(symbol "LT3439_1_1"
-			(pin power_in line
-				(at 0 -15.24 90)
+			(pin passive line
+				(at 5.08 -12.7 90)
 				(length 2.54)
 				(name "PGND"
 					(effects
@@ -84,11 +80,10 @@
 					)
 				)
 			)
-			(pin no_connect line
-				(at -7.62 5.08 0)
+			(pin passive line
+				(at -11.43 6.35 0)
 				(length 2.54)
-				(hide yes)
-				(name "NC"
+				(name "_SHDN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -103,10 +98,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 12.7 5.08 180)
+			(pin passive line
+				(at 11.43 6.35 180)
 				(length 2.54)
-				(name "COLA"
+				(name "COL A"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -122,9 +117,9 @@
 				)
 			)
 			(pin passive line
-				(at 12.7 -10.16 180)
+				(at 11.43 -6.35 180)
 				(length 2.54)
-				(name "Rsl"
+				(name "RSL"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -132,153 +127,6 @@
 					)
 				)
 				(number "4"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at -10.16 -5.08 0)
-				(length 2.54)
-				(name "SYNC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "5"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at -10.16 -7.62 0)
-				(length 2.54)
-				(name "Ct"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at -10.16 -10.16 0)
-				(length 2.54)
-				(name "Rt"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at -7.62 2.54 0)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "8"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at -7.62 0 0)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "9"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_in line
-				(at -2.54 -15.24 90)
-				(length 2.54)
-				(name "GND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "10"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -10.16 7.62 0)
-				(length 2.54)
-				(name "~{SHDN}"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "11"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at -7.62 -2.54 0)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "12"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -296,44 +144,7 @@
 						)
 					)
 				)
-				(number "13"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 12.7 -2.54 180)
-				(length 2.54)
-				(name "COLB"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "14"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at 10.16 0 180)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "15"
+				(number "5"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -342,17 +153,52 @@
 				)
 			)
 			(pin passive line
-				(at 0 -15.24 90)
+				(at -11.43 0 0)
 				(length 2.54)
-				(hide yes)
-				(name "PGND"
+				(name "CT"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "16"
+				(number "6"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -11.43 -6.35 0)
+				(length 2.54)
+				(name "RT"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "7"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 11.43 0 180)
+				(length 2.54)
+				(name "COL B"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "8"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -361,16 +207,16 @@
 				)
 			)
 			(pin power_in line
-				(at 2.54 -15.24 90)
+				(at -5.08 -12.7 90)
 				(length 2.54)
-				(name "PADGND"
+				(name "GND"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "17"
+				(number "9"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -379,6 +225,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

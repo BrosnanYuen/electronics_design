@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LTC6902"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -6.35 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 20.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,41 +14,44 @@
 			)
 		)
 		(property "Value" "LTC6902"
-			(at 5.08 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 19.05 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Multiphase oscillator, spread spectrum frequency modulation, MSOP-10"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*3x3mm*P0.5mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Multiphase Oscillator with Spread Spectrum Frequency Modulation"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LTC6902_0_1"
 			(rectangle
-				(start -7.62 7.62)
-				(end 7.62 -7.62)
+				(start -8.89 17.78)
+				(end 8.89 -17.78)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -65,7 +63,7 @@
 		)
 		(symbol "LTC6902_1_1"
 			(pin power_in line
-				(at 0 10.16 270)
+				(at -8.89 15.24 0)
 				(length 2.54)
 				(name "V+"
 					(effects
@@ -82,8 +80,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 -2.54 0)
+			(pin passive line
+				(at -8.89 7.62 0)
 				(length 2.54)
 				(name "DIV"
 					(effects
@@ -100,8 +98,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 -5.08 0)
+			(pin passive line
+				(at -8.89 0 0)
 				(length 2.54)
 				(name "PH"
 					(effects
@@ -119,7 +117,7 @@
 				)
 			)
 			(pin output line
-				(at 10.16 5.08 180)
+				(at -8.89 -7.62 0)
 				(length 2.54)
 				(name "OUT1"
 					(effects
@@ -137,7 +135,7 @@
 				)
 			)
 			(pin output line
-				(at 10.16 2.54 180)
+				(at -8.89 -15.24 0)
 				(length 2.54)
 				(name "OUT2"
 					(effects
@@ -155,7 +153,7 @@
 				)
 			)
 			(pin output line
-				(at 10.16 0 180)
+				(at 8.89 -15.24 180)
 				(length 2.54)
 				(name "OUT3"
 					(effects
@@ -173,7 +171,7 @@
 				)
 			)
 			(pin output line
-				(at 10.16 -2.54 180)
+				(at 8.89 -7.62 180)
 				(length 2.54)
 				(name "OUT4"
 					(effects
@@ -191,7 +189,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -10.16 90)
+				(at 8.89 0 180)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -209,7 +207,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 2.54 0)
+				(at 8.89 7.62 180)
 				(length 2.54)
 				(name "MOD"
 					(effects
@@ -227,7 +225,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 5.08 0)
+				(at 8.89 15.24 180)
 				(length 2.54)
 				(name "SET"
 					(effects
@@ -245,6 +243,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

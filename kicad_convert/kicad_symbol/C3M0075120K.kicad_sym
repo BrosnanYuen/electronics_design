@@ -1,76 +1,57 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "C3M0030090K"
-
-		(pin_names
-			(hide yes)
-		)
+	(symbol "C3M0075120K"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
-		(property "Reference" "Q"
-			(at 5.08 1.905 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Reference" "U"
+			(at 0 6.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Value" "C3M0030090K"
-			(at 5.08 0 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "C3M0075120K"
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Description" "63A Id, 900V Vds, 30mOhm, N-Channel SiC MOSFET, TO-247-4"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "TO?247*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "C3M0030090K_0_1"
-			(polyline
-				(pts
-					(xy -2.54 -2.54) (xy -2.54 -3.175) (xy 2.54 -3.175)
+		(property "Description" "N-Channel MOSFET transistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
 				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
+				(hide yes)
 			)
+		)
+		(symbol "C3M0075120K_0_1"
 			(polyline
 				(pts
-					(xy 0.254 1.905) (xy 0.254 -1.905)
+					(xy 1.27 0) (xy 1.27 -2.54)
 				)
 				(stroke
 					(width 0.254)
@@ -82,19 +63,7 @@
 			)
 			(polyline
 				(pts
-					(xy 0.254 0) (xy -2.54 0)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 0.762 2.286) (xy 0.762 1.27)
+					(xy -1.27 -2.54) (xy 1.27 -2.54)
 				)
 				(stroke
 					(width 0.254)
@@ -106,7 +75,7 @@
 			)
 			(polyline
 				(pts
-					(xy 0.762 0.508) (xy 0.762 -0.508)
+					(xy 0.635 0) (xy 1.27 0)
 				)
 				(stroke
 					(width 0.254)
@@ -118,7 +87,7 @@
 			)
 			(polyline
 				(pts
-					(xy 0.762 -1.27) (xy 0.762 -2.286)
+					(xy -1.27 0) (xy 0.635 0.3175)
 				)
 				(stroke
 					(width 0.254)
@@ -130,10 +99,10 @@
 			)
 			(polyline
 				(pts
-					(xy 0.762 -1.778) (xy 3.302 -1.778) (xy 3.302 1.778) (xy 0.762 1.778)
+					(xy -1.27 0) (xy 0.635 -0.3175)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -142,102 +111,153 @@
 			)
 			(polyline
 				(pts
-					(xy 1.016 0) (xy 2.032 0.381) (xy 2.032 -0.381) (xy 1.016 0)
+					(xy 0.635 0.3175) (xy 0.635 -0.3175)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type outline)
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 3.175) (xy -1.27 1.905)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 0.635) (xy -1.27 -0.635)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 -1.905) (xy -1.27 -3.175)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 -2.54) (xy -1.905 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.905 2.54) (xy -1.905 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 2.54) (xy -1.27 2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 3.81) (xy 1.27 2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -2.54) (xy 1.27 -3.81)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -2.54) (xy 0 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -3.09563) (xy 0 -3.09563)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 -3.09563) (xy 0 -3.81)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
 				)
 			)
 			(circle
-				(center 1.651 0)
-				(radius 2.794)
+				(center 1.27 -2.54)
+				(radius 0.15875)
 				(stroke
 					(width 0.254)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 2.54 2.54) (xy 2.54 1.778)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(circle
-				(center 2.54 1.778)
-				(radius 0.254)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(circle
-				(center 2.54 -1.778)
-				(radius 0.254)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(polyline
-				(pts
-					(xy 2.54 -2.54) (xy 2.54 0) (xy 0.762 0)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(circle
-				(center 2.54 -3.175)
-				(radius 0.2794)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(polyline
-				(pts
-					(xy 2.794 0.508) (xy 2.921 0.381) (xy 3.683 0.381) (xy 3.81 0.254)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 3.302 0.381) (xy 2.921 -0.254) (xy 3.683 -0.254) (xy 3.302 0.381)
-				)
-				(stroke
-					(width 0)
 					(type default)
 				)
 				(fill
@@ -245,9 +265,9 @@
 				)
 			)
 		)
-		(symbol "C3M0030090K_1_1"
+		(symbol "C3M0075120K_1_1"
 			(pin passive line
-				(at 2.54 5.08 270)
+				(at 1.27 3.81 270)
 				(length 2.54)
 				(name "D"
 					(effects
@@ -264,10 +284,10 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 2.54 -5.08 90)
+			(pin input line
+				(at -2.54 -2.54 0)
 				(length 2.54)
-				(name "S"
+				(name "G"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -283,9 +303,9 @@
 				)
 			)
 			(pin passive line
-				(at -5.08 -2.54 0)
+				(at 0 -3.81 90)
 				(length 2.54)
-				(name "DS"
+				(name "S1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -300,10 +320,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -5.08 0 0)
+			(pin passive line
+				(at 1.27 -3.81 90)
 				(length 2.54)
-				(name "G"
+				(name "S2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -318,58 +338,42 @@
 					)
 				)
 			)
-		)
-		(embedded_fonts no)
-	)
-	(symbol "C3M0075120K"
-		(extends "C3M0030090K")
-		(in_bom yes)
-		(on_board yes)
-
-		(property "Reference" "Q"
-			(at 5.08 1.905 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
+			(pin passive line
+				(at 3.81 2.54 90)
+				(length 2.54)
+				(name "Tj"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
 				)
-				(justify left)
-			)
-		)
-		(property "Value" "C3M0075120K"
-			(at 5.08 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
+				(number "5"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
 				)
-				(justify left)
 			)
-		)
-		(property "Description" "30A Id, 1200V Vds, 75mOhm, N-Channel SiC MOSFET, TO-247-4"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
+			(pin passive line
+				(at 3.81 -2.54 90)
+				(length 2.54)
+				(name "Tc"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "6"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
 				)
 			)
 		)
-		(property "ki_fp_filters" "TO?247*"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(embedded_fonts no)
 	)
 )

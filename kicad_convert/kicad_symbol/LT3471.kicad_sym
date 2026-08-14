@@ -2,60 +2,56 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT3471"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -12.7 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 17.78 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify right)
 			)
 		)
 		(property "Value" "LT3471"
-			(at 11.43 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "Dual 1.3A, 1.2MHz Boost/Inverter, DFN-10"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 16.51 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "DFN*1EP*3x3mm*P0.5mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Dual 1.3A, 1.2MHz Boost/Inverter in 3mm x 3mm DFN"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT3471_0_1"
 			(rectangle
-				(start -12.7 10.16)
-				(end 12.7 -7.62)
+				(start -12.7 15.24)
+				(end 13.97 -15.24)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -66,8 +62,8 @@
 			)
 		)
 		(symbol "LT3471_1_1"
-			(pin input line
-				(at -15.24 0 0)
+			(pin passive line
+				(at 13.97 10.16 180)
 				(length 2.54)
 				(name "FB1N"
 					(effects
@@ -84,8 +80,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 2.54 0)
+			(pin passive line
+				(at 13.97 5.08 180)
 				(length 2.54)
 				(name "FB1P"
 					(effects
@@ -102,10 +98,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at -15.24 -5.08 0)
+			(pin power_in line
+				(at 13.97 0 180)
 				(length 2.54)
-				(name "VREF"
+				(name "Vref"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -120,8 +116,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 2.54 180)
+			(pin passive line
+				(at 13.97 -10.16 180)
 				(length 2.54)
 				(name "FB2P"
 					(effects
@@ -138,8 +134,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 0 180)
+			(pin passive line
+				(at 13.97 -5.08 180)
 				(length 2.54)
 				(name "FB2N"
 					(effects
@@ -157,7 +153,7 @@
 				)
 			)
 			(pin passive line
-				(at 10.16 12.7 270)
+				(at 7.62 -15.24 90)
 				(length 2.54)
 				(name "SW2"
 					(effects
@@ -174,10 +170,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 -2.54 180)
+			(pin passive line
+				(at -12.7 -10.16 0)
 				(length 2.54)
-				(name "~{SHDN}/SS2"
+				(name "_SHDN/SS2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -193,9 +189,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 12.7 270)
+				(at -12.7 0 0)
 				(length 2.54)
-				(name "VIN"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -210,10 +206,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 -2.54 0)
+			(pin passive line
+				(at -12.7 10.16 0)
 				(length 2.54)
-				(name "~{SHDN}/SS1"
+				(name "_SHDN/SS1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -229,7 +225,7 @@
 				)
 			)
 			(pin passive line
-				(at -10.16 12.7 270)
+				(at 1.27 15.24 270)
 				(length 2.54)
 				(name "SW1"
 					(effects
@@ -247,7 +243,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -10.16 90)
+				(at -6.35 -15.24 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -265,6 +261,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

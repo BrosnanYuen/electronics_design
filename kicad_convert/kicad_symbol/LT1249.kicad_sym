@@ -2,19 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT1249"
-
-		(pin_names
-			(offset 1.016)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 6.35 16.51 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 15.24 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22,41 +14,44 @@
 			)
 		)
 		(property "Value" "LT1249"
-			(at 6.35 13.97 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 13.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Power Factor Controller, DIP-8/SOIC-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm* DIP*W7.62mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power Factor Controller\\n\\nNote: External sync capability is not modeled."
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT1249_0_1"
 			(rectangle
-				(start -12.7 12.7)
-				(end 12.7 -12.7)
+				(start -13.97 12.7)
+				(end 13.97 -12.7)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -68,7 +63,7 @@
 		)
 		(symbol "LT1249_1_1"
 			(pin power_in line
-				(at 0 -15.24 90)
+				(at 0 -12.7 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -85,10 +80,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -15.24 0 0)
+			(pin passive line
+				(at -13.97 -5.08 0)
 				(length 2.54)
-				(name "CAOUT"
+				(name "CAout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -103,10 +98,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 -5.08 0)
+			(pin passive line
+				(at -7.62 12.7 270)
 				(length 2.54)
-				(name "MOUT"
+				(name "Mout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -121,10 +116,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 -10.16 0)
+			(pin passive line
+				(at 7.62 12.7 270)
 				(length 2.54)
-				(name "IAC"
+				(name "Iac"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -139,10 +134,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -15.24 10.16 0)
+			(pin passive line
+				(at 13.97 6.35 180)
 				(length 2.54)
-				(name "VAOUT"
+				(name "VAout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -157,10 +152,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 5.08 0)
+			(pin passive line
+				(at 13.97 0 180)
 				(length 2.54)
-				(name "VSENSE"
+				(name "Vsense"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -176,9 +171,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 15.24 270)
+				(at -13.97 5.08 0)
 				(length 2.54)
-				(name "VCC"
+				(name "Vcc"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -193,8 +188,8 @@
 					)
 				)
 			)
-			(pin output line
-				(at 15.24 0 180)
+			(pin passive line
+				(at 13.97 -6.35 180)
 				(length 2.54)
 				(name "GTDR"
 					(effects
@@ -212,6 +207,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

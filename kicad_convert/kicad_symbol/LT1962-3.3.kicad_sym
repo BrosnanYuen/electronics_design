@@ -1,61 +1,57 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "LT1962-5"
-
+	(symbol "LT1962-3.3"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -7.62 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 11.43 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Value" "LT1962-5"
-			(at 1.27 -6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "LT1962-3.3"
+			(at 0 10.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Description" "5.0V, 300mA, Low Noise, Micropower LDO Regulator, MSOP-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*3x3mm*P0.65mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "LT1962-5_0_1"
+		(property "Description" "300mA Low Noise Low Dropout µPower Regulator with Shutdown, Adjustable Output Voltage"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "LT1962-3.3_0_1"
 			(rectangle
-				(start -7.62 7.62)
-				(end 7.62 -5.08)
+				(start -11.43 8.89)
+				(end 11.43 -8.89)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -65,9 +61,9 @@
 				)
 			)
 		)
-		(symbol "LT1962-5_1_1"
-			(pin power_out line
-				(at 10.16 5.08 180)
+		(symbol "LT1962-3.3_1_1"
+			(pin output line
+				(at 11.43 5.08 180)
 				(length 2.54)
 				(name "OUT"
 					(effects
@@ -84,8 +80,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 2.54 180)
+			(pin passive line
+				(at 11.43 0 180)
 				(length 2.54)
 				(name "SENSE"
 					(effects
@@ -103,7 +99,7 @@
 				)
 			)
 			(pin passive line
-				(at 10.16 -2.54 180)
+				(at 11.43 -5.08 180)
 				(length 2.54)
 				(name "BYP"
 					(effects
@@ -121,7 +117,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -7.62 90)
+				(at 0 -8.89 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -138,10 +134,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 -2.54 0)
+			(pin passive line
+				(at -11.43 -3.81 0)
 				(length 2.54)
-				(name "~{SHDN}"
+				(name "_SHDN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -156,46 +152,8 @@
 					)
 				)
 			)
-			(pin no_connect line
-				(at 2.54 5.08 90)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin no_connect line
-				(at 2.54 2.54 90)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_in line
-				(at -10.16 5.08 0)
+			(pin input line
+				(at -11.43 3.81 0)
 				(length 2.54)
 				(name "IN"
 					(effects
@@ -213,57 +171,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
-	)
-	(symbol "LT1962-3.3"
-		(extends "LT1962-5")
-		(in_bom yes)
-		(on_board yes)
-
-		(property "Reference" "U"
-			(at -7.62 8.89 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "LT1962-3.3"
-			(at 1.27 -6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "3.3V, 300mA, Low Noise, Micropower LDO Regulator, MSOP-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_fp_filters" "MSOP*3x3mm*P0.65mm*"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(embedded_fonts no)
 	)
 )

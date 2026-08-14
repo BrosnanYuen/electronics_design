@@ -1,89 +1,57 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "PMOS"
-
-		(pin_numbers
-			(hide yes)
-		)
-		(pin_names
-			(offset 0)
-		)
+	(symbol "pmos"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "Q"
-			(at 5.08 1.27 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 6.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "PMOS"
-			(at 5.08 -1.27 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Description" "P-MOSFET transistor, drain/source/gate"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "Sim.Device" "PMOS"
-			(at 0 -17.145 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+		(property "Datasheet" "~"
+			(at 0 0 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "Sim.Type" "VDMOS"
-			(at 0 -19.05 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+		(property "Description" "P-Channel MOSFET transistor"
+			(at 0 0 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "Sim.Pins" "1=D 2=G 3=S"
-			(at 0 -15.24 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(symbol "PMOS_0_1"
+		(symbol "pmos_0_1"
 			(polyline
 				(pts
-					(xy 0.254 1.905) (xy 0.254 -1.905)
+					(xy 1.27 0) (xy 1.27 -3.81)
 				)
 				(stroke
 					(width 0.254)
@@ -95,19 +63,7 @@
 			)
 			(polyline
 				(pts
-					(xy 0.254 0) (xy -2.54 0)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 0.762 2.286) (xy 0.762 1.27)
+					(xy -1.27 -2.54) (xy 1.27 -2.54)
 				)
 				(stroke
 					(width 0.254)
@@ -119,19 +75,7 @@
 			)
 			(polyline
 				(pts
-					(xy 0.762 1.778) (xy 3.302 1.778) (xy 3.302 -1.778) (xy 0.762 -1.778)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(polyline
-				(pts
-					(xy 0.762 0.508) (xy 0.762 -0.508)
+					(xy -1.27 0) (xy -0.635 0)
 				)
 				(stroke
 					(width 0.254)
@@ -143,7 +87,7 @@
 			)
 			(polyline
 				(pts
-					(xy 0.762 -1.27) (xy 0.762 -2.286)
+					(xy 1.27 0) (xy -0.635 0.3175)
 				)
 				(stroke
 					(width 0.254)
@@ -153,9 +97,10 @@
 					(type none)
 				)
 			)
-			(circle
-				(center 1.651 0)
-				(radius 2.794)
+			(polyline
+				(pts
+					(xy 1.27 0) (xy -0.635 -0.3175)
+				)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -166,56 +111,10 @@
 			)
 			(polyline
 				(pts
-					(xy 2.286 0) (xy 1.27 0.381) (xy 1.27 -0.381) (xy 2.286 0)
+					(xy -0.635 0.3175) (xy -0.635 -0.3175)
 				)
 				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(polyline
-				(pts
-					(xy 2.54 2.54) (xy 2.54 1.778)
-				)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type none)
-				)
-			)
-			(circle
-				(center 2.54 1.778)
-				(radius 0.254)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(circle
-				(center 2.54 -1.778)
-				(radius 0.254)
-				(stroke
-					(width 0)
-					(type default)
-				)
-				(fill
-					(type outline)
-				)
-			)
-			(polyline
-				(pts
-					(xy 2.54 -2.54) (xy 2.54 0) (xy 0.762 0)
-				)
-				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -224,10 +123,10 @@
 			)
 			(polyline
 				(pts
-					(xy 2.794 -0.508) (xy 2.921 -0.381) (xy 3.683 -0.381) (xy 3.81 -0.254)
+					(xy -1.27 3.175) (xy -1.27 1.905)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -236,10 +135,70 @@
 			)
 			(polyline
 				(pts
-					(xy 3.302 -0.381) (xy 2.921 0.254) (xy 3.683 0.254) (xy 3.302 -0.381)
+					(xy -1.27 0.635) (xy -1.27 -0.635)
 				)
 				(stroke
-					(width 0)
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 -1.905) (xy -1.27 -3.175)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 -2.54) (xy -1.905 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.905 2.54) (xy -1.905 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 2.54) (xy -1.27 2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 3.81) (xy 1.27 2.54)
+				)
+				(stroke
+					(width 0.254)
 					(type default)
 				)
 				(fill
@@ -247,9 +206,9 @@
 				)
 			)
 		)
-		(symbol "PMOS_1_1"
+		(symbol "pmos_1_1"
 			(pin passive line
-				(at 2.54 5.08 270)
+				(at 1.27 3.81 180)
 				(length 2.54)
 				(name "D"
 					(effects
@@ -267,7 +226,7 @@
 				)
 			)
 			(pin input line
-				(at -5.08 0 0)
+				(at -2.54 -2.54 0)
 				(length 2.54)
 				(name "G"
 					(effects
@@ -285,7 +244,7 @@
 				)
 			)
 			(pin passive line
-				(at 2.54 -5.08 90)
+				(at 1.27 -3.81 180)
 				(length 2.54)
 				(name "S"
 					(effects
@@ -303,6 +262,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

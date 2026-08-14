@@ -2,16 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT1054"
-
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -6.604 11.176 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 12.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19,41 +14,80 @@
 			)
 		)
 		(property "Value" "LT1054"
-			(at 4.318 11.176 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 11.43 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Switched-Capacitor Voltage Converter with Regulator, output current 100mA, operating range 3.5V to 15V, low loss 1.1V at 100mA, DIP-8/SO-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "DIP*W7.62mm* SOIC*3.9x4.9mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Switched-Capacitor Voltage Converter with Regulator"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT1054_0_1"
+			(polyline
+				(pts
+					(xy -1.5875 10.16) (xy -1.5875 8.89)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.5875 10.16) (xy 1.5875 8.89)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.635 7.9375) (xy 0.635 7.9375)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
 			(rectangle
-				(start -7.62 10.16)
-				(end 7.62 -10.16)
+				(start -10.16 10.16)
+				(end 10.16 -10.16)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -62,12 +96,36 @@
 					(type background)
 				)
 			)
+			(arc
+				(start -1.5875 8.89)
+				(mid 0.038519 9.56352)
+				(end -0.635 7.9375)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start 0.635 7.9375)
+				(mid -0.038519 9.56352)
+				(end 1.5875 8.89)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
 		)
 		(symbol "LT1054_1_1"
-			(pin input line
-				(at -10.16 5.08 0)
+			(pin passive line
+				(at -10.16 7.62 0)
 				(length 2.54)
-				(name "FB/SHDN"
+				(name "FB"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -82,10 +140,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 2.54 180)
+			(pin passive line
+				(at -10.16 2.54 0)
 				(length 2.54)
-				(name "CAP+"
+				(name "Cap+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -101,7 +159,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -12.7 90)
+				(at -10.16 -2.54 0)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -118,10 +176,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 -7.62 180)
+			(pin passive line
+				(at -10.16 -7.62 0)
 				(length 2.54)
-				(name "CAP-"
+				(name "Cap-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -136,10 +194,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at 10.16 7.62 180)
+			(pin passive line
+				(at 10.16 -7.62 180)
 				(length 2.54)
-				(name "-VOUT"
+				(name "Vout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -154,10 +212,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -10.16 -5.08 0)
+			(pin passive line
+				(at 10.16 -2.54 180)
 				(length 2.54)
-				(name "VREF"
+				(name "Ref"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -172,8 +230,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -10.16 0 0)
+			(pin passive line
+				(at 10.16 2.54 180)
 				(length 2.54)
 				(name "OSC"
 					(effects
@@ -191,9 +249,9 @@
 				)
 			)
 			(pin power_in line
-				(at -10.16 7.62 0)
+				(at 10.16 7.62 180)
 				(length 2.54)
-				(name "V+"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -209,6 +267,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

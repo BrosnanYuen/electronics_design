@@ -2,63 +2,56 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "AD9834"
-
-		(pin_names
-			(offset 1.016)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -12.7 16.51 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 13.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Value" "AD9834"
-			(at 5.334 16.51 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "10 bit 75 MHz Complete Direct Digital Synthesizer, 2.3V to 5.5V, 20mW, TSSOP-20"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
+			(at 0 12.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "ki_fp_filters" "TSSOP*4.4x6.5mm*P0.65mm*"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "20 mW Power, 2.3 V to 5.5 V, 75 MHz Complete DDS"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "AD9834_0_1"
 			(rectangle
-				(start -12.7 15.24)
-				(end 12.7 -12.7)
+				(start -15.24 11.43)
+				(end 16.51 -11.43)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -70,9 +63,9 @@
 		)
 		(symbol "AD9834_1_1"
 			(pin passive line
-				(at 15.24 5.08 180)
+				(at -15.24 2.54 0)
 				(length 2.54)
-				(name "FS_ADJUST"
+				(name "MCLK"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -87,10 +80,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 15.24 7.62 180)
+			(pin passive line
+				(at -15.24 -2.54 0)
 				(length 2.54)
-				(name "REFOUT"
+				(name "FSEL"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -106,9 +99,9 @@
 				)
 			)
 			(pin passive line
-				(at 15.24 10.16 180)
+				(at -15.24 -7.62 0)
 				(length 2.54)
-				(name "COMP"
+				(name "PSEL"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -123,8 +116,8 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 2.54 17.78 270)
+			(pin passive line
+				(at -3.81 11.43 270)
 				(length 2.54)
 				(name "AVDD"
 					(effects
@@ -141,10 +134,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 0 17.78 270)
+			(pin passive line
+				(at 1.27 -11.43 90)
 				(length 2.54)
-				(name "DVDD"
+				(name "AGND"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -160,9 +153,9 @@
 				)
 			)
 			(pin passive line
-				(at -2.54 17.78 270)
+				(at 5.08 11.43 270)
 				(length 2.54)
-				(name "CAP/2.5V"
+				(name "FSADJ"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -177,10 +170,10 @@
 					)
 				)
 			)
-			(pin power_in line
-				(at 0 -15.24 90)
+			(pin passive line
+				(at 16.51 6.35 180)
 				(length 2.54)
-				(name "DGND"
+				(name "IOUT"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -195,10 +188,10 @@
 					)
 				)
 			)
-			(pin input clock
-				(at -15.24 -7.62 0)
+			(pin passive line
+				(at 16.51 0 180)
 				(length 2.54)
-				(name "MCLK"
+				(name "IOUTB"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -213,10 +206,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 -5.08 0)
+			(pin passive line
+				(at 16.51 -6.35 180)
 				(length 2.54)
-				(name "FSELECT"
+				(name "SBO"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -231,10 +224,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 -2.54 0)
+			(pin power_in line
+				(at -15.24 7.62 0)
 				(length 2.54)
-				(name "PSELECT"
+				(name "VIN"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -249,187 +242,6 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 5.08 0)
-				(length 2.54)
-				(name "RESET"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "11"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 0 0)
-				(length 2.54)
-				(name "SLEEP"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "12"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 10.16 0)
-				(length 2.54)
-				(name "SDATA"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "13"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input clock
-				(at -15.24 12.7 0)
-				(length 2.54)
-				(name "SCLK"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "14"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin input line
-				(at -15.24 7.62 0)
-				(length 2.54)
-				(name "~{FSYNC}"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "15"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 15.24 0 180)
-				(length 2.54)
-				(name "SIGNBITOUT"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "16"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_in line
-				(at 15.24 -10.16 180)
-				(length 2.54)
-				(name "VIN"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "17"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin power_in line
-				(at 2.54 -15.24 90)
-				(length 2.54)
-				(name "AGND"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "18"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 15.24 -7.62 180)
-				(length 2.54)
-				(name "IOUT"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "19"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin output line
-				(at 15.24 -5.08 180)
-				(length 2.54)
-				(name "IOUTB"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "20"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
 		)
-		(embedded_fonts no)
 	)
 )

@@ -1,61 +1,57 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "LT3465"
-
+	(symbol "LT3465A"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at -7.62 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 13.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Value" "LT3465"
-			(at 1.27 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "LT3465A"
+			(at 0 12.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
-		(property "Description" "1.2MHz White LED Drivers with Built-in Schottky, ThinSOT-23-6"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "TSOT?23*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "LT3465_0_1"
+		(property "Description" "2.4MHz White LED Step-Up Converter with Built-In Schottky in ThinSOT"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "LT3465A_0_1"
 			(rectangle
-				(start -7.62 5.08)
-				(end 7.62 -5.08)
+				(start -11.43 11.43)
+				(end 11.43 -11.43)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -65,11 +61,11 @@
 				)
 			)
 		)
-		(symbol "LT3465_1_1"
-			(pin power_out line
-				(at 10.16 2.54 180)
+		(symbol "LT3465A_1_1"
+			(pin passive line
+				(at 6.35 11.43 270)
 				(length 2.54)
-				(name "VOUT"
+				(name "Vout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -85,7 +81,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -7.62 90)
+				(at 0 -11.43 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -102,8 +98,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 -2.54 180)
+			(pin passive line
+				(at 11.43 -5.08 180)
 				(length 2.54)
 				(name "FB"
 					(effects
@@ -121,7 +117,7 @@
 				)
 			)
 			(pin input line
-				(at -10.16 -2.54 0)
+				(at -11.43 -5.08 0)
 				(length 2.54)
 				(name "CTRL"
 					(effects
@@ -139,9 +135,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 7.62 270)
+				(at -11.43 5.08 0)
 				(length 2.54)
-				(name "VIN"
+				(name "Vin"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -156,8 +152,8 @@
 					)
 				)
 			)
-			(pin output line
-				(at -10.16 2.54 0)
+			(pin passive line
+				(at -6.35 11.43 270)
 				(length 2.54)
 				(name "SW"
 					(effects
@@ -175,57 +171,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
-	)
-	(symbol "LT3465A"
-		(extends "LT3465")
-		(in_bom yes)
-		(on_board yes)
-
-		(property "Reference" "U"
-			(at -7.62 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "LT3465A"
-			(at 1.27 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "2.4MHz White LED Drivers with Built-in Schottky in ThinSOT"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_fp_filters" "TSOT?23*"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(embedded_fonts no)
 	)
 )

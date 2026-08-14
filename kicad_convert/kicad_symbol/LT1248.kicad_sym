@@ -2,19 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT1248"
-
-		(pin_names
-			(offset 1.016)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 7.62 24.13 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 25.4 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22,41 +14,44 @@
 			)
 		)
 		(property "Value" "LT1248"
-			(at 7.62 21.59 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 24.13 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Power Factor Controller, DIP-16/SOIC-16"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "SOIC*16*3.9x9.9mm*P1.27mm* DIP*16*W7.62mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power Factor Controller\\n\\nNote: External sync capability is not modeled"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT1248_0_1"
 			(rectangle
-				(start -12.7 20.32)
-				(end 12.7 -20.32)
+				(start -15.24 22.86)
+				(end 15.24 -21.59)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -68,7 +63,7 @@
 		)
 		(symbol "LT1248_1_1"
 			(pin power_in line
-				(at 0 -22.86 90)
+				(at 7.62 -21.59 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -85,10 +80,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 2.54 180)
+			(pin passive line
+				(at -15.24 16.51 0)
 				(length 2.54)
-				(name "PKLIM"
+				(name "PKlim"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -103,10 +98,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at 15.24 12.7 180)
+			(pin passive line
+				(at -15.24 -2.54 0)
 				(length 2.54)
-				(name "CAOUT"
+				(name "CAout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -121,10 +116,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 7.62 180)
+			(pin passive line
+				(at -15.24 3.81 0)
 				(length 2.54)
-				(name "ISENSE"
+				(name "Isense"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -139,10 +134,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 15.24 17.78 180)
+			(pin passive line
+				(at -7.62 22.86 270)
 				(length 2.54)
-				(name "MOUT"
+				(name "Mout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -157,10 +152,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 2.54 0)
+			(pin passive line
+				(at 7.62 22.86 270)
 				(length 2.54)
-				(name "IAC"
+				(name "Iac"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -175,10 +170,10 @@
 					)
 				)
 			)
-			(pin output line
-				(at -15.24 17.78 0)
+			(pin passive line
+				(at 15.24 3.81 180)
 				(length 2.54)
-				(name "VAOUT"
+				(name "VAout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -193,8 +188,8 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 7.62 0)
+			(pin passive line
+				(at 15.24 -8.89 180)
 				(length 2.54)
 				(name "OVP"
 					(effects
@@ -211,10 +206,10 @@
 					)
 				)
 			)
-			(pin power_out line
-				(at -15.24 -2.54 0)
+			(pin passive line
+				(at -15.24 10.16 0)
 				(length 2.54)
-				(name "VREF"
+				(name "Ref"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -230,9 +225,9 @@
 				)
 			)
 			(pin input line
-				(at -15.24 -7.62 0)
+				(at 15.24 10.16 180)
 				(length 2.54)
-				(name "EN/SYNC"
+				(name "Enable"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -247,10 +242,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at -15.24 12.7 0)
+			(pin passive line
+				(at 15.24 -2.54 180)
 				(length 2.54)
-				(name "VSENSE"
+				(name "Vsense"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -266,9 +261,9 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -15.24 0)
+				(at -15.24 -8.89 0)
 				(length 2.54)
-				(name "RSET"
+				(name "Rset"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -284,7 +279,7 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -17.78 0)
+				(at -7.62 -21.59 90)
 				(length 2.54)
 				(name "SS"
 					(effects
@@ -302,9 +297,9 @@
 				)
 			)
 			(pin passive line
-				(at -15.24 -12.7 0)
+				(at -15.24 -15.24 0)
 				(length 2.54)
-				(name "CSET"
+				(name "Cset"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -320,9 +315,9 @@
 				)
 			)
 			(pin power_in line
-				(at 0 22.86 270)
+				(at 15.24 16.51 180)
 				(length 2.54)
-				(name "VCC"
+				(name "Vcc"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -337,8 +332,8 @@
 					)
 				)
 			)
-			(pin output line
-				(at 15.24 -2.54 180)
+			(pin passive line
+				(at 15.24 -15.24 180)
 				(length 2.54)
 				(name "GTDR"
 					(effects
@@ -356,6 +351,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

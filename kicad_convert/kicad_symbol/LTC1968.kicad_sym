@@ -1,58 +1,69 @@
 (kicad_symbol_lib
 	(version 20251024)
 	(generator "electronics_design")
-	(symbol "LTC1967"
-
+	(symbol "LTC1968"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 6.35 13.97 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 11.43 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "LTC1967"
-			(at 6.35 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Value" "LTC1968"
+			(at 0 10.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Precision Extended Bandwidth True RMS-to-DC Converter, MSOP-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "MSOP*3x3mm*P0.65mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(symbol "LTC1967_0_0"
+		(property "Description" "Precision Wide Bandwidth RMS-to-DC Converter"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "LTC1968_0_1"
+			(rectangle
+				(start -8.89 8.89)
+				(end 8.89 -8.89)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type background)
+				)
+			)
+		)
+		(symbol "LTC1968_1_1"
 			(pin power_in line
-				(at 0 -10.16 90)
+				(at 0 -8.89 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -70,9 +81,9 @@
 				)
 			)
 			(pin input line
-				(at -10.16 2.54 0)
+				(at -8.89 3.81 0)
 				(length 2.54)
-				(name "IN1"
+				(name "In1"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -88,9 +99,9 @@
 				)
 			)
 			(pin input line
-				(at -10.16 0 0)
+				(at -8.89 -3.81 0)
 				(length 2.54)
-				(name "IN2"
+				(name "In2"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -105,31 +116,10 @@
 					)
 				)
 			)
-			(pin input line
-				(at 10.16 0 180)
+			(pin passive line
+				(at 8.89 3.81 180)
 				(length 2.54)
-				(name "OUT_RTN"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "6"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-		)
-		(symbol "LTC1967_1_0"
-			(pin no_connect line
-				(at 2.54 -7.62 90)
-				(length 2.54)
-				(hide yes)
-				(name "NC"
+				(name "Vout"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -145,9 +135,9 @@
 				)
 			)
 			(pin output line
-				(at 10.16 2.54 180)
+				(at 8.89 -3.81 180)
 				(length 2.54)
-				(name "V_{OUT}"
+				(name "OutRtn"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -163,34 +153,16 @@
 				)
 			)
 			(pin power_in line
-				(at 0 10.16 270)
+				(at 0 8.89 270)
 				(length 2.54)
-				(name "V^{+}"
+				(name "Vdd"
 					(effects
 						(font
 							(size 1.27 1.27)
 						)
 					)
 				)
-				(number "7"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-			)
-			(pin passive line
-				(at -10.16 -2.54 0)
-				(length 2.54)
-				(name "~{ENABLE}"
-					(effects
-						(font
-							(size 1.27 1.27)
-						)
-					)
-				)
-				(number "8"
+				(number "6"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -199,68 +171,5 @@
 				)
 			)
 		)
-		(symbol "LTC1967_1_1"
-			(rectangle
-				(start -7.62 7.62)
-				(end 7.62 -7.62)
-				(stroke
-					(width 0.254)
-					(type default)
-				)
-				(fill
-					(type background)
-				)
-			)
-		)
-		(embedded_fonts no)
-	)
-	(symbol "LTC1968"
-		(extends "LTC1967")
-		(in_bom yes)
-		(on_board yes)
-
-		(property "Reference" "U"
-			(at 6.35 13.97 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "LTC1968"
-			(at 6.35 11.43 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Precision Wide Bandwidth True RMS-to-DC Converter, MSOP-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_fp_filters" "MSOP*3x3mm*P0.65mm*"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(embedded_fonts no)
 	)
 )

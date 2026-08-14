@@ -2,23 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "DIAC"
-
-		(pin_numbers
-			(hide yes)
-		)
-		(pin_names
-			(offset 1.016)
-			(hide yes)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
-		(property "Reference" "D"
-			(at 0 3.81 0)
-			(show_name no)
-			(do_not_autoplace no)
+		(property "Reference" "U"
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -26,68 +14,167 @@
 			)
 		)
 		(property "Value" "DIAC"
-			(at 0 -3.81 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 3.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Diode for alternating current"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "TO-???* *_Diode_* *SingleDiode* D_*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Generic Bi-directional Trigger Device symbol for use with a model that you supply"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "DIAC_0_1"
 			(polyline
 				(pts
-					(xy -1.27 -2.54) (xy -1.27 2.54) (xy 1.27 1.27) (xy -1.27 0)
+					(xy -2.54 -0.9525) (xy 0.3175 -0.9525)
 				)
 				(stroke
 					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type outline)
+					(type none)
 				)
 			)
 			(polyline
 				(pts
-					(xy 1.27 2.54) (xy 1.27 -2.54) (xy -1.27 -1.27) (xy 1.27 0)
+					(xy -2.54 0.9525) (xy 0.3175 0.9525)
 				)
 				(stroke
 					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type outline)
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.3175 0.9525) (xy -0.9525 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.2225 0.9525) (xy -0.9525 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 2.54) (xy 0 0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 -0.9525) (xy 0 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.3175 -0.9525) (xy 2.54 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.3175 -0.9525) (xy 0.9525 0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.9525 0.9525) (xy 2.2225 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.3175 0.9525) (xy 2.54 0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
 				)
 			)
 		)
 		(symbol "DIAC_1_1"
-			(pin passive line
-				(at -3.81 0 0)
+			(pin power_in line
+				(at 0 2.54 270)
 				(length 2.54)
-				(name "K"
+				(name "+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -102,10 +189,10 @@
 					)
 				)
 			)
-			(pin passive line
-				(at 3.81 0 180)
+			(pin power_in line
+				(at 0 -2.54 90)
 				(length 2.54)
-				(name "A"
+				(name "-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -121,6 +208,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )

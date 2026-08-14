@@ -2,19 +2,11 @@
 	(version 20251024)
 	(generator "electronics_design")
 	(symbol "LT1016"
-
-		(pin_names
-			(offset 0.127)
-		)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
-			(at 3.81 6.35 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 6.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22,54 +14,308 @@
 			)
 		)
 		(property "Value" "LT1016"
-			(at 3.81 -5.08 0)
-			(show_name no)
-			(do_not_autoplace no)
+			(at 0 5.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Description" "Single UltraFast Precision 10ns Comparator, DIP-8/SOIC-8"
+		(property "Footprint" ""
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
 			)
 		)
-		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm* DIP*W7.62mm*"
+		(property "Datasheet" "~"
 			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Ultra Fast Precision Comparator"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
 			)
 		)
 		(symbol "LT1016_0_1"
 			(polyline
 				(pts
-					(xy -5.08 5.08) (xy 5.08 0) (xy -5.08 -5.08) (xy -5.08 5.08)
+					(xy -2.54 3.81) (xy 3.81 0)
 				)
 				(stroke
 					(width 0.254)
 					(type default)
 				)
 				(fill
-					(type background)
+					(type none)
 				)
 			)
 			(polyline
 				(pts
-					(xy 5.08 3.81) (xy 5.08 -3.81)
+					(xy -2.54 -3.81) (xy 3.81 0)
 				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 3.81) (xy -2.54 -3.81)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.2225 1.27) (xy -1.5875 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.2225 -1.27) (xy -1.5875 -1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.905 -1.5875) (xy -1.905 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 3.81) (xy 0 2.2225)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 -3.81) (xy 0 -2.2225)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.3175 1.5875) (xy 0.3175 1.5875)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 1.905) (xy 0 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.5875 -2.54) (xy -0.9525 -2.54)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.27 -3.81) (xy -1.27 -3.175)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -3.81) (xy 1.27 -1.5875)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 3.81 1.27) (xy 1.905 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.8575 -1.27) (xy 3.81 -1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.3175 -0.9525) (xy -0.3175 -1.905)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.3175 -1.905) (xy -0.3175 -1.905)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 -0.9525) (xy 1.5875 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.5875 -1.27) (xy 1.5875 -0.9525)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.5875 -1.27) (xy 0.9525 -1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.9525 -1.27) (xy 0.9525 -0.635)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.9525 -0.635) (xy 1.5875 -0.635)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 2.54 -1.27)
+				(radius 0.3175)
 				(stroke
 					(width 0.254)
 					(type default)
@@ -81,8 +327,8 @@
 		)
 		(symbol "LT1016_1_1"
 			(pin power_in line
-				(at -2.54 7.62 270)
-				(length 3.81)
+				(at 0 3.81 270)
+				(length 2.54)
 				(name "V+"
 					(effects
 						(font
@@ -99,9 +345,9 @@
 				)
 			)
 			(pin input line
-				(at -7.62 2.54 0)
+				(at -2.54 -1.27 0)
 				(length 2.54)
-				(name "+"
+				(name "In+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -117,9 +363,9 @@
 				)
 			)
 			(pin input line
-				(at -7.62 -2.54 0)
+				(at -2.54 1.27 0)
 				(length 2.54)
-				(name "-"
+				(name "In-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -135,8 +381,8 @@
 				)
 			)
 			(pin power_in line
-				(at -2.54 -7.62 90)
-				(length 3.81)
+				(at -1.27 -3.81 90)
+				(length 2.54)
 				(name "V-"
 					(effects
 						(font
@@ -152,13 +398,13 @@
 					)
 				)
 			)
-			(pin input line
-				(at 2.54 7.62 270)
-				(length 6.35)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 2.54)
 				(name "LATCH"
 					(effects
 						(font
-							(size 0.508 0.508)
+							(size 1.27 1.27)
 						)
 					)
 				)
@@ -171,8 +417,8 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -7.62 90)
-				(length 5.08)
+				(at 1.27 -3.81 90)
+				(length 2.54)
 				(name "GND"
 					(effects
 						(font
@@ -189,9 +435,9 @@
 				)
 			)
 			(pin output line
-				(at 7.62 -2.54 180)
+				(at 3.81 1.27 180)
 				(length 2.54)
-				(name "Q"
+				(name "OUT+"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -207,9 +453,9 @@
 				)
 			)
 			(pin output line
-				(at 7.62 2.54 180)
+				(at 3.81 -1.27 180)
 				(length 2.54)
-				(name "~{Q}"
+				(name "OUT-"
 					(effects
 						(font
 							(size 1.27 1.27)
@@ -225,6 +471,5 @@
 				)
 			)
 		)
-		(embedded_fonts no)
 	)
 )
