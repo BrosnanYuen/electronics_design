@@ -39,17 +39,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "voltage reference Micropower"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "TSOT?23?6*"
 			(at 0 0 0)
 			(show_name no)
@@ -215,17 +204,6 @@
 			)
 		)
 		(property "Description" "2.5V Voltage Reference, Low Dropout, Micropower, TSOT-23-6"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "voltage reference Micropower"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

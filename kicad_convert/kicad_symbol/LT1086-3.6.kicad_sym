@@ -43,17 +43,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Voltage Regulator Fixed 5A Positive"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "TO?220* TO?263*"
 			(at 0 0 0)
 			(show_name no)
@@ -163,17 +152,6 @@
 			)
 		)
 		(property "Description" "1.5A 20V LDO Linear Regulator, Fixed Output 3.6V, TO-220/TO-263"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "Voltage Regulator Fixed 1.5A Positive LDO"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

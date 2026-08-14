@@ -41,17 +41,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "5v 12v dc converter boost"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "DIP*7.62mm* SOIC*3.9x4.9mm*P1.27mm*"
 			(at 0 0 0)
 			(show_name no)

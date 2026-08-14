@@ -39,17 +39,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "uModule Buck Regulator"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "Analog*BGA*6.25x6.25mm*Layout7x7*P0.8mm*"
 			(at 0 0 0)
 			(show_name no)

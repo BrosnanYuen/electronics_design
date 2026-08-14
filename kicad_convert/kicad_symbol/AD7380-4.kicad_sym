@@ -39,17 +39,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Analog-Devices SPI"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "LFCSP*4x4mm*P0.5mm*EP0.5x0.5mm*"
 			(at 0 0 0)
 			(show_name no)

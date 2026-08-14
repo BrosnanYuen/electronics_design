@@ -52,17 +52,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "quad opamp"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "SSOP*3.9x4.9mm*P0.635mm* SOIC*3.9x9.9mm*P1.27mm* QSOP*3.9x4.9mm*P0.635mm*"
 			(at 0 0 0)
 			(show_name no)
@@ -450,17 +439,6 @@
 			)
 		)
 		(property "Description" "5MHz, 3V/µs, Low Power, Single Supply, Quad Precision Op Amps, SOIC-16"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "quad opamp"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

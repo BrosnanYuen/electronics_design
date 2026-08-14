@@ -43,17 +43,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "boost step-up DC/DC synchronous"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "*SC?70* SOT?363*"
 			(at 0 0 0)
 			(show_name no)
@@ -218,17 +207,6 @@
 			)
 		)
 		(property "Description" "Fixed 3V, 400mA Micropower Synchronous Step-Up DC/DC Converter with Output Disconnect, SC-70-6"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "fixed boost step-up DC/DC synchronous"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

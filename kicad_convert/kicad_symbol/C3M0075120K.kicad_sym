@@ -44,17 +44,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "N-Channel SiC MOSFET"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "TO?247*"
 			(at 0 0 0)
 			(show_name no)
@@ -360,17 +349,6 @@
 			)
 		)
 		(property "Description" "30A Id, 1200V Vds, 75mOhm, N-Channel SiC MOSFET, TO-247-4"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "N-Channel SiC MOSFET"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

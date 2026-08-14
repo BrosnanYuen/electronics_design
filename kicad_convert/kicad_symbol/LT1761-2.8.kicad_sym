@@ -40,17 +40,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "REGULATOR POSITIVE POWER LDO"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "TSOT?23*"
 			(at 0 0 0)
 			(show_name no)
@@ -196,17 +185,6 @@
 			)
 		)
 		(property "Description" "MICROPOWER Low Noise 2.8V 100mA LDO regulator, TSOT-23-5"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "REGULATOR POSITIVE POWER LDO"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

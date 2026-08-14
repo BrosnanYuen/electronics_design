@@ -43,17 +43,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Voltage Regulator 4.6A Positive Fixed"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "TO?220* TO?263*"
 			(at 0 0 0)
 			(show_name no)
@@ -163,17 +152,6 @@
 			)
 		)
 		(property "Description" "Positive 3A 35V Low Dropout Fast Response Linear Regulator, Fixed Output 3.6V, TO-220/TO-263"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "Voltage Regulator 3A Positive Fixed"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

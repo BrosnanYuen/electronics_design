@@ -44,17 +44,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "single opamp"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "DIP*W7.62mm* SOIC*3.9x4.9mm*P1.27mm* TO*99*"
 			(at 0 0 0)
 			(show_name no)

@@ -67,17 +67,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "diode"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "D*DO?41*"
 			(at 0 0 0)
 			(show_name no)
@@ -193,17 +182,6 @@
 			)
 		)
 		(property "Description" "100V, 0.25A, High-speed Switching Diode, SOD-523"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "diode"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

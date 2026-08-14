@@ -74,17 +74,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "lossless transmission line characteristic impedance"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(symbol "TLINE_0_1"
 			(polyline
 				(pts

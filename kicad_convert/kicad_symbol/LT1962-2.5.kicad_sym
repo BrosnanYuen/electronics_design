@@ -41,17 +41,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "LDO 5V"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "MSOP*3x3mm*P0.65mm*"
 			(at 0 0 0)
 			(show_name no)
@@ -254,17 +243,6 @@
 			)
 		)
 		(property "Description" "2.5V, 300mA, Low Noise, Micropower LDO Regulator, MSOP-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "LDO 2.5V"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

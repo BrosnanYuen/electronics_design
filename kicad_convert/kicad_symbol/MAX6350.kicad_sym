@@ -41,17 +41,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "precision voltage reference"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "SOIC*P1.27mm* DIP*W7.62mm*"
 			(at 0 0 0)
 			(show_name no)

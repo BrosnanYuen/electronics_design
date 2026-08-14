@@ -63,17 +63,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Analog-Devices Buck-Converter MAX15062AATA+"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "*DFN*2x2mm?P0.5mm*"
 			(at 0 0 0)
 			(show_name no)
@@ -274,17 +263,6 @@
 			)
 		)
 		(property "Description" "60V, 300mA, synchronous step-down dc-dc converter, 5.0V fixed output voltage, DFN-8 / WSON-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "Analog-Devices Buck-Converter MAX15062BATA+"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

@@ -39,17 +39,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "16-Bit 5msps 4 channel adc lvds cmos"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "QFN*1EP*P0.5mm*5.41x6.45mm*"
 			(at 0 0 0)
 			(show_name no)

@@ -41,17 +41,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Fuel gauge coulomb counter I2C"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "DFN*1EP*3x2mm*P0.5mm*"
 			(at 0 0 0)
 			(show_name no)
@@ -216,17 +205,6 @@
 			)
 		)
 		(property "Description" "1A Battery Gas Gauge with Internal Sense Resistor and Temperature/Voltage Measurement, DFN-6"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "Fuel gauge coulomb counter I2C"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

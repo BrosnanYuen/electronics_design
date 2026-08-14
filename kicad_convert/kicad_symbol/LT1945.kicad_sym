@@ -42,17 +42,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "switched voltage converter regulator inverter double shutdown  positive negative"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "MSOP*3x3mm*P0.5mm*"
 			(at 0 0 0)
 			(show_name no)

@@ -41,17 +41,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Switching LED driver"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "TSOT?23*"
 			(at 0 0 0)
 			(show_name no)
@@ -216,17 +205,6 @@
 			)
 		)
 		(property "Description" "2.4MHz White LED Drivers with Built-in Schottky in ThinSOT"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "Switching LED driver"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

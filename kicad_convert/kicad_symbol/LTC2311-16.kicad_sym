@@ -39,17 +39,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "16-bit adc differential input 5 msps lvds cmos"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "MSOP*1EP*3x4.039mm*P0.5mm*"
 			(at 0 0 0)
 			(show_name no)

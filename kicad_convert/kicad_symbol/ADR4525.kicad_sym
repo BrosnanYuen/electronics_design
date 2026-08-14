@@ -39,17 +39,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "vref"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm*"
 			(at 0 0 0)
 			(show_name no)
@@ -255,17 +244,6 @@
 			)
 		)
 		(property "Description" "2.5V, Ultralow Noise, High Accuracy Voltage Reference, SOIC-8"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "vref"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

@@ -39,17 +39,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "step down switch manager I2C telemetry fault current sense"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "Linear*UGK52*QFN*46*52*"
 			(at 0 0 0)
 			(show_name no)

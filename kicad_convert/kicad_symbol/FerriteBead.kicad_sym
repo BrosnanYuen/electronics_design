@@ -45,17 +45,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "L ferrite bead inductor filter"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "Inductor_* L_* *Ferrite*"
 			(at 0 0 0)
 			(show_name no)

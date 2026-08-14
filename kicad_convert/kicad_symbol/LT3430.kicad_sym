@@ -41,17 +41,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Step-Down Switching Regulator"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "TSSOP*EP*4.4x5mm*P0.65mm*"
 			(at 0 0 0)
 			(show_name no)

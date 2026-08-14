@@ -44,17 +44,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "NPN DC Optocoupler Base Connected"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "DIP*W7.62mm* DIP*W10.16mm* SMDIP*W9.53mm*"
 			(at 0 0 0)
 			(show_name no)
@@ -388,17 +377,6 @@
 			)
 		)
 		(property "Description" "DC Optocoupler Base Connected, Vce 70V, CTR 63-125%, Viso 5000V (RMS), DIP6"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "ki_keywords" "NPN DC Optocoupler Base Connected"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

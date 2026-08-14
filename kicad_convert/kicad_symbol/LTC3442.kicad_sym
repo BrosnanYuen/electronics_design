@@ -43,17 +43,6 @@
 				)
 			)
 		)
-		(property "ki_keywords" "Micropower Synchronous Buck-Boost DC/DC Converter"
-			(at 0 0 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
 		(property "ki_fp_filters" "DFN*EP*3x4mm*P0.5mm*"
 			(at 0 0 0)
 			(show_name no)
