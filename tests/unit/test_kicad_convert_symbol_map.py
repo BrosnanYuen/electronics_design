@@ -39,6 +39,15 @@ class TestLtspiceAsyToKicadSymbol(unittest.TestCase):  # Group the ASY-to-KiCad-
                         (True, ""),  # Expect success with an empty message.
                         msg=f"{output_path.name} should be valid but returned: {validation[1]}",  # Report the failure with the returned message.
                     )  # Finish the validation assertion.
+                    ground_truth_path = _KICAD_SYMBOL_DIRECTORY / f"{asy_path.stem}.kicad_sym"  # Resolve the checked-in ground-truth symbol file.
+                    self.assertTrue(ground_truth_path.is_file(), msg=f"Missing ground truth {ground_truth_path.name}.")  # Require the ground-truth file to exist.
+                    generated_lines = output_path.read_text(encoding="utf-8").splitlines()  # Read the generated symbol lines.
+                    expected_lines = ground_truth_path.read_text(encoding="utf-8").splitlines()  # Read the ground-truth symbol lines.
+                    self.assertEqual(  # Require the generated file to match the ground truth line by line.
+                        generated_lines,  # Compare the generated lines.
+                        expected_lines,  # Against the checked-in ground-truth lines.
+                        msg=f"{output_path.name} must match {ground_truth_path.name} line by line.",  # Report the mismatch with both file names.
+                    )  # Finish the line-by-line assertion.
 
     def test_symbol_map_is_one_to_one(self) -> None:  # Verify that every component name maps one LTspice file to one KiCad file.
         asy_stems = {path.stem for path in _ASY_DIRECTORY.glob("*.asy")}  # Collect the LTspice symbol file stems.
