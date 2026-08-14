@@ -1,0 +1,26 @@
+Version 4
+SymbolType CELL
+RECTANGLE Normal -112 -96 112 96
+TEXT 96 64 Right 2 ADJ
+TEXT 96 -64 Right 2 OUT
+TEXT -78 63 Center 2 GND
+TEXT -88 -65 Center 2 IN
+WINDOW 0 32 -112 Left 2
+WINDOW 3 0 0 Center 2
+SYMATTR Value MAX6350
+SYMATTR Prefix X
+SYMATTR SpiceModel MAX6350.sub
+SYMATTR Value2 MAX6350
+SYMATTR Description 1ppm/degC, Low Noise, +5.000V Voltage Reference
+PIN -112 -64 NONE 8
+PINATTR PinName 1
+PINATTR SpiceOrder 1
+PIN -112 64 NONE 8
+PINATTR PinName 2
+PINATTR SpiceOrder 2
+PIN 112 -64 NONE 8
+PINATTR PinName 3
+PINATTR SpiceOrder 3
+PIN 112 64 NONE 8
+PINATTR PinName 4
+PINATTR SpiceOrder 4
