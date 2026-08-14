@@ -109,6 +109,27 @@ Converts both ASC files to netlists and compares their structure.  Returns `(Tru
 - `ltspice_netlist_to_asc` runs the public netlist-to-symbol-initial, autoplace, and netlist/symbol/wire-to-ASC stages to generate one validated schematic from a netlist.
 - `ltspice_netlist_symbol_wire_to_asc` reconstructs one LTspice schematic from a netlist, resolved symbol-pose JSON, and routed wire JSON. The generated `.asc` file is written in Latin-1 encoding.
 
+### LTspice ASY to KiCad Symbol Conversion
+
+| Function | Returns |
+|---|---|
+| `ltspice_asy_to_kicad_symbol(ltspice_asy_filepath, kicad_symbol_filepath_out, convert_settings)` | `(bool, str, int)` |
+
+Converts one LTspice symbol (`.asy`) file into one self-contained KiCad symbol library (`.kicad_sym`) file. The generated library defines a single top-level symbol named after the ASY file stem, mirroring the symbol shape produced by the MIT-licensed `kicad-tools` project (`kicad_tools.schema.library`) and the MIT-licensed `KiCAD-MCP-Server` project (`SymbolCreator`); no third-party packages are required.
+
+Conversion rules:
+
+- **Graphics** — `LINE` records become `polyline` elements, `RECTANGLE` become `rectangle` (filled `background`), `CIRCLE` become `circle`, and `ARC` become `arc` records with a computed counterclockwise midpoint. Normal/`Wide` strokes map to 0.254/0.508 mm widths.
+- **Pins** — every `PIN`/`PINATTR` pair becomes a `pin` with the KiCad pin number, name, and a 2.54 mm default length. The electrical type is guessed from the pin name: power names (`VCC`, `GND`, `+`, …) become `power_in`, `OUT*` names become `output`, `IN*`/`G`/`B`/`EN` names become `input`, and everything else is `passive`.
+- **Orientation** — the pin angle follows the ASY `PIN` justification (`LEFT`→0, `RIGHT`→180, `TOP`→270, `BOTTOM`→90), falling back to the nearest body-bounding-box side for `NONE` pins.
+- **Attributes** — `SYMATTR Prefix` maps onto the KiCad `Reference` prefix (`X`→`U`, `M`/`MN`/`MP`→`Q`, …), `SYMATTR Value` fills the `Value` property, and `SYMATTR Description` fills the `Description` property. `Footprint` and `Datasheet` properties default to `""` and `"~"`.
+- **Coordinates** — 16 LTspice units map to 1.27 mm with the Y axis flipped, and the finished symbol is centered on the 1.27 mm grid.
+- **Validation** — the written file is checked with `is_valid_kicad_symbol_file()` before `OK` is returned.
+
+Optional `convert_settings` keys: `kicad_symbol_version` (YYYYMMDD, default today's date), `kicad_symbol_generator` (default `"electronics_design"`), `kicad_symbol_default_footprint` (default `""`), `kicad_symbol_default_datasheet` (default `"~"`), and `kicad_symbol_pin_length` (default `2.54`).
+
+Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_ASY_FILE`, `ASY_PARSE_ERROR`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SYMBOL`.
+
 ### Schematic Plotting
 
 | Function | Returns |
@@ -290,8 +311,8 @@ from electronics_design import ltspice_netlist_symbol_wire_to_asc
 from electronics_design import ltspice_netlist_to_wiring
 from electronics_design import ltspice_resolve_symbol_pose
 from electronics_design import ltspice_symbol_estimate
-from electronics_design import ltspice_symbol_facing
 from electronics_design import rectangle_points_to_lines
+from electronics_design import ltspice_asy_to_kicad_symbol
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
@@ -331,6 +352,9 @@ kicad_sch_ok, _ = is_valid_kicad_sch_file("example.kicad_sch")
 
 # KiCad symbol validation
 kicad_symbol_ok, _ = is_valid_kicad_symbol_file("example.kicad_sym")
+
+# LTspice ASY to KiCad symbol conversion
+ltspice_asy_to_kicad_symbol("example.asy", "example.kicad_sym", convert_settings)
 
 # ASY
 asy_ok, _ = is_valid_ltspice_asy("example.asy")
@@ -396,6 +420,7 @@ src/electronics_design/
     ltspice_asc.py
     ltspice_asc_to_netlist.py
     ltspice_asy.py
+    ltspice_asy_to_kicad_symbol.py
     ltspice_autoplace_symbol_pose.py
     ltspice_net.py
     ltspice_netlist_plot_networkx.py

@@ -43,6 +43,9 @@ Some lower-level helpers return a conversion result together with an empty paylo
 | `ASC_PARSE_ERROR` | ASC records or symbol pin data could not be parsed. | Inspect the reported line and verify record token counts, coordinates, orientations, and pin metadata. |
 | `INVALID_GENERATED_NETLIST` | ASC-to-netlist conversion produced a netlist that failed validation. | Inspect the generated-netlist line reported by the result; check symbol pin orders, payloads, and generated directives. |
 | `INVALID_GENERATED_ASC` | Netlist/symbol/wire-to-ASC conversion produced an ASC file that failed validation. | Inspect the generated ASC line reported by the result and verify symbol poses, wires, flags, and analysis text. |
+| `INVALID_ASY_FILE` | An ASY file is missing, unreadable, or failed `is_valid_ltspice_asy()` during ASY-to-KiCad-symbol conversion. | Check the path and permissions, then run `is_valid_ltspice_asy()` separately to locate the failing line. |
+| `ASY_PARSE_ERROR` | An ASY pin record is incomplete (for example a `PIN` without a `SpiceOrder` `PINATTR`) during ASY-to-KiCad-symbol conversion. | Inspect the reported ASY line and verify every `PIN` is followed by its `PinName`/`SpiceOrder` attributes. |
+| `INVALID_GENERATED_KICAD_SYMBOL` | ASY-to-KiCad-symbol conversion produced a `.kicad_sym` file that failed `is_valid_kicad_symbol_file()`. | Inspect the generated symbol line reported by the result and verify the symbol, property, and pin structure. |
 
 ## Symbol and symbol-pose errors
 
