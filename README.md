@@ -104,12 +104,14 @@ Converts both ASC files to netlists and compares their structure.  Returns `(Tru
 | `ltspice_netlist_to_asc(netlist_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `ltspice_netlist_symbol_wire_to_asc(netlist_filepath, symbol_pose_filepath, wire_filepath, asc_filepath_out, convert_settings)` | `(bool, str, int)` |
 | `kicad_sch_to_ltspice_netlist(kicad_sch_filepath, ltspice_netlist_filepath_out, convert_settings)` | `(bool, str, int)` |
+| `ltspice_netlist_to_kicad_sch(ltspice_netlist_filepath, kicad_sch_filepath_out, convert_settings)` | `(bool, str, int)` |
 
 - `ltspice_asc_to_netlist` resolves symbols and library files from `convert_settings`, generates a validated netlist. Error codes include `UNKNOWN_SYMBOL`, `UNCONNECTED_SYMBOL_PIN`, `INVALID_GENERATED_NETLIST`, etc.
 - `get_ltspice_asc_symbol_info` returns absolute-coordinate symbol pin and rectangle data keyed by instance name. Raises `ValueError` on failure.
 - `ltspice_netlist_to_asc` runs the public netlist-to-symbol-initial, autoplace, and netlist/symbol/wire-to-ASC stages to generate one validated schematic from a netlist.
 - `ltspice_netlist_symbol_wire_to_asc` reconstructs one LTspice schematic from a netlist, resolved symbol-pose JSON, and routed wire JSON. The generated `.asc` file is written in Latin-1 encoding.
 - `kicad_sch_to_ltspice_netlist` converts one KiCad schematic (`.kicad_sch`) into one validated LTspice netlist (`.net`). Symbol definitions, pin geometry, and simulation attributes are looked up from the KiCad symbol libraries under `convert_settings["kicad_path"]` (falling back to the schematic's embedded `lib_symbols` definitions). Power symbols become LTspice voltage sources named after their reference designator (without the leading `#`) with the symbol value as the DC payload; `GND`/`0` power symbols become node `0`. Inductors receive LTspice's standard `Rser=1m` default and three-pin BJT/MOSFET symbols receive the substrate node `0`, matching LTspice's own netlist generator. Pin order follows the symbol's `Sim.Pins` role mapping when present and ascending pin numbers otherwise. Error codes include `INVALID_KICAD_SCH_FILE`, `KICAD_SCH_READ_ERROR`, `KICAD_SCH_PARSE_ERROR`, `UNKNOWN_KICAD_SYMBOL`, `UNCONNECTED_SYMBOL_PIN`, `MISSING_COMPONENT_PAYLOAD`, and `INVALID_GENERATED_NETLIST`.
+- `ltspice_netlist_to_kicad_sch` converts one validated LTspice netlist (`.net`) into one validated KiCad schematic (`.kicad_sch`). Every device resolves to a symbol from the KiCad symbol libraries under `convert_settings["kicad_path"]` (resistors, capacitors, and inductors map to the `Device` library; transistors, diodes, and sources to the `Simulation_SPICE` library symbols whose `Sim.Device`/`Sim.Pins` attributes match the netlist device class). When no library symbol matches, the device's LTspice `.asy` file is searched under the configured `custom_search_paths`, `ltspice_wine_path`, and `ltspice_windows_path` roots and converted through the public `ltspice_asy_to_kicad_symbol` API. Ground-referenced voltage sources become KiCad power symbols (value = source payload, reference = `#V1`-style), floating sources use the two-pin `Simulation_SPICE:VDC` symbol, and the global ground net receives a `GND` power symbol. Wires are routed orthogonally along per-net trunks with collision-checked side-exit stubs so every pin is physically connected; non-ground nets carry labels with their original node names. The generated schematic embeds every resolved symbol definition in its `lib_symbols` section, so `kicad_sch_to_ltspice_netlist` can convert it back without extra files and `ltspice_netlist_structure_cmp` reports structural equivalence with the original netlist. Optional `convert_settings` keys: `kicad_sch_version` (YYYYMMDD, default today's date) and `kicad_sch_generator` (default `"electronics_design"`). Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_NETLIST_FILE`, `NETLIST_READ_ERROR`, `UNKNOWN_SYMBOL`, `UNSUPPORTED_DEVICE`, `MISSING_COMPONENT_PAYLOAD`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SCH`.
 
 ### LTspice ASY to KiCad Symbol Conversion
 
@@ -231,6 +233,10 @@ convert_settings = {
 
     # KiCad symbol library path (required for KiCad schematic conversion)
     "kicad_path": "/usr/share/kicad/",
+
+    # KiCad schematic generation (optional, used by ltspice_netlist_to_kicad_sch)
+    "kicad_sch_version": "20260306",
+    "kicad_sch_generator": "electronics_design",
 }
 ```
 
@@ -319,6 +325,7 @@ from electronics_design import ltspice_symbol_estimate
 from electronics_design import rectangle_points_to_lines
 from electronics_design import ltspice_asy_to_kicad_symbol
 from electronics_design import kicad_sch_to_ltspice_netlist
+from electronics_design import ltspice_netlist_to_kicad_sch
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
 from electronics_design.pathtracing import are_wires_intersecting_obstacles_fast
@@ -337,6 +344,8 @@ convert_settings = {
     "parallel_workers": 8,
     "voltage_must_have_dc": False,
     "kicad_path": "/usr/share/kicad/",
+    "kicad_sch_version": "20260306",
+    "kicad_sch_generator": "electronics_design",
 }
 
 # ASC validation
@@ -365,6 +374,9 @@ ltspice_asy_to_kicad_symbol("example.asy", "example.kicad_sym", convert_settings
 
 # KiCad schematic to LTspice netlist conversion
 kicad_netlist_ok, _, _ = kicad_sch_to_ltspice_netlist("example.kicad_sch", "example.net", convert_settings)
+
+# LTspice netlist to KiCad schematic conversion
+netlist_to_sch_ok, _, _ = ltspice_netlist_to_kicad_sch("example.net", "example.kicad_sch", convert_settings)
 
 # ASY
 asy_ok, _ = is_valid_ltspice_asy("example.asy")
@@ -435,6 +447,7 @@ src/electronics_design/
     ltspice_net.py
     ltspice_netlist_plot_networkx.py
     ltspice_netlist_to_symbol_initial.py
+    ltspice_netlist_to_kicad_sch.py
     ltspice_symbol_estimate.py
     ltspice_netlist_to_wiring.py
     ltspice_resolve_symbol_pose.py

@@ -37,6 +37,7 @@ from .ltspice import is_valid_ltspice_netlist_format  # Re-export the format val
 from .ltspice import ltspice_netlist_footer_cmp  # Re-export the footer comparison helper.
 from .ltspice import ltspice_netlist_plot_networkx  # Re-export the graph plotting helper.
 from .ltspice import ltspice_netlist_structure_cmp  # Re-export the structural comparison helper.
+from .ltspice_netlist_to_kicad_sch import ltspice_netlist_to_kicad_sch  # Re-export the netlist-to-KiCad-schematic conversion helper.
 from .ltspice import gui_debug  # Re-export the path tracing GUI helper.
 from .ltspice import find_wire_group_index  # Re-export the wire-group-index helper.
 from .ltspice import place_wires_into_groups  # Re-export the wire-grouping helper.
@@ -79,6 +80,7 @@ __all__ = [  # Define the supported public API surface.
     "ltspice_netlist_footer_cmp",  # Export the footer comparison helper name.
     "ltspice_netlist_plot_networkx",  # Export the networkx plotting helper name.
     "ltspice_netlist_structure_cmp",  # Export the structural comparison helper name.
+    "ltspice_netlist_to_kicad_sch",  # Export the netlist-to-KiCad-schematic conversion helper name.
     "gui_debug",  # Export the path tracing GUI helper name.
     "are_wires_intersecting_obstacles_detailed",  # Export the detailed intersection helper name.
     "place_wires_into_groups",  # Export the wire-grouping helper name.
