@@ -1558,7 +1558,7 @@
 				)
 			)
 		)
-		(property "Value" "V1"
+		(property "Value" "12"
 			(at 95.25 77.47 0)
 			(show_name no)
 			(do_not_autoplace no)
