@@ -346,8 +346,8 @@ def ltspice_netlist_structure_cmp(filepath1: str, filepath2: str) -> bool:  # Co
     second_parse_result = _load_parsed_elements(filepath2)  # Parse the second input file into device elements after format validation.
     if not second_parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
         return False  # Return False because the second graph cannot be built reliably.
-    first_graph = _build_networkx_graph(first_parse_result[1], include_visual_labels=False)  # Build the normalized comparison graph for the first file.
-    second_graph = _build_networkx_graph(second_parse_result[1], include_visual_labels=False)  # Build the normalized comparison graph for the second file.
+    first_graph = _build_networkx_graph(first_parse_result[1], include_visual_labels=False, include_zero_node_elements=False)  # Build the normalized comparison graph for the first file without node-free statements.
+    second_graph = _build_networkx_graph(second_parse_result[1], include_visual_labels=False, include_zero_node_elements=False)  # Build the normalized comparison graph for the second file without node-free statements.
     matcher = isomorphism.MultiGraphMatcher(  # Create a multigraph isomorphism matcher for the two normalized graphs.
         first_graph,  # Provide the normalized graph built from the first netlist.
         second_graph,  # Provide the normalized graph built from the second netlist.
@@ -541,12 +541,15 @@ def _validate_connectivity(lines: Sequence[str]) -> Tuple[bool, int]:  # Validat
         return False, parse_result[2]  # Report the parser's failing line number.
     elements = parse_result[1]  # Extract the parsed elements after confirming parsing succeeded.
     node_counts = _count_element_nodes(elements)  # Count how many times each relevant node appears across all element ports and expression references.
+    positional_owners = _positional_node_owners(elements)  # Index which elements carry each node as an explicit positional port.
     for element in elements:  # Walk elements in source order so the earliest problem line is reported.
         for node_name in element.nodes:  # Check each connectivity node attached to the element.
             if _is_exempt_node(node_name):  # Skip ground and explicit no-connect nodes.
                 continue  # Move to the next node because exempt nodes do not need multiple connections.
             node_occurrences = node_counts.get(node_name, 0)  # Look up how many ports reference this node.
             if node_occurrences < 2:  # Require at least two references to consider the node connected.
+                if _node_owners_are_behavioral_only(positional_owners.get(node_name, ())):  # Accept probe nodes whose only positional port sits on a behavioral source.
+                    continue  # Treat behavioral-source output probes as valid unloaded nets.
                 return False, element.line_number  # Report the element line containing the first orphan node.
     return True, 0  # Return success when every relevant node is connected.
 
@@ -707,6 +710,19 @@ def _count_element_nodes(elements: Sequence[ParsedElement]) -> Dict[str, int]:  
     return node_counts  # Return the completed node-count mapping.
 
 
+def _positional_node_owners(elements: Sequence[ParsedElement]) -> Dict[str, Tuple[ParsedElement, ...]]:  # Index the elements that carry each node as an explicit positional port.
+    owners: Dict[str, List[ParsedElement]] = {}  # Collect the owning elements per node name.
+    for element in elements:  # Walk every parsed device element.
+        for node_name in element.nodes:  # Walk the element's positional connectivity nodes.
+            owners.setdefault(node_name, []).append(element)  # Record the element under the node name.
+    return {node_name: tuple(element_list) for node_name, element_list in owners.items()}  # Return the immutable owner index.
+
+def _node_owners_are_behavioral_only(owners: Sequence[ParsedElement]) -> bool:  # Decide whether every positional owner of a node is a behavioral source.
+    if not owners:  # Nodes with no positional owner cannot justify an exemption.
+        return False  # Return False for ownerless nodes.
+    return all(owner.prefix == "B" for owner in owners)  # Return True only when behavioral sources alone carry the node positionally.
+
+
 def _is_two_node_behavioral_controlled_source(prefix: str, tokens: Sequence[str]) -> bool:  # Detect LTspice's reduced-node behavioral E/G forms such as E1 out 0 G={G}.
     if prefix not in {"E", "G"}:  # Restrict this reduced-node detection to the controlled-source prefixes that support it in the fixture corpus.
         return False  # Return False because all other prefixes keep their existing node-count rules.
@@ -769,9 +785,11 @@ def _format_line_message(prefix: str, line_number: int) -> str:  # Build the req
     return f"{prefix} Line {line_number}"  # Return the final user-facing message.
 
 
-def _build_networkx_graph(elements: Sequence[ParsedElement], include_visual_labels: bool) -> nx.MultiGraph:  # Build a component-to-net multigraph from parsed device elements.
+def _build_networkx_graph(elements: Sequence[ParsedElement], include_visual_labels: bool, include_zero_node_elements: bool = True) -> nx.MultiGraph:  # Build a component-to-net multigraph from parsed device elements.
     graph = nx.MultiGraph()  # Create the multigraph that will back plotting and structural comparison.
     for element in elements:  # Walk every parsed device element in source order.
+        if not include_zero_node_elements and not element.nodes:  # Skip node-free statements such as K couplings and FRA analyzers during structural comparison.
+            continue  # Move to the next element because node-free statements cannot contribute to the component-to-net topology.
         component_node_id = _component_node_id(element)  # Derive a unique graph node id for the current component.
         component_attributes = {  # Assemble the normalized component attributes used by the graph.
             "kind": "component",  # Mark this node as a component node.

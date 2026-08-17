@@ -408,6 +408,7 @@ Nodes treated as exempt:
 - `0`
 - `GND`
 - names beginning with `NC`, `NC_`, or `NC-`
+- single-port probe nodes whose only positional owner is a `B` behavioral source
 
 Important limitations:
 

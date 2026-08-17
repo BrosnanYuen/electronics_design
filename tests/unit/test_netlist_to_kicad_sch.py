@@ -22,6 +22,10 @@ _CONVERT_SETTINGS = {  # Pin the settings so generated files are reproducible.
     "kicad_path": _KICAD_PATH,  # Look symbols up from the configured KiCad installation path.
     "kicad_sch_version": "20260306",  # Use a fixed eight-digit KiCad format version.
     "kicad_sch_generator": "electronics_design",  # Name the generator explicitly.
+    "custom_search_paths": [  # Resolve LTspice ASY fallback symbols from the repository corpus.
+        str(_ROOT_DIRECTORY / "kicad_convert" / "asy"),  # Use the checked-in ASY conversion corpus first.
+        str(_ROOT_DIRECTORY / "valid_asy"),  # Fall back to the standard valid ASY fixtures.
+    ],  # Finish the custom search paths.
 }  # Finish the conversion settings dictionary.
 
 
@@ -94,6 +98,23 @@ class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-sc
                 {"kicad_path": str(Path(temporary_directory) / "missing_kicad")},  # Pass a kicad_path that does not exist.
             )  # Finish the conversion call.
             self.assertEqual(result, (False, "INVALID_CONVERT_SETTINGS", 0), msg="Missing kicad_path directories must fail with the settings error code.")  # Require the settings error tuple.
+
+    def test_invalid_layout_settings_return_invalid_convert_settings(self) -> None:  # Verify finite positive dimensions and an integral iteration budget.
+        source_path = next(_NETLIST_DIRECTORY.glob("*.net"))  # Read one valid source file for each validation call.
+        invalid_overrides = (  # Collect representative invalid layout values.
+            {"kicad_sch_grid": 0},  # Reject a zero routing resolution.
+            {"kicad_sch_page_width": float("nan")},  # Reject a non-finite page dimension.
+            {"kicad_sch_page_height": "wide"},  # Reject a non-numeric page dimension.
+            {"kicad_placement_iterations": -1},  # Reject a negative iteration budget.
+            {"kicad_placement_iterations": 1.5},  # Reject a fractional iteration budget.
+        )  # Finish the invalid settings table.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch output directory.
+            for overrides in invalid_overrides:  # Exercise every invalid setting independently.
+                with self.subTest(overrides=overrides):  # Isolate failures by setting value.
+                    settings = dict(_CONVERT_SETTINGS)  # Start from the valid shared settings.
+                    settings.update(overrides)  # Apply the invalid override.
+                    result = ltspice_netlist_to_kicad_sch(str(source_path), str(Path(temporary_directory) / "ignored.kicad_sch"), settings)  # Run settings validation through the public API.
+                    self.assertEqual(result, (False, "INVALID_CONVERT_SETTINGS", 0))  # Require the settings error contract.
 
     def test_invalid_output_path_returns_invalid_output_path(self) -> None:  # Verify the output path error contract.
         source_path = next(_NETLIST_DIRECTORY.glob("*.net"))  # Read one valid source file for the call.

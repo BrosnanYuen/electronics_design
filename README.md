@@ -111,7 +111,7 @@ Converts both ASC files to netlists and compares their structure.  Returns `(Tru
 - `ltspice_netlist_to_asc` runs the public netlist-to-symbol-initial, autoplace, and netlist/symbol/wire-to-ASC stages to generate one validated schematic from a netlist.
 - `ltspice_netlist_symbol_wire_to_asc` reconstructs one LTspice schematic from a netlist, resolved symbol-pose JSON, and routed wire JSON. The generated `.asc` file is written in Latin-1 encoding.
 - `kicad_sch_to_ltspice_netlist` converts one KiCad schematic (`.kicad_sch`) into one validated LTspice netlist (`.net`). Symbol definitions, pin geometry, and simulation attributes are looked up from the KiCad symbol libraries under `convert_settings["kicad_path"]` (falling back to the schematic's embedded `lib_symbols` definitions). Power symbols become LTspice voltage sources named after their reference designator (without the leading `#`) with the symbol value as the DC payload; `GND`/`0` power symbols become node `0`. Inductors receive LTspice's standard `Rser=1m` default and three-pin BJT/MOSFET symbols receive the substrate node `0`, matching LTspice's own netlist generator. Pin order follows the symbol's `Sim.Pins` role mapping when present and ascending pin numbers otherwise. Error codes include `INVALID_KICAD_SCH_FILE`, `KICAD_SCH_READ_ERROR`, `KICAD_SCH_PARSE_ERROR`, `UNKNOWN_KICAD_SYMBOL`, `UNCONNECTED_SYMBOL_PIN`, `MISSING_COMPONENT_PAYLOAD`, and `INVALID_GENERATED_NETLIST`.
-- `ltspice_netlist_to_kicad_sch` converts one validated LTspice netlist (`.net`) into one validated KiCad schematic (`.kicad_sch`). Every device resolves to a symbol from the KiCad symbol libraries under `convert_settings["kicad_path"]` (resistors, capacitors, and inductors map to the `Device` library; transistors, diodes, and sources to the `Simulation_SPICE` library symbols whose `Sim.Device`/`Sim.Pins` attributes match the netlist device class). When no library symbol matches, the device's LTspice `.asy` file is searched under the configured `custom_search_paths`, `ltspice_wine_path`, and `ltspice_windows_path` roots and converted through the public `ltspice_asy_to_kicad_symbol` API. Ground-referenced voltage sources become KiCad power symbols (value = source payload, reference = `#V1`-style), floating sources use the two-pin `Simulation_SPICE:VDC` symbol, and the global ground net receives a `GND` power symbol. Wires are routed orthogonally along per-net trunks with collision-checked side-exit stubs so every pin is physically connected; non-ground nets carry labels with their original node names. The generated schematic embeds every resolved symbol definition in its `lib_symbols` section, so `kicad_sch_to_ltspice_netlist` can convert it back without extra files and `ltspice_netlist_structure_cmp` reports structural equivalence with the original netlist. Optional `convert_settings` keys: `kicad_sch_version` (YYYYMMDD, default today's date) and `kicad_sch_generator` (default `"electronics_design"`). Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_NETLIST_FILE`, `NETLIST_READ_ERROR`, `UNKNOWN_SYMBOL`, `UNSUPPORTED_DEVICE`, `MISSING_COMPONENT_PAYLOAD`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SCH`.
+- `ltspice_netlist_to_kicad_sch` converts one validated LTspice netlist (`.net`) into one validated KiCad schematic (`.kicad_sch`). Every device resolves to a symbol from the KiCad symbol libraries under `convert_settings["kicad_path"]` (resistors, capacitors, and inductors map to the `Device` library; transistors, diodes, and sources to the `Simulation_SPICE` library symbols whose `Sim.Device`/`Sim.Pins` attributes match the netlist device class). When no library symbol matches, the device's LTspice `.asy` file is searched under the configured `custom_search_paths`, `ltspice_wine_path`, and `ltspice_windows_path` roots and converted through the public `ltspice_asy_to_kicad_symbol` API. Ground-referenced voltage sources become KiCad power symbols (value = source payload, reference = `#V1`-style), floating sources use the two-pin `Simulation_SPICE:VDC` symbol, and the global ground net receives a `GND` power symbol. Component bodies are placed by a force-directed model, then every ordinary net is physically routed pin-to-pin by a Numba-compiled grid A* router. Hard ownership prevents foreign-net overlap; verified straight-through soft crossings and isolated physical trunk fallbacks handle congested layouts without replacing nets with disconnected label stubs. Non-ground nets also carry their original node-name labels on copper. The generated schematic embeds every resolved symbol definition in its `lib_symbols` section, so `kicad_sch_to_ltspice_netlist` can convert it back without extra files and `ltspice_netlist_structure_cmp` reports structural equivalence with the original netlist. The placement and routing cores are self-contained adaptations of the MIT-licensed `kicad-tools` project (`optim` and `router`, Copyright (c) 2024 RJ Walters). Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_NETLIST_FILE`, `NETLIST_READ_ERROR`, `UNKNOWN_SYMBOL`, `UNSUPPORTED_DEVICE`, `MISSING_COMPONENT_PAYLOAD`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SCH`.
 
 ### LTspice ASY to KiCad Symbol Conversion
 
@@ -237,10 +237,16 @@ convert_settings = {
     # KiCad schematic generation (optional, used by ltspice_netlist_to_kicad_sch)
     "kicad_sch_version": "20260306",
     "kicad_sch_generator": "electronics_design",
+    "kicad_sch_grid": 1.27,
+    "kicad_placement_iterations": 250,
+    "kicad_sch_page_width": 297.0,
+    "kicad_sch_page_height": 210.0,
 }
 ```
 
 No hard-coded paths are permitted in `src/`; all search paths must be supplied through this mapping.
+
+The KiCad layout dimensions are finite positive millimetre values. `kicad_placement_iterations` is a non-negative integer iteration limit; zero skips the physics steps while retaining grid snapping. The grid controls both final component snapping and wire routing resolution; the page width and height bound force-directed placement and the primary A* routing area.
 
 CPU-bound geometry and routing kernels use Numba. Independent route candidates,
 visibility groups, and symbol-file discovery use bounded thread pools. The
@@ -435,6 +441,7 @@ path = auto_route_wires(0, 0, 128, 128, obstacles, 16, 16)
 src/electronics_design/
     __init__.py
     autoroute.py
+    force_directed_placement.py
     kicad_sch.py
     kicad_sexp_parser.py
     kicad_symbol.py
@@ -452,6 +459,7 @@ src/electronics_design/
     ltspice_netlist_to_wiring.py
     ltspice_resolve_symbol_pose.py
     pathtracing.py
+    schematic_grid_router.py
 tests/
 test_files/
 valid_asy/

@@ -13,6 +13,7 @@ from __future__ import annotations  # Postpone annotation evaluation for forward
 import math  # Compute pin rotation transforms for symbol instances.
 import os  # Resolve library search roots and write the output file.
 import re  # Extract line numbers from validator messages.
+from functools import lru_cache  # Reuse parsed, read-only KiCad library trees across conversions.
 from typing import Dict  # Type net-name and property mappings.
 from typing import List  # Type collected line and record lists.
 from typing import Mapping  # Type the convert_settings parameter.
@@ -110,6 +111,13 @@ class _LibraryCache:  # Lazily parse KiCad symbol library files found under the 
             for entry in entries:  # Walk every directory entry.
                 if not entry.endswith(_KICAD_SYMBOL_EXTENSION):  # Skip non-library entries.
                     continue  # Move to the next entry.
+                candidate_path = os.path.join(search_root, entry)  # Build the concrete library path for the text prefilter.
+                try:  # Read metadata used to invalidate the prefilter cache.
+                    file_stat = os.stat(candidate_path)  # Stat the candidate file.
+                    if not _library_file_contains_symbol(candidate_path, file_stat.st_mtime_ns, file_stat.st_size, name):  # Avoid parsing libraries that cannot define the requested symbol.
+                        continue  # Move to the next library file.
+                except (OSError, UnicodeDecodeError):  # Skip unreadable candidate files.
+                    continue  # Move to the next entry.
                 library_root = self._load_library(entry[: -len(_KICAD_SYMBOL_EXTENSION)])  # Parse the library file.
                 symbol_node = _find_symbol_in_root(library_root, name)  # Search for the symbol name.
                 if symbol_node is not None:  # Stop at the first library that defines the symbol.
@@ -125,13 +133,27 @@ class _LibraryCache:  # Lazily parse KiCad symbol library files found under the 
             if not os.path.isfile(candidate_path):  # Skip roots that do not contain the library file.
                 continue  # Move to the next search root.
             try:  # Attempt to read and parse the library file.
-                with open(candidate_path, "r", encoding="utf-8") as file_handle:  # Open the library text.
-                    library_root = parse_string(file_handle.read())  # Parse the library into an S-expression root.
+                file_stat = os.stat(candidate_path)  # Read metadata used to invalidate the shared parse cache.
+                library_root = _load_library_file(candidate_path, file_stat.st_mtime_ns, file_stat.st_size)  # Reuse the parsed read-only tree when unchanged.
                 break  # Stop after the first readable library file.
             except (OSError, UnicodeDecodeError, ParseError):  # Treat unreadable libraries as missing.
                 library_root = None  # Keep the missing-library default.
         self._parsed[nickname] = library_root  # Cache the parsed root (or None).
         return library_root  # Return the cached library root.
+
+
+@lru_cache(maxsize=64)
+def _load_library_file(candidate_path: str, _mtime_ns: int, _size: int) -> SExp:  # Parse one unchanged library file once per process.
+    with open(candidate_path, "r", encoding="utf-8") as file_handle:  # Open the configured library path.
+        return parse_string(file_handle.read())  # Parse and cache the read-only S-expression tree.
+
+
+@lru_cache(maxsize=4096)
+def _library_file_contains_symbol(candidate_path: str, _mtime_ns: int, _size: int, symbol_name: str) -> bool:  # Cheaply prefilter a library before full S-expression parsing.
+    with open(candidate_path, "r", encoding="utf-8") as file_handle:  # Read the configured library text.
+        library_text = file_handle.read()  # Load the text for an exact symbol declaration search.
+    pattern = rf'\(\s*symbol\s+"{re.escape(symbol_name)}"(?=\s|\))'  # Match an exact quoted symbol name with flexible formatting.
+    return re.search(pattern, library_text) is not None  # Report whether full parsing could find the requested symbol.
 
 
 def kicad_sch_to_ltspice_netlist(  # Convert one KiCad schematic into one LTspice netlist file.
@@ -281,6 +303,8 @@ def _wire_and_emit(components: List[Dict[str, object]], root: SExp) -> Tuple[boo
             if net_name.upper().startswith(_NO_CONNECT_PREFIXES):  # Skip explicitly marked no-connect pins.
                 continue  # Move to the next pin.
             if record["power"]:  # Power pins may sit on nets referenced only by behavioral expressions.
+                continue  # Move to the next pin.
+            if str(record["reference"])[:1].upper() == "B":  # Behavioral source pins may sit on probe nets referenced only by expressions.
                 continue  # Move to the next pin.
             if net_member_counts.get(pin_root, 0) < 2:  # Require at least two device ports on ordinary nets.
                 message = f"UNCONNECTED_SYMBOL_PIN: pin {pin_number} of '{record['reference']}' is not connected to another component"  # Explain the floating pin.
