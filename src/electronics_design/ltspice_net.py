@@ -805,6 +805,8 @@ def _net_node_id(node_name: str) -> str:  # Build a stable graph node id for one
 
 def _component_signature(element: ParsedElement) -> Tuple[str, Tuple[str, ...]]:  # Build an instance-name-free structural signature for comparison.
     non_node_tokens = tuple(element.tokens[1 + len(element.nodes):])  # Drop the instance name and explicit connectivity nodes from the signature.
+    if element.prefix == "L":  # Inductors implicitly carry LTspice's Rser=1m default even when the deck omits it.
+        non_node_tokens = tuple(token for token in non_node_tokens if token.lower() != "rser=1m")  # Ignore the default series resistance in comparisons.
     return element.prefix, non_node_tokens  # Return the normalized component signature tuple.
 
 

@@ -66,15 +66,6 @@ _PROPERTY_STEP = 2.54  # Vertical offset between stacked instance properties.
 
 _UNSUPPORTED_PREFIXES = frozenset({"K", "A", "@", "&"})  # Devices that cannot be represented by KiCad schematic symbols.
 
-_SIM_DEVICE_LIB_NAMES = {  # Map simulation device classes onto the standard KiCad simulation library symbol names.
-    "NPN": "NPN",  # BJT NPN device class.
-    "PNP": "PNP",  # BJT PNP device class.
-    "NMOS": "NMOS",  # MOSFET N-channel device class.
-    "PMOS": "PMOS",  # MOSFET P-channel device class.
-    "NJF": "NJFET",  # JFET N-channel device class.
-    "PJF": "PJFET",  # JFET P-channel device class.
-}  # Finish the simulation device class mapping.
-
 _PREFIX_ASY_FALLBACKS = {  # Map device prefixes onto candidate LTspice symbol file basenames.
     "R": ("res.asy",),  # Resistor symbol file.
     "C": ("cap.asy",),  # Capacitor symbol file.
@@ -183,7 +174,7 @@ def _build_schematic_text(lines: Sequence[str], input_path: str, settings: Dict[
     if not elements_result[0]:  # Stop when element parsing fails unexpectedly.
         return False, "", "INVALID_NETLIST_FILE", elements_result[2]  # Return the failing line.
     elements = elements_result[1]  # Read the parsed element records.
-    model_types = _parse_model_types(lines)  # Parse .model lines into name-to-type mappings.
+    model_types = _build_model_types(lines, settings)  # Parse netlist and library .model lines into polarity mappings.
     temp_directory = tempfile.mkdtemp(prefix="electronics_design_netlist_kicad_")  # Create a scratch directory for ASY fallback conversions.
     try:  # Run the conversion stages inside the scratch directory lifetime.
         records_result = _build_component_records(elements, model_types, settings, temp_directory)  # Resolve symbols and build component records.
@@ -205,17 +196,127 @@ def _build_schematic_text(lines: Sequence[str], input_path: str, settings: Dict[
             pass  # Continue because the schematic already embeds the converted symbols.
 
 
-def _parse_model_types(lines: Sequence[str]) -> Dict[str, str]:  # Parse .model lines into model-name to model-type mappings.
+_LIBRARY_DIRECTIVE_PATTERN = re.compile(r"^\.(?:include|lib|inc)\b", re.IGNORECASE)  # Detect library reference directives.
+
+_MODEL_DIRECTIVE_PATTERN = re.compile(r"^\.model\b", re.IGNORECASE)  # Detect .model definition lines in library files.
+
+_UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")  # Recognize UTF-16 byte order marks when reading library files.
+_UTF8_BOM = b"\xef\xbb\xbf"  # Recognize the UTF-8 byte order mark.
+
+
+def _parse_model_types(lines: Sequence[str]) -> Dict[str, str]:  # Parse inline .model lines into model-name to polarity-type mappings.
     model_types: Dict[str, str] = {}  # Collect the model type mappings.
     for raw_line in lines:  # Walk every netlist line.
         stripped_line = raw_line.strip()  # Normalize leading whitespace.
-        if not stripped_line.lower().startswith(".model"):  # Skip lines that are not model definitions.
+        if not _MODEL_DIRECTIVE_PATTERN.match(stripped_line):  # Skip lines that are not model definitions.
             continue  # Move to the next line.
         tokens = stripped_line.split()  # Split the model line into tokens.
         if len(tokens) < 3:  # Skip malformed model lines defensively.
             continue  # Move to the next line.
-        model_types[tokens[1]] = tokens[2].upper()  # Record the model type under the model name.
+        model_types[tokens[1]] = _model_polarity_type(stripped_line, tokens[2])  # Record the polarity type under the model name.
     return model_types  # Return the collected model type mapping.
+
+
+def _model_polarity_type(raw_line: str, kind_token: str) -> str:  # Normalize one .model kind token into a polarity type.
+    kind = kind_token.split("(")[0].upper()  # Strip the parameter section from the kind token.
+    if kind == "VDMOS":  # VDMOS polarity depends on the Pchan parameter instead of the model kind.
+        return "PMOS" if re.search(r"\bpchan\b", raw_line, re.IGNORECASE) is not None else "NMOS"  # Return the VDMOS polarity type.
+    return kind  # Return the kind as the polarity type.
+
+
+def _ltspice_search_roots(settings: Dict[str, Any]) -> List[str]:  # Collect the configured LTspice symbol search roots.
+    search_roots: List[str] = []  # Collect the search roots.
+    custom_paths = settings.get("custom_search_paths")  # Read the optional custom search paths.
+    if isinstance(custom_paths, (list, tuple)):  # Accept list-style custom paths.
+        for custom_path in custom_paths:  # Walk every custom search path.
+            if isinstance(custom_path, str) and custom_path.strip():  # Keep nonempty path strings.
+                search_roots.append(os.path.expanduser(custom_path.strip()))  # Expand and store the custom root.
+    for setting_key in ("ltspice_wine_path", "ltspice_windows_path"):  # Walk the LTspice install root settings.
+        raw_path = settings.get(setting_key)  # Read the configured install root.
+        if isinstance(raw_path, str) and raw_path.strip():  # Keep nonempty path strings.
+            normalized_path = os.path.expanduser(raw_path.strip().replace("\\", "/"))  # Normalize separators and expand the root.
+            search_roots.append(normalized_path)  # Store the install root.
+    return search_roots  # Return the collected search roots.
+
+
+def _find_library_file(library_name: str, search_roots: Sequence[str]) -> Optional[str]:  # Locate one referenced library file under the configured roots.
+    normalized = os.path.expanduser(library_name.strip()).replace("\\", "/")  # Normalize the referenced path.
+    if os.path.isfile(normalized):  # Accept a directly usable path first.
+        return normalized  # Return the direct path.
+    basename = os.path.basename(normalized)  # Extract the library basename for root-based lookup.
+    relative = normalized.lstrip("./")  # Drop a relative path prefix for root-based lookup.
+    for search_root in search_roots:  # Walk every search root.
+        candidates = [  # Build the candidate paths for this root.
+            os.path.join(search_root, relative),  # The referenced relative path below the root.
+            os.path.join(search_root, basename),  # The root itself may hold the library file.
+            os.path.join(search_root, "lib", basename),  # The conventional library subdirectory.
+            os.path.join(search_root, "lib", "cmp", basename),  # The standard component library layout.
+            os.path.join(search_root, "lib", "sub", basename),  # The standard subcircuit library layout.
+        ]  # Finish the candidate path list.
+        for candidate in candidates:  # Walk the candidate paths.
+            if os.path.isfile(candidate):  # Stop at the first existing file.
+                return candidate  # Return the resolved library path.
+    return None  # Return None when no root contains the library file.
+
+
+def _read_encoded_text_file(filepath: str) -> Tuple[bool, str]:  # Read one LTspice library file with encoding detection.
+    try:  # Attempt to read the raw file bytes.
+        with open(filepath, "rb") as file_handle:  # Open the file in binary mode for BOM inspection.
+            raw_bytes = file_handle.read()  # Read the entire file as bytes.
+    except OSError:  # Catch unreadable files.
+        return False, ""  # Signal the read failure.
+    if raw_bytes.startswith(_UTF16_BOMS):  # Prefer UTF-16 when a byte order mark is present.
+        encodings = ("utf-16",)  # Use the BOM-aware UTF-16 codec.
+    elif raw_bytes.startswith(_UTF8_BOM):  # Prefer BOM-aware UTF-8 when marked.
+        encodings = ("utf-8-sig", "utf-8", "latin-1")  # Fall back through simpler encodings.
+    elif b"\x00" in raw_bytes[:4096]:  # Detect BOM-less UTF-16 through interleaved null bytes.
+        encodings = ("utf-16", "utf-8", "latin-1")  # Try UTF-16 first for null-byte content.
+    else:  # Default to plain text encodings.
+        encodings = ("utf-8", "latin-1")  # Try UTF-8 with a Latin-1 fallback.
+    for encoding in encodings:  # Walk the candidate encodings.
+        try:  # Attempt to decode the raw bytes.
+            return True, raw_bytes.decode(encoding)  # Return the decoded text.
+        except UnicodeDecodeError:  # Skip encodings that cannot decode the content.
+            continue  # Move to the next encoding.
+    return False, ""  # Signal that no encoding could decode the file.
+
+
+def _collect_library_model_types(lines: Sequence[str], settings: Dict[str, Any]) -> Dict[str, str]:  # Parse model polarities from referenced library files.
+    library_names: List[str] = []  # Collect the referenced library filenames.
+    for raw_line in lines:  # Walk every netlist line.
+        stripped_line = raw_line.strip()  # Normalize leading whitespace.
+        if not _LIBRARY_DIRECTIVE_PATTERN.match(stripped_line):  # Skip lines that do not reference a library.
+            continue  # Move to the next line.
+        tokens = stripped_line.split()  # Split the library line into tokens.
+        if len(tokens) < 2:  # Skip malformed library lines defensively.
+            continue  # Move to the next line.
+        reference = tokens[1].strip().strip("\"'")  # Read the filename token without surrounding quotes.
+        if reference:  # Keep nonempty references.
+            library_names.append(reference)  # Store the referenced filename.
+    model_types: Dict[str, str] = {}  # Collect the library model mappings.
+    search_roots = _ltspice_search_roots(settings)  # Collect the configured search roots once.
+    for library_name in library_names:  # Walk every referenced library.
+        library_path = _find_library_file(library_name, search_roots)  # Locate the library file.
+        if library_path is None:  # Skip references that cannot be located.
+            continue  # Move to the next reference.
+        read_result = _read_encoded_text_file(library_path)  # Read the library text with encoding detection.
+        if not read_result[0]:  # Skip unreadable libraries.
+            continue  # Move to the next reference.
+        for raw_line in read_result[1].splitlines():  # Walk every library line.
+            stripped_line = raw_line.strip()  # Normalize leading whitespace.
+            if not _MODEL_DIRECTIVE_PATTERN.match(stripped_line):  # Skip non-model lines.
+                continue  # Move to the next line.
+            tokens = stripped_line.split()  # Split the model line into tokens.
+            if len(tokens) < 3:  # Skip malformed model lines defensively.
+                continue  # Move to the next line.
+            model_types[tokens[1]] = _model_polarity_type(stripped_line, tokens[2])  # Record the polarity type under the model name.
+    return model_types  # Return the collected library model mapping.
+
+
+def _build_model_types(lines: Sequence[str], settings: Dict[str, Any]) -> Dict[str, str]:  # Merge library and inline model types.
+    model_types = _collect_library_model_types(lines, settings)  # Start with the referenced library model types.
+    model_types.update(_parse_model_types(lines))  # Inline netlist .model definitions override the libraries.
+    return model_types  # Return the merged model type mapping.
 
 
 def _candidate_lib_ids(element: ParsedElement, model_types: Dict[str, str]) -> List[str]:  # Derive candidate KiCad library identifiers for one device.
@@ -234,35 +335,35 @@ def _candidate_lib_ids(element: ParsedElement, model_types: Dict[str, str]) -> L
             candidates.append(f"Diode:{payload_text}")  # Prefer the model-named diode symbol.
         candidates.extend(["Simulation_SPICE:D", "Device:D"])  # Append the generic diode symbols.
         return candidates  # Return the diode candidates.
-    if prefix == "Q":  # BJTs prefer a simulation symbol matching the declared model type.
-        model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the model type from .model lines.
+    if prefix == "Q":  # BJTs prefer a model-named symbol followed by the polarity-matched simulation symbol.
+        model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the model type from the netlist and library .model lines.
         candidates = []  # Collect BJT candidates.
-        if model_type in _SIM_DEVICE_LIB_NAMES:  # Use the simulation symbol for known BJT classes.
-            candidates.append(f"Simulation_SPICE:{_SIM_DEVICE_LIB_NAMES[model_type]}")  # Prefer the simulation symbol.
         if payload_text and model_type not in {"NPN", "PNP"}:  # Propose a model-named transistor symbol when it differs from the class name.
             candidates.append(f"Transistor_BJT:{payload_text}")  # Append the model-named transistor symbol.
-        if not candidates:  # Fall back when no candidate was proposed.
-            candidates.append("Simulation_SPICE:NPN")  # Use the generic NPN simulation symbol.
+        polarity = "PNP" if model_type == "PNP" else "NPN"  # Resolve the BJT polarity class.
+        if len(element.nodes) == 4:  # Preserve an explicit substrate node with the four-pin simulation symbol.
+            polarity += "_Substrate"  # Use the substrate variant of the simulation symbol.
+        candidates.append(f"Simulation_SPICE:{polarity}")  # Always propose the polarity-matched simulation symbol.
         return candidates  # Return the BJT candidates.
-    if prefix == "M":  # MOSFETs prefer a simulation symbol matching the declared model type.
-        model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the model type from .model lines.
+    if prefix == "M":  # MOSFETs prefer a model-named symbol followed by the polarity-matched simulation symbol.
+        model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the model type from the netlist and library .model lines.
         candidates = []  # Collect MOSFET candidates.
-        if model_type in _SIM_DEVICE_LIB_NAMES:  # Use the simulation symbol for known MOSFET classes.
-            candidates.append(f"Simulation_SPICE:{_SIM_DEVICE_LIB_NAMES[model_type]}")  # Prefer the simulation symbol.
         if payload_text and model_type not in {"NMOS", "PMOS"}:  # Propose a model-named FET symbol when it differs from the class name.
             candidates.append(f"Transistor_FET:{payload_text}")  # Append the model-named FET symbol.
-        if not candidates:  # Fall back when no candidate was proposed.
-            candidates.append("Simulation_SPICE:NMOS")  # Use the generic NMOS simulation symbol.
+        polarity = "PMOS" if model_type == "PMOS" else "NMOS"  # Resolve the MOSFET polarity class.
+        if len(element.nodes) == 4:  # Preserve an explicit substrate node with the four-pin simulation symbol.
+            polarity += "_Substrate"  # Use the substrate variant of the simulation symbol.
+        candidates.append(f"Simulation_SPICE:{polarity}")  # Always propose the polarity-matched simulation symbol.
         return candidates  # Return the MOSFET candidates.
-    if prefix == "J":  # JFETs prefer a simulation symbol matching the declared model type.
-        model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the model type from .model lines.
-        if model_type in _SIM_DEVICE_LIB_NAMES:  # Use the simulation symbol for known JFET classes.
-            return [f"Simulation_SPICE:{_SIM_DEVICE_LIB_NAMES[model_type]}"]  # Return the simulation symbol candidate.
-        return ["Simulation_SPICE:NJFET"]  # Fall back to the N-channel JFET simulation symbol.
+    if prefix == "J":  # JFETs map to the polarity-matched simulation symbol.
+        model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the model type from the netlist and library .model lines.
+        return [f"Simulation_SPICE:{'PJFET' if model_type == 'PJF' else 'NJFET'}"]  # Return the polarity-matched simulation symbol candidate.
     if prefix == "V":  # Voltage sources prefer power symbols named after their positive node when ground-referenced.
         positive_node = element.nodes[0] if element.nodes else ""  # Read the source positive node.
         negative_node = element.nodes[1] if len(element.nodes) > 1 else ""  # Read the source negative node.
         if negative_node not in _GROUND_NODE_NAMES or positive_node in _GROUND_NODE_NAMES:  # Use a two-pin source for floating or inverted supplies.
+            return ["Simulation_SPICE:VDC"]  # Return the two-pin simulation voltage source.
+        if payload_text == "0":  # A zero-volt source is a sensing source, not a supply; keep it as a two-pin device.
             return ["Simulation_SPICE:VDC"]  # Return the two-pin simulation voltage source.
         candidates = []  # Collect voltage source candidates.
         candidates.append(f"power:{positive_node}")  # Prefer a power symbol named after the node.
@@ -296,18 +397,26 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
     element: ParsedElement,  # Accept the device element for fallback naming.
     settings: Dict[str, Any],  # Accept the normalized settings.
     temp_directory: str,  # Accept the scratch directory for fallback conversions.
+    extra_asy_names: Sequence[str] = (),  # Accept polarity-derived ASY fallback names.
 ) -> BuildResult:  # Return the resolution success with the lib_id and symbol node.
     for lib_id in lib_ids:  # Walk the candidate library identifiers in order.
         if lib_id == "":  # Skip empty candidates.
             continue  # Move to the next candidate.
         symbol_node = library_cache.find(lib_id)  # Search the kicad_path libraries.
-        if symbol_node is not None:  # Stop at the first resolved library symbol.
-            return True, (lib_id, symbol_node), "", 0  # Return the resolved symbol.
+        if symbol_node is None:  # Skip candidates that no library defines.
+            continue  # Move to the next candidate.
+        short_name = _split_lib_id(lib_id)[1]  # Read the short symbol name for pin extraction.
+        pins_result = _extract_symbol_pins(symbol_node, 1, 1, short_name)  # Check that the symbol carries usable pin graphics.
+        if pins_result[0]:  # Require usable pin graphics before accepting the candidate.
+            if symbol_node.find_child("power") is not None or len(pins_result[1]) == len(element.nodes):  # Power symbols carry one pin regardless of node count; others must match exactly.
+                return True, (lib_id, symbol_node), "", 0  # Return the resolved symbol.
     asy_names = list(_PREFIX_ASY_FALLBACKS.get(element.prefix, ()))  # Read the prefix ASY fallback names.
     if element.prefix == "X":  # Subcircuit fallbacks use the subcircuit name as the ASY basename.
-        subcircuit_name = element.tokens[-1] if element.tokens else ""  # Read the trailing subcircuit name token.
+        payload = element.tokens[1 + len(element.nodes):]  # Read the payload tokens after the connectivity nodes.
+        subcircuit_name = payload[0] if payload else ""  # Read the first payload token as the subcircuit name.
         if subcircuit_name:  # Only propose a fallback when a name exists.
             asy_names = [subcircuit_name + _ASY_EXTENSION]  # Build the subcircuit ASY filename.
+    asy_names.extend(extra_asy_names)  # Append polarity-derived fallback names after the prefix defaults.
     for asy_name in asy_names:  # Walk the candidate ASY basenames.
         asy_path = _find_asy_file(asy_name, settings)  # Search the configured LTspice roots for the file.
         if asy_path is None:  # Skip names that do not exist anywhere.
@@ -330,6 +439,9 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
                 break  # Stop searching.
         if symbol_node is None:  # Skip generated files without the expected symbol.
             continue  # Move to the next ASY name.
+        fallback_pins_result = _extract_symbol_pins(symbol_node, 1, 1, stem)  # Check the generated symbol pin graphics.
+        if not fallback_pins_result[0] or len(fallback_pins_result[1]) != len(element.nodes):  # Require a pin-count match before embedding.
+            continue  # Move to the next ASY name.
         embedded_lib_id = f"{stem}:{stem}"  # Qualify the embedded symbol so kicad_path never shadows it.
         return True, (embedded_lib_id, symbol_node), "", 0  # Return the embedded fallback symbol.
     detail = "', '".join(lib_ids)  # Join the candidate identifiers for the error message.
@@ -337,18 +449,22 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
     return False, None, message, element.line_number  # Return the unknown symbol error with the element line.
 
 
+def _polarity_asy_fallback_names(element: ParsedElement, model_types: Dict[str, str]) -> Tuple[str, ...]:  # Derive polarity-matched ASY fallback names for transistor devices.
+    prefix = element.prefix  # Read the device prefix.
+    if prefix not in {"Q", "M", "J"}:  # Only transistors carry polarity-dependent fallback symbols.
+        return ()  # Return no extra fallback names.
+    payload = element.tokens[1 + len(element.nodes):]  # Read the payload tokens after the nodes.
+    payload_text = payload[0] if payload else ""  # Read the primary model token.
+    model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the polarity type.
+    if prefix == "Q":  # BJTs fall back to the matching LTspice NPN or PNP symbol.
+        return ("pnp.asy",) if model_type == "PNP" else ("npn.asy",)  # Return the polarity-matched BJT fallback.
+    if prefix == "M":  # MOSFETs fall back to the matching LTspice NMOS or PMOS symbol.
+        return ("pmos.asy",) if model_type == "PMOS" else ("nmos.asy",)  # Return the polarity-matched MOSFET fallback.
+    return ("pjf.asy",) if model_type == "PJF" else ("njf.asy",)  # Return the polarity-matched JFET fallback.
+
+
 def _find_asy_file(asy_name: str, settings: Dict[str, Any]) -> Optional[str]:  # Search the configured LTspice roots for one ASY file.
-    search_roots: List[str] = []  # Collect the ASY search roots from the settings.
-    custom_paths = settings.get("custom_search_paths")  # Read the optional custom search paths.
-    if isinstance(custom_paths, (list, tuple)):  # Accept list-style custom paths.
-        for custom_path in custom_paths:  # Walk every custom search path.
-            if isinstance(custom_path, str) and custom_path.strip():  # Keep nonempty path strings.
-                search_roots.append(os.path.expanduser(custom_path.strip()))  # Expand and store the custom root.
-    for setting_key in ("ltspice_wine_path", "ltspice_windows_path"):  # Walk the LTspice install root settings.
-        raw_path = settings.get(setting_key)  # Read the configured install root.
-        if isinstance(raw_path, str) and raw_path.strip():  # Keep nonempty path strings.
-            normalized_path = os.path.expanduser(raw_path.strip().replace("\\", "/"))  # Normalize separators and expand the root.
-            search_roots.append(normalized_path)  # Store the install root.
+    search_roots = _ltspice_search_roots(settings)  # Collect the configured LTspice search roots.
     for search_root in search_roots:  # Walk every search root.
         candidates = [  # Build the candidate paths for this root.
             os.path.join(search_root, asy_name),  # The root itself may hold the symbol.
@@ -376,7 +492,8 @@ def _build_component_records(  # Resolve symbols and build one component record 
             message = f"UNSUPPORTED_DEVICE: LTspice device prefix '{prefix}' has no KiCad schematic symbol representation"  # Explain the unsupported prefix.
             return False, None, message, element.line_number  # Return the unsupported device error with the element line.
         candidate_ids = _candidate_lib_ids(element, model_types)  # Derive the candidate library identifiers.
-        resolve_result = _resolve_symbol(library_cache, candidate_ids, element, settings, temp_directory)  # Resolve the device symbol.
+        extra_asy_names = _polarity_asy_fallback_names(element, model_types)  # Derive polarity-matched ASY fallback names.
+        resolve_result = _resolve_symbol(library_cache, candidate_ids, element, settings, temp_directory, extra_asy_names)  # Resolve the device symbol.
         if not resolve_result[0]:  # Stop when resolution fails.
             return resolve_result  # Return the resolution error unchanged.
         lib_id, symbol_node = resolve_result[1]  # Read the resolved lib_id and symbol node.
@@ -433,18 +550,14 @@ def _build_one_record(  # Build one component record from a resolved device and 
     if not payload:  # Require a value or model payload on ordinary components.
         message = f"MISSING_COMPONENT_PAYLOAD: device '{element.tokens[0]}' has no value or model payload"  # Explain the missing payload.
         return False, None, message, element.line_number  # Return the payload error.
-    if prefix == "L":  # Inductors carry only the inductance value; the reverse conversion restores Rser=1m.
-        value = payload[0]  # Use the first payload token as the inductance value.
-    elif prefix in {"V", "I"}:  # Source values may carry SPICE waveform phrases.
-        value = " ".join(payload)  # Join the source payload into one value string.
-    else:  # All other devices take their model or value token directly.
-        value = payload[0]  # Use the first payload token as the value.
+    value = " ".join(payload)  # Preserve the full value payload so the reverse conversion restores it token for token.
     reference = element.tokens[0]  # Start with the netlist instance name.
     if prefix == "X":  # Map subcircuit references onto KiCad U references.
         if reference.startswith("X") and len(reference) > 1 and reference[1:2].isdigit():  # Strip the leading X for digit-suffixed names.
             reference = "U" + reference[1:]  # Rebuild the reference with the U prefix.
         else:  # Keep nonstandard subcircuit names intact.
             reference = reference[1:]  # Strip only the leading X.
+        reference = reference.lstrip("\u00a7")  # Drop LTspice hierarchy path markers so the reverse conversion reads a valid prefix.
     record = {  # Assemble the ordinary component record.
         "element": element,  # Store the parsed element.
         "prefix": prefix,  # Store the device prefix.
@@ -546,6 +659,13 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
                 nets[node_name] = []  # Start the net pin list.
                 net_order.append(node_name)  # Preserve the first-appearance order.
             nets[node_name].append((record_index, pin_number, absolute_x, absolute_y, record["pin_exits"][pin_number]))  # Append the pin to its net.
+    for record in records:  # Pre-register power-only nets so every power source gets its own trunk and label.
+        if not record["power"]:  # Skip ordinary records whose nets were already registered.
+            continue  # Move to the next record.
+        node_name = record["element"].nodes[0] if record["element"].nodes else ""  # Read the source positive node.
+        if node_name and node_name not in nets:  # Register power-only nets that no ordinary component touches.
+            nets[node_name] = []  # Start the empty net pin list.
+            net_order.append(node_name)  # Append the power net to the ordering for trunk and label assignment.
     min_pin_y = _PLACEMENT_Y  # Initialize the lowest pin Y bound.
     for net_pins in nets.values():  # Walk every net to find the lowest pin.
         for _record_index, _pin_number, _pin_x, pin_y, _exit_x in net_pins:  # Walk the net pins.
@@ -657,7 +777,7 @@ def _route_all_nets(  # Route orthogonal wire segments and labels for every net.
             label_x = min(exit_x for _record_index, _pin_number, _pin_x, _pin_y, exit_x in net_pins)  # Place the label at the left trunk end.
             label_nodes.append(  # Append the generated label node.
                 SExp(name="label", children=[  # Build the label list node.
-                    SExp(value=node_name),  # Label text carries the original node name.
+                    SExp(value=node_name, _originally_quoted=True),  # Label text carries the original node name; KiCad requires a quoted string here.
                     SExp(name="at", children=[SExp(value=label_x), SExp(value=trunk_y), SExp(value=0)]),  # Label position on the trunk.
                     SExp(name="effects", children=[SExp(name="font", children=[SExp(name="size", children=[SExp(value=1.27), SExp(value=1.27)])])]),  # Label text effects.
                     SExp(name="uuid", children=[SExp(value=_derive_uuid(root_uuid, f"label/{label_counter}"))]),  # Label identifier.
@@ -687,7 +807,7 @@ def _build_symbol_instance_nodes(records: Sequence[Dict[str, Any]], root_uuid: s
         for pin_number in pin_numbers:  # Walk the used pins.
             children.append(  # Append the pin declaration.
                 SExp(name="pin", children=[  # Build the pin declaration node.
-                    SExp(value=pin_number),  # Pin number atom.
+                    SExp(value=str(pin_number), _originally_quoted=True),  # Pin number atom; KiCad requires a quoted string here.
                     SExp(name="uuid", children=[SExp(value=_derive_uuid(root_uuid, f"symbol/{record['reference']}/pin/{pin_number}"))]),  # Pin identifier.
                 ])  # Finish the pin declaration node.
             )  # Append the pin declaration to the children.
@@ -733,7 +853,7 @@ def _build_instance_properties(record: Dict[str, Any]) -> List[SExp]:  # Build t
 def _property_node(reference: str, key: str, value: str, record: Dict[str, Any], visible: bool) -> SExp:  # Build one property node for an instance.
     children: List[SExp] = [  # Start the property children.
         SExp(value=key),  # Property key atom.
-        SExp(value=value),  # Property value atom.
+        SExp(value=value, _originally_quoted=True),  # Property value atom; KiCad requires a quoted string here.
         SExp(name="at", children=[SExp(value=record["x"]), SExp(value=record["y"] + _PROPERTY_STEP), SExp(value=0)]),  # Property position.
         SExp(name="show_name", children=[SExp(value="no")]),  # Property name visibility flag.
         SExp(name="do_not_autoplace", children=[SExp(value="no")]),  # Autoplace flag.
@@ -779,7 +899,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
         SExp(name="sheet_instances", children=[  # Build the sheet instances section.
             SExp(name="path", children=[  # Build the root sheet path.
                 SExp(value="/"),  # Root sheet path marker.
-                SExp(name="page", children=[SExp(value="1")]),  # Page number.
+                SExp(name="page", children=[SExp(value="1", _originally_quoted=True)]),  # Page number; KiCad requires a quoted string here.
             ])  # Finish the root sheet path.
         ])  # Finish the sheet instances section.
     )  # Append the sheet instances section to the root.

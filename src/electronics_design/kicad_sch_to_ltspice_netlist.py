@@ -280,6 +280,8 @@ def _wire_and_emit(components: List[Dict[str, object]], root: SExp) -> Tuple[boo
                 continue  # Move to the next pin.
             if net_name.upper().startswith(_NO_CONNECT_PREFIXES):  # Skip explicitly marked no-connect pins.
                 continue  # Move to the next pin.
+            if record["power"]:  # Power pins may sit on nets referenced only by behavioral expressions.
+                continue  # Move to the next pin.
             if net_member_counts.get(pin_root, 0) < 2:  # Require at least two device ports on ordinary nets.
                 message = f"UNCONNECTED_SYMBOL_PIN: pin {pin_number} of '{record['reference']}' is not connected to another component"  # Explain the floating pin.
                 return False, [], message, record["line"]  # Return the unconnected pin error.
@@ -341,7 +343,10 @@ def _emit_device_lines(components: List[Dict[str, object]], net_names: Dict[str,
 
 def _payload_tokens(prefix: str, value: str) -> List[str]:  # Build the value payload tokens for one device class.
     if prefix == "L":  # Inductors carry LTspice's standard series resistance default.
-        return [value, "Rser=1m"]  # Append the LTspice inductor default.
+        tokens = value.split()  # Split the inductor value payload into tokens.
+        if any(token.lower().startswith("rser=") for token in tokens):  # Keep an explicitly stored series resistance.
+            return tokens  # Return the stored payload unchanged.
+        return tokens + ["Rser=1m"]  # Append the LTspice inductor default when the payload omits it.
     if prefix in {"V", "I"}:  # Source values may carry SPICE waveform phrases.
         return value.split()  # Split the source payload into individual tokens.
     return [value]  # Return the plain value token for all other devices.
