@@ -238,7 +238,13 @@ convert_settings = {
     "kicad_sch_version": "20260306",
     "kicad_sch_generator": "electronics_design",
     "kicad_sch_grid": 1.27,
+    "kicad_placement_strategy": "hybrid",  # physics, evolutionary, or hybrid
     "kicad_placement_iterations": 250,
+    "kicad_evolutionary_population": 10,
+    "kicad_evolutionary_generations": 6,
+    "kicad_placement_seed": 0,
+    "kicad_routing_trials": 3,
+    "kicad_trace_optimization_passes": 8,
     "kicad_sch_page_width": 297.0,
     "kicad_sch_page_height": 210.0,
 }
@@ -246,7 +252,7 @@ convert_settings = {
 
 No hard-coded paths are permitted in `src/`; all search paths must be supplied through this mapping.
 
-The KiCad layout dimensions are finite positive millimetre values. `kicad_placement_iterations` is a non-negative integer iteration limit; zero skips the physics steps while retaining grid snapping. The grid controls both final component snapping and wire routing resolution; the page width and height bound force-directed placement and the primary A* routing area.
+The KiCad layout dimensions are finite positive millimetre values. `kicad_placement_strategy` selects force physics, deterministic evolutionary placement, or the default hybrid global-search/physics-refinement pipeline. `kicad_placement_iterations` is a non-negative physics iteration limit; zero skips physics steps while retaining grid snapping. Evolutionary population, generation, and seed settings bound and reproduce the genetic search. The router can evaluate one to three complete net-order candidates and keeps the route with the fewest physical fallback trunks, then the shortest trace length and fewest segments. Trace optimization deduplicates wires and merges only collinear degree-two chains while retaining pin terminals and branch junctions. The grid controls both final component snapping and wire routing resolution; the page width and height bound placement and the primary A* routing area.
 
 CPU-bound geometry and routing kernels use Numba. Independent route candidates,
 visibility groups, and symbol-file discovery use bounded thread pools. The

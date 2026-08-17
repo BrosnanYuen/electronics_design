@@ -107,6 +107,13 @@ class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-sc
             {"kicad_sch_page_height": "wide"},  # Reject a non-numeric page dimension.
             {"kicad_placement_iterations": -1},  # Reject a negative iteration budget.
             {"kicad_placement_iterations": 1.5},  # Reject a fractional iteration budget.
+            {"kicad_placement_strategy": "random"},  # Reject unknown placement engines.
+            {"kicad_evolutionary_population": 1},  # Require at least two chromosomes.
+            {"kicad_evolutionary_generations": 0},  # Require at least one genetic generation.
+            {"kicad_placement_seed": -1},  # Require a non-negative deterministic seed.
+            {"kicad_routing_trials": 0},  # Require at least one complete route trial.
+            {"kicad_routing_trials": 4},  # Reject unavailable route-order trials.
+            {"kicad_trace_optimization_passes": -1},  # Reject negative cleanup budgets.
         )  # Finish the invalid settings table.
         with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch output directory.
             for overrides in invalid_overrides:  # Exercise every invalid setting independently.

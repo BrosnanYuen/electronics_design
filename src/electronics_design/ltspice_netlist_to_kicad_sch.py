@@ -31,6 +31,8 @@ from typing import Tuple  # Type tuple-based helper results.
 
 from .force_directed_placement import ForceDirectedPlacer  # Place symbols with the ported kicad-tools physics model.
 from .force_directed_placement import PlacementConfig  # Configure the placement physics parameters.
+from .evolutionary_schematic_placement import EvolutionaryPlacementConfig  # Configure the vendored evolutionary placement search.
+from .evolutionary_schematic_placement import EvolutionarySchematicPlacer  # Seed physics placement with a global genetic search.
 from .kicad_sch import is_valid_kicad_sch_file  # Validate the generated schematic file.
 from .kicad_sch_to_ltspice_netlist import _collect_properties  # Reuse the shared property collector.
 from .kicad_sch_to_ltspice_netlist import _extract_symbol_pins  # Reuse the shared pin-geometry extractor.
@@ -47,6 +49,8 @@ from .ltspice_net import _read_text_file_lines  # Reuse the shared encoding-awar
 from .ltspice_net import is_valid_ltspice_netlist_file  # Validate the input netlist file.
 from .ltspice_net import ParsedElement  # Type parsed netlist elements.
 from .schematic_grid_router import GridRouter  # Route net wires with the ported kicad-tools grid A*.
+from .schematic_trace_optimizer import optimize_routed_traces  # Consolidate routed traces without changing their copper topology.
+from .schematic_trace_optimizer import trace_cost  # Compare complete routing candidates deterministically.
 
 ConversionResult = Tuple[bool, str, int]  # Represent the public conversion return shape.
 BuildResult = Tuple[bool, object, str, int]  # Represent internal build successes with payloads and failures with codes.
@@ -62,6 +66,11 @@ _KICAD_SCH_GRID = 1.27  # Default placement and routing grid in mm.
 _KICAD_SCH_PAGE_WIDTH = 297.0  # Default A4 landscape page width in mm.
 _KICAD_SCH_PAGE_HEIGHT = 210.0  # Default A4 landscape page height in mm.
 _PLACEMENT_ITERATIONS = 250  # Default force-directed placement iteration budget.
+_PLACEMENT_STRATEGY = "hybrid"  # Use evolutionary global search followed by physics refinement by default.
+_EVOLUTIONARY_POPULATION = 10  # Keep the default global search bounded for API latency.
+_EVOLUTIONARY_GENERATIONS = 6  # Default number of genetic placement generations.
+_ROUTING_TRIALS = 3  # Try complementary net orders and retain the best complete route.
+_TRACE_OPTIMIZATION_PASSES = 8  # Bound topology-preserving trace consolidation work.
 _SYMBOL_BODY_PADDING = 1.27  # Extra body padding added around symbol graphics.
 _PLACEMENT_START_X = 25.4  # Initial placement row starts at this X coordinate in mm.
 _PLACEMENT_STEP_X = 25.4  # Initial placement row column spacing in mm.
@@ -646,11 +655,116 @@ def _build_pin_map(  # Map netlist node positions onto symbol pin numbers.
     return pin_map  # Return the completed pin mapping.
 
 
-def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Dict[str, Any]) -> BuildResult:  # Place symbols with the ported physics model, route nets with grid A*, and assemble schematic nodes.
+def _make_routing_orders(
+    nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
+    net_order: Sequence[str],
+) -> List[List[str]]:
+    """Build complementary deterministic orders for negotiated route trials."""
+
+    names = [name for name in net_order if nets[name]]
+
+    def span(name: str) -> float:
+        xs = [pin[2] for pin in nets[name]]
+        ys = [pin[3] for pin in nets[name]]
+        return (max(xs) - min(xs)) + (max(ys) - min(ys))
+
+    candidates = [
+        sorted(names, key=lambda name: (len(nets[name]), span(name), name)),
+        sorted(names, key=lambda name: (-len(nets[name]), -span(name), name)),
+        sorted(names, key=lambda name: (-span(name), -len(nets[name]), name)),
+    ]
+    unique: List[List[str]] = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def _new_routing_grid(
+    records: Sequence[Dict[str, Any]],
+    nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
+    net_ids: Mapping[str, int],
+    grid: float,
+    page_width: float,
+    page_height: float,
+) -> GridRouter:
+    router = GridRouter(grid, 0.0, 0.0, page_width, page_height)
+    for record in records:
+        if record["power"]:
+            continue
+        body_rect = _record_body_rect(record, bounds_key="routing_bounds")
+        router.block_rectangle(body_rect[0], body_rect[1], body_rect[2], body_rect[3])
+    for name, pins in nets.items():
+        if name not in net_ids:
+            continue
+        for _record_index, _pin_number, pin_x, pin_y in pins:
+            cell_x, cell_y = router.world_to_cell(pin_x, pin_y)
+            router.block_pin_cell(cell_x, cell_y, net_ids[name])
+    return router
+
+
+def _route_trial(
+    records: Sequence[Dict[str, Any]],
+    nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
+    routing_order: Sequence[str],
+    net_ids: Mapping[str, int],
+    grid: float,
+    page_width: float,
+    page_height: float,
+) -> Tuple[GridRouter, Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]], Set[Tuple[float, float]], int]:
+    """Route every net physically for one order and return the complete trial."""
+
+    router = _new_routing_grid(records, nets, net_ids, grid, page_width, page_height)
+    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]] = {}
+    polyline_keys_by_net: Dict[str, Set[Tuple[float, float]]] = {}
+    foreign_points = {
+        (round(pin_x, 6), round(pin_y, 6))
+        for pins in nets.values()
+        for _record_index, _pin_number, pin_x, pin_y in pins
+    }
+    fallback_count = 0
+    for name in routing_order:
+        pins = nets[name]
+        terminals = [(pin_x, pin_y) for _record_index, _pin_number, pin_x, pin_y in pins]
+        segments = router.route(terminals, net_id=net_ids[name])
+        used_cells = list(router.last_routed_cells or [])
+        if segments is None:
+            segments = router.route(terminals, net_id=net_ids[name], soft=True)
+            used_cells = list(router.last_routed_cells or [])
+            if segments is not None and _soft_route_unsafe(router, used_cells, net_ids[name], segments, segments_by_net, polyline_keys_by_net):
+                router.unmark_cells(used_cells, net_ids[name])
+                segments = None
+        if segments is None:
+            trunk_y = -_TRUNK_FALLBACK_GAP * (fallback_count + 1)
+            fallback_count += 1
+            segments = _route_net_trunk_fallback(pins, grid, foreign_points, trunk_y)
+        else:
+            route_corners = router.routed_corner_points()
+            polyline_keys_by_net[name] = {(round(point[0], 6), round(point[1], 6)) for point in route_corners}
+            foreign_points.update(polyline_keys_by_net[name])
+        endpoints = {(round(point[0], 6), round(point[1], 6)) for segment in segments for point in segment}
+        foreign_points.update(endpoints)
+        polyline_keys_by_net.setdefault(name, set()).update(endpoints)
+        segments_by_net[name] = segments
+    return router, segments_by_net, foreign_points, fallback_count
+
+
+def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Dict[str, Any]) -> BuildResult:  # Place symbols with hybrid optimization, route nets with grid A*, and assemble schematic nodes.
     layout = _layout_parameters(settings)  # Resolve the layout parameters from the settings.
     grid, iterations, page_width, page_height = layout  # Unpack the layout parameters.
     placer = _build_placer(records, page_width, page_height, grid)  # Build the force-directed placement model.
-    placer.run(iterations)  # Run the physics simulation until convergence or the iteration budget.
+    placement_strategy = settings.get("kicad_placement_strategy", _PLACEMENT_STRATEGY)
+    if placement_strategy in ("evolutionary", "hybrid"):
+        evolution_config = EvolutionaryPlacementConfig(
+            population_size=int(settings.get("kicad_evolutionary_population", _EVOLUTIONARY_POPULATION)),
+            generations=int(settings.get("kicad_evolutionary_generations", _EVOLUTIONARY_GENERATIONS)),
+            elitism=min(3, int(settings.get("kicad_evolutionary_population", _EVOLUTIONARY_POPULATION))),
+            position_mutation_sigma=max(grid * 4.0, 2.54),
+            random_seed=int(settings.get("kicad_placement_seed", 0)),
+        )
+        EvolutionarySchematicPlacer(placer, grid, evolution_config).optimize()
+    if placement_strategy in ("physics", "hybrid"):
+        placer.run(iterations)  # Run physics as the local refinement phase.
     placer.snap_to_grid(grid, 90.0)  # Snap every component onto the discrete placement grids.
     for record in records:  # Write the optimized poses back into the records.
         if record["power"]:  # Power symbols are attached onto net copper later.
@@ -662,50 +776,28 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
         record["y"] = component.y  # Store the optimized Y position.
         record["angle"] = component.rotation  # Store the snapped rotation angle.
     nets, net_order = _collect_nets(records)  # Collect net memberships and absolute pin positions.
-    router = GridRouter(grid, 0.0, 0.0, page_width, page_height)  # Build the routing grid over the whole page.
     for record in records:  # Block every ordinary symbol body on the routing grid.
         if record["power"]:  # Power bodies are placed after routing.
             continue  # Move to the next record.
         short_name = _split_lib_id(record["lib_id"])[1]  # Read the short symbol name for graphics lookup.
         record["routing_bounds"] = _symbol_body_bounds(record["symbol_node"], short_name, include_pins=False)  # Measure the graphics-only body bounds.
-        body_rect = _record_body_rect(record, bounds_key="routing_bounds")  # Compute the rotated body bounding box.
-        router.block_rectangle(body_rect[0], body_rect[1], body_rect[2], body_rect[3])  # Block the body cells.
-    routing_order = sorted([name for name in net_order if nets[name]], key=lambda name: (len(nets[name]), name))  # Route short nets first.
-    net_ids = {name: index + 1 for index, name in enumerate(routing_order)}  # Assign deterministic net ids.
-    for name in routing_order:  # Reserve every pin cell for its own net.
-        for _record_index, _pin_number, pin_x, pin_y in nets[name]:  # Walk the net pins.
-            cell = router.world_to_cell(pin_x, pin_y)  # Convert the pin position to a grid cell.
-            router.block_pin_cell(cell[0], cell[1], net_ids[name])  # Hard-reserve the pin cell.
-    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]] = {}  # Collect routed segments per net.
-    polyline_keys_by_net: Dict[str, Set[Tuple[float, float]]] = {}  # Collect compressed corner keys per net for turn-safety checks.
-    foreign_points: Set[Tuple[float, float]] = set()  # Collect every pin and corner point used by any net.
-    for name in routing_order:  # Preload the foreign-point index with all pin positions.
-        for _record_index, _pin_number, pin_x, pin_y in nets[name]:  # Walk the net pins.
-            foreign_points.add((round(pin_x, 6), round(pin_y, 6)))  # Index the pin point.
-    fallback_count = 0  # Count fallback trunks for deterministic trunk Y assignment.
-    for name in routing_order:  # Route every net in the deterministic order.
-        pins = nets[name]  # Read the net pin list.
-        terminals = [(pin_x, pin_y) for _record_index, _pin_number, pin_x, pin_y in pins]  # Build the A* terminal points.
-        segments = router.route(terminals, net_id=net_ids[name])  # Route with hard cell ownership.
-        used_cells = list(router.last_routed_cells or [])  # Read the claimed cell path.
-        if segments is None:  # Retry with soft foreign-cell crossing.
-            segments = router.route(terminals, net_id=net_ids[name], soft=True)  # Route with foreign cells penalized instead of blocked.
-            used_cells = list(router.last_routed_cells or [])  # Read the soft cell path.
-            if segments is not None and _soft_route_unsafe(router, used_cells, net_ids[name], segments, segments_by_net, polyline_keys_by_net):  # Reject unsafe soft crossings.
-                router.unmark_cells(used_cells, net_ids[name])  # Release the unsafe path.
-                segments = None  # Force the fallback router.
-        if segments is None:  # Route the net with the provably safe fallback trunk engine.
-            trunk_y = -_TRUNK_FALLBACK_GAP * (fallback_count + 1)  # Assign a unique trunk below the page.
-            fallback_count += 1  # Advance the fallback counter.
-            segments = _route_net_trunk_fallback(pins, grid, foreign_points, trunk_y)  # Build the fallback trunk segments.
-        else:  # Index the successful A* path corners for fallback avoidance.
-            route_corners = router.routed_corner_points()  # Read actual per-branch corners without concatenation jumps.
-            polyline_keys_by_net[name] = {(round(point[0], 6), round(point[1], 6)) for point in route_corners}  # Store the corner keys.
-            foreign_points.update(polyline_keys_by_net[name])  # Index the corners as foreign points.
-        segment_endpoints = {(round(point[0], 6), round(point[1], 6)) for segment in segments for point in segment}  # Index every emitted endpoint, including fallback trunks.
-        foreign_points.update(segment_endpoints)  # Prevent later fallback lanes from terminating on these points.
-        polyline_keys_by_net.setdefault(name, set()).update(segment_endpoints)  # Include fallback endpoints in later soft-crossing checks.
-        segments_by_net[name] = segments  # Store the routed segments.
+    routing_orders = _make_routing_orders(nets, net_order)
+    trial_limit = min(len(routing_orders), int(settings.get("kicad_routing_trials", _ROUTING_TRIALS)))
+    stable_names = [name for name in net_order if nets[name]]
+    net_ids = {name: index + 1 for index, name in enumerate(stable_names)}
+    trials = [
+        _route_trial(records, nets, order, net_ids, grid, page_width, page_height)
+        for order in routing_orders[:trial_limit]
+    ]
+    router, segments_by_net, foreign_points, fallback_count = min(
+        trials,
+        key=lambda trial: trace_cost(trial[1], trial[3]),
+    )
+    segments_by_net = optimize_routed_traces(
+        segments_by_net,
+        passes=int(settings.get("kicad_trace_optimization_passes", _TRACE_OPTIMIZATION_PASSES)),
+        protected_points_by_net={name: [(pin[2], pin[3]) for pin in pins] for name, pins in nets.items()},
+    )
     embedded_result = _resolve_ground_symbol(settings)  # Resolve the power:GND symbol definition for embedding.
     if not embedded_result[0]:  # Stop when the ground symbol cannot be resolved.
         return embedded_result  # Return the ground symbol error.
@@ -1568,6 +1660,29 @@ def _normalize_convert_settings(convert_settings: Mapping) -> Tuple[bool, Option
                 return False, None  # Signal the settings failure.
         except (OverflowError, TypeError, ValueError):  # Catch non-finite and non-integer values.
             return False, None  # Signal the settings failure.
+    placement_strategy = settings.get("kicad_placement_strategy", _PLACEMENT_STRATEGY)
+    if placement_strategy not in ("physics", "evolutionary", "hybrid"):
+        return False, None
+    integer_limits = {
+        "kicad_evolutionary_population": (2, None),
+        "kicad_evolutionary_generations": (1, None),
+        "kicad_placement_seed": (0, None),
+        "kicad_routing_trials": (1, 3),
+        "kicad_trace_optimization_passes": (0, None),
+    }
+    for integer_key, (minimum, maximum) in integer_limits.items():
+        value = settings.get(integer_key)
+        if value is None:
+            continue
+        try:
+            numeric_value = float(value)
+            integer_value = int(value)
+        except (OverflowError, TypeError, ValueError):
+            return False, None
+        if not math.isfinite(numeric_value) or numeric_value != integer_value or integer_value < minimum:
+            return False, None
+        if maximum is not None and integer_value > maximum:
+            return False, None
     return True, settings  # Return the normalized settings dictionary.
 
 
