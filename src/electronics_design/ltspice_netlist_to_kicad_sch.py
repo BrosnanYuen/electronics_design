@@ -80,6 +80,37 @@ _POWER_STUB_LENGTH = 3.81  # Default stub length in mm for power-only nets.
 _TRUNK_FALLBACK_GAP = 15.24  # Vertical gap below the page for fallback net trunks.
 
 _PROPERTY_STEP = 2.54  # Vertical offset between stacked instance properties.
+_TEXT_FONT_SIZE = 1.27  # Visible schematic text height in mm.
+_NET_LABEL_FONT_SIZE = 0.01  # Preserve node identities without visible text-on-wire overlap; KiCad 10 ignores local-label hide.
+_TEXT_BOUND_HEIGHT = 1.905  # Conservative rendered glyph/baseline envelope in mm used for net-label avoidance boxes.
+_TEXT_CLEARANCE = 1.27  # Minimum visible-text clearance from symbols, wires, and other text.
+_TEXT_SEARCH_RINGS = 96  # Bound deterministic field-position searches around a symbol.
+
+# Per-character glyph advance widths of the KiCad 10 stroke font, measured from
+# rendered schematics and normalized as fractions of the font size. KiCad sums
+# these advances plus a constant inter-character gap to form its own text
+# bounding boxes, so matching the values here makes collision boxes agree with
+# what KiCad actually draws.
+_GLYPH_ADVANCES = {
+    " ": 0.5564, "!": 0.3421, '"': 0.5564, "#": 0.735, "$": 0.6993, "%": 0.8422, "&": 0.9136,
+    "'": 0.3421, "(": 0.485, ")": 0.485, "*": 0.5564, "+": 0.9136, ",": 0.3421, "-": 0.9136,
+    ".": 0.3421, "/": 0.7707, ":": 0.3421, ";": 0.3421, "<": 0.9136, "=": 0.9136, ">": 0.9136,
+    "?": 0.6279, "@": 0.9493, "[": 0.485, "\\": 0.485, "]": 0.485, "^": 0.4136, "_": 0.5564,
+    "{": 0.485, "|": 0.6993, "}": 0.485, "~": 0.5207, "µ": 0.7707, "Ω": 0.8422, "§": 0.6279,
+    "0": 0.6993, "1": 0.6993, "2": 0.6993, "3": 0.6993, "4": 0.6993, "5": 0.6993,
+    "6": 0.6993, "7": 0.6993, "8": 0.6993, "9": 0.6993,
+    "A": 0.6279, "B": 0.735, "C": 0.735, "D": 0.735, "E": 0.6636, "F": 0.6279, "G": 0.735,
+    "H": 0.7707, "I": 0.3421, "J": 0.5564, "K": 0.735, "L": 0.5922, "M": 0.8422, "N": 0.7707,
+    "O": 0.7707, "P": 0.735, "Q": 0.7707, "R": 0.735, "S": 0.6993, "T": 0.5564, "U": 0.7707,
+    "V": 0.6279, "W": 0.8422, "X": 0.6993, "Y": 0.6279, "Z": 0.6993,
+    "a": 0.6636, "b": 0.6636, "c": 0.6279, "d": 0.6636, "e": 0.6279, "f": 0.4136, "g": 0.6636,
+    "h": 0.6636, "i": 0.3421, "j": 0.3421, "k": 0.5922, "l": 0.3779, "m": 0.985, "n": 0.6636,
+    "o": 0.6636, "p": 0.6636, "q": 0.6636, "r": 0.4493, "s": 0.5922, "t": 0.4136, "u": 0.6636,
+    "v": 0.5564, "w": 0.7707, "x": 0.5922, "y": 0.5564, "z": 0.5922,
+}  # Finish the measured KiCad stroke-font advance table.
+_DEFAULT_GLYPH_ADVANCE = 0.70  # Fallback advance fraction for characters missing from the measured table.
+_TEXT_INTER_CHARACTER_GAP = 0.0149  # Constant KiCad stroke-font gap between adjacent glyphs, as a fraction of font size.
+_TEXT_BOX_HEIGHT_FRACTION = 1.27  # Full stroke-font box height (cap height plus descender) as a fraction of font size.
 
 _UNSUPPORTED_PREFIXES = frozenset({"A", "@", "&"})  # Devices that cannot be represented by KiCad schematic symbols; K couplings carry no nodes and are skipped instead.
 
@@ -811,7 +842,8 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
             continue  # Move to the next record.
         node_name = record["element"].nodes[0] if record["element"].nodes else ""  # Read the source positive node.
         _ensure_net_copper(node_name, nets, segments_by_net, router, foreign_points, grid, page_width, page_height)  # Make sure the net carries wire copper.
-        _attach_symbol_on_net(record, segments_by_net.get(node_name, []), placed_bodies, grid)  # Attach the power pin onto the net copper.
+        foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]  # Collect other-net copper that must not become a power-pin junction.
+        _attach_symbol_on_net(record, segments_by_net.get(node_name, []), placed_bodies, grid, foreign_segments)  # Attach the power pin only to electrically exclusive copper.
     ground_records: List[Dict[str, Any]] = []  # Collect the generated GND power symbols.
     ground_counter = 0  # Count generated GND symbols for deterministic references.
     for node_name in net_order:  # Walk every net to attach GND symbols to ground nets.
@@ -838,13 +870,16 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
             "pin_positions": {},  # Pin positions are filled by the attachment step.
         }  # Finish the ground record assembly.
         ground_record["body_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND")  # Resolve the ground body bounds.
+        ground_record["text_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND", include_pins=False, combine_sections=True)  # Measure every rendered body section for text avoidance.
         _ensure_net_copper(node_name, nets, segments_by_net, router, foreign_points, grid, page_width, page_height)  # Make sure the ground net carries wire copper.
-        _attach_symbol_on_net(ground_record, segments_by_net.get(node_name, []), placed_bodies, grid)  # Attach the GND pin onto the ground copper.
+        foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]  # Collect other-net copper that must remain isolated from ground.
+        _attach_symbol_on_net(ground_record, segments_by_net.get(node_name, []), placed_bodies, grid, foreign_segments)  # Attach the GND pin only to electrically exclusive ground copper.
         ground_records.append(ground_record)  # Append the ground symbol record.
     all_records = records + ground_records  # Combine the component and ground records.
     lead_stubs_by_net = _build_pin_lead_stubs(nets, segments_by_net, all_records, grid)  # Build pin lead stubs so every pin owns a segment start.
+    label_layout = _layout_visible_text(all_records, net_order, segments_by_net, lead_stubs_by_net, grid, page_width, page_height)  # Place visible fields and net labels away from symbols, wires, and other text.
     wire_nodes = _build_wire_nodes(root_uuid, net_order, segments_by_net, lead_stubs_by_net)  # Build the wire nodes for every routed segment and pin stub.
-    label_nodes = _build_label_nodes(root_uuid, net_order, segments_by_net)  # Build the label nodes on every non-ground net.
+    label_nodes = _build_label_nodes(root_uuid, net_order, segments_by_net, label_layout)  # Build collision-free label nodes on non-ground nets.
     symbol_nodes = _build_symbol_instance_nodes(all_records, root_uuid)  # Build the symbol instance nodes.
     embedded_extra = {ground_lib_id: ground_symbol_node}  # Collect the ground symbol for embedding.
     return True, (wire_nodes, label_nodes, symbol_nodes, embedded_extra), "", 0  # Return the assembled schematic body.
@@ -869,6 +904,7 @@ def _build_placer(records: Sequence[Dict[str, Any]], page_width: float, page_hei
         short_name = _split_lib_id(record["lib_id"])[1]  # Read the short symbol name for graphics lookup.
         bounds = _symbol_body_bounds(record["symbol_node"], short_name)  # Look the body bounds up from the symbol graphics.
         record["body_bounds"] = bounds  # Store the body bounds on the record.
+        record["text_bounds"] = _symbol_body_bounds(record["symbol_node"], short_name, include_pins=False, combine_sections=True)  # Combine split graphical sections for visible-text collision checks.
         if bounds is None:  # Fall back to a small default body for graphics-less symbols.
             width = height = 2 * _SYMBOL_BODY_PADDING + 1.27  # Use a minimal default body.
         else:  # Size the body from the looked-up graphics bounds.
@@ -911,6 +947,8 @@ def _collect_nets(records: Sequence[Dict[str, Any]]) -> Tuple[Dict[str, List[Tup
 
 def _record_body_rect(record: Dict[str, Any], bounds_key: str = "body_bounds") -> Tuple[float, float, float, float]:  # Compute the world bounding box of one record's body.
     bounds = record.get(bounds_key)  # Read the local body bounds.
+    if bounds is None and bounds_key != "body_bounds":  # Allow specialized collision bounds to fall back for synthetic or graphics-less records.
+        bounds = record.get("body_bounds")  # Reuse the ordinary body measurement when no specialized bound exists.
     if bounds is None:  # Fall back to a small default box.
         return record["x"] - 2.54, record["y"] - 2.54, record["x"] + 2.54, record["y"] + 2.54  # Return the default box.
     corners = [(bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3])]  # Build the local corner list.
@@ -1083,10 +1121,13 @@ def _attach_symbol_on_net(  # Attach one power or ground symbol onto its net cop
     segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],  # Accept the net wire segments.
     placed_bodies: List[Tuple[float, float, float, float]],  # Accept the placed body rectangles.
     grid: float,  # Accept the routing grid.
+    foreign_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]] = (),  # Accept other-net copper whose crossings must not become junctions.
 ) -> None:  # Return nothing.
     pin_number = sorted(record["pin_map"].values(), key=_pin_sort_key)[0]  # Read the single pin number.
     local_x, local_y, _pin_name = record["pins"][pin_number]  # Read the pin local coordinates.
     for point in _segment_attachment_candidates(segments, grid):  # Walk the candidate attachment points.
+        if any(_point_on_segment_local(point[0], point[1], foreign_segment) for foreign_segment in foreign_segments):  # A pin at a foreign crossing would electrically short the two nets.
+            continue  # Try another point owned exclusively by the target net.
         origin_x = point[0] - local_x  # Compute the symbol origin X.
         origin_y = point[1] + local_y  # Compute the symbol origin Y.
         rect = _body_rect_at(record.get("body_bounds"), origin_x, origin_y)  # Compute the placed body rectangle.
@@ -1097,7 +1138,8 @@ def _attach_symbol_on_net(  # Attach one power or ground symbol onto its net cop
             record["pin_positions"] = {pin_number: point}  # Store the attached pin position.
             placed_bodies.append(rect)  # Index the placed body.
             return  # Finish the attachment.
-    fallback_point = _segment_attachment_candidates(segments, grid)[0]  # Reuse the first candidate when nothing is collision-free.
+    safe_candidates = [point for point in _segment_attachment_candidates(segments, grid) if not any(_point_on_segment_local(point[0], point[1], foreign_segment) for foreign_segment in foreign_segments)]  # Retain electrically safe points even when every body placement collides.
+    fallback_point = safe_candidates[0] if safe_candidates else _segment_attachment_candidates(segments, grid)[0]  # Prefer electrical isolation over body clearance in the fallback.
     record["x"] = fallback_point[0] - local_x  # Store the fallback X position.
     record["y"] = fallback_point[1] + local_y  # Store the fallback Y position.
     record["angle"] = 0.0  # Store the upright angle.
@@ -1162,21 +1204,26 @@ def _resolve_ground_symbol(settings: Dict[str, Any]) -> BuildResult:  # Resolve 
     return False, None, "UNKNOWN_SYMBOL: Unable to locate the power:GND symbol in kicad_path", 0  # Return the ground symbol error.
 
 
-def _symbol_body_bounds(symbol_node: SExp, short_name: str, include_pins: bool = True) -> Optional[Tuple[float, float, float, float]]:  # Look one symbol's body bounds up from its graphics.
-    preferred_name = f"{short_name}_1_1"  # Build the preferred sub-symbol name.
-    chosen: Optional[SExp] = None  # Initialize the chosen sub-symbol.
-    for sub_symbol in symbol_node.find_children("symbol"):  # Walk the nested sub-symbols.
-        if _first_atom_value(sub_symbol) == preferred_name:  # Match the preferred name.
-            chosen = sub_symbol  # Select the preferred sub-symbol.
-            break  # Stop searching.
-    if chosen is None:  # Second pass accepts any sub-symbol of the first unit.
-        unit_prefix = f"{short_name}_1_"  # Build the unit prefix.
-        for sub_symbol in symbol_node.find_children("symbol"):  # Walk the nested sub-symbols again.
-            name_value = _first_atom_value(sub_symbol)  # Read the sub-symbol name.
-            if name_value is not None and str(name_value).startswith(unit_prefix):  # Match the unit prefix.
-                chosen = sub_symbol  # Select the first unit sub-symbol.
+def _symbol_body_bounds(symbol_node: SExp, short_name: str, include_pins: bool = True, combine_sections: bool = False) -> Optional[Tuple[float, float, float, float]]:  # Look one symbol's body bounds up from its graphics.
+    if combine_sections:  # Text avoidance must account for KiCad's separately stored common and unit graphics.
+        accepted_prefixes = (f"{short_name}_0_", f"{short_name}_1_")  # Match common body sections and unit-one sections.
+        graphics_sections = [sub_symbol for sub_symbol in symbol_node.find_children("symbol") if (_first_atom_value(sub_symbol) is not None and str(_first_atom_value(sub_symbol)).startswith(accepted_prefixes))]  # Collect every rendered section.
+        graphics_node = SExp(name="combined_symbol_graphics", children=[child for section in graphics_sections for child in section.children]) if graphics_sections else symbol_node  # Flatten matching sections or use a flat-symbol fallback.
+    else:  # Preserve the established placement and routing geometry behavior.
+        preferred_name = f"{short_name}_1_1"  # Build the preferred sub-symbol name.
+        chosen: Optional[SExp] = None  # Initialize the chosen sub-symbol.
+        for sub_symbol in symbol_node.find_children("symbol"):  # Walk the nested sub-symbols.
+            if _first_atom_value(sub_symbol) == preferred_name:  # Match the preferred name.
+                chosen = sub_symbol  # Select the preferred sub-symbol.
                 break  # Stop searching.
-    graphics_node = chosen if chosen is not None else symbol_node  # Fall back to the whole symbol node.
+        if chosen is None:  # Second pass accepts any sub-symbol of the first unit.
+            unit_prefix = f"{short_name}_1_"  # Build the unit prefix.
+            for sub_symbol in symbol_node.find_children("symbol"):  # Walk the nested sub-symbols again.
+                name_value = _first_atom_value(sub_symbol)  # Read the sub-symbol name.
+                if name_value is not None and str(name_value).startswith(unit_prefix):  # Match the unit prefix.
+                    chosen = sub_symbol  # Select the first unit sub-symbol.
+                    break  # Stop searching.
+        graphics_node = chosen if chosen is not None else symbol_node  # Fall back to the whole symbol node.
     min_x: Optional[float] = None  # Initialize the minimum X bound.
     min_y: Optional[float] = None  # Initialize the minimum Y bound.
     max_x: Optional[float] = None  # Initialize the maximum X bound.
@@ -1355,26 +1402,267 @@ def _wire_node(root_uuid: str, wire_counter: int, start_point: Tuple[float, floa
     ])  # Finish the wire node.
 
 
+def _measure_text_bounds(text: str, font_size: float = _TEXT_FONT_SIZE) -> Tuple[float, float]:
+    """Measure the KiCad stroke-font bounding box of one text string in mm.
+
+    The width sums the per-character glyph advances measured from the KiCad 10
+    stroke font plus the constant inter-character gap, matching the bounding
+    boxes KiCad itself computes for schematic text. The height covers the full
+    font box: the cap height plus the descender area below the baseline.
+    Returns ``(width, height)`` in millimetres.
+    """
+
+    characters = str(text)
+    width_fraction = sum(_GLYPH_ADVANCES.get(character, _DEFAULT_GLYPH_ADVANCE) for character in characters)
+    if characters:
+        width_fraction += _TEXT_INTER_CHARACTER_GAP * (len(characters) - 1)
+    return width_fraction * font_size, _TEXT_BOX_HEIGHT_FRACTION * font_size
+
+
+def _text_width(text: str, font_size: float = _TEXT_FONT_SIZE) -> float:
+    """Measure the KiCad stroke-font bounding width of one text string."""
+
+    return _measure_text_bounds(text, font_size)[0]
+
+
+def _expand_rect(rect: Tuple[float, float, float, float], clearance: float) -> Tuple[float, float, float, float]:
+    return rect[0] - clearance, rect[1] - clearance, rect[2] + clearance, rect[3] + clearance
+
+
+def _rects_overlap(first: Tuple[float, float, float, float], second: Tuple[float, float, float, float]) -> bool:
+    """Return whether two rectangles have overlapping interiors."""
+
+    return first[0] < second[2] and first[2] > second[0] and first[1] < second[3] and first[3] > second[1]
+
+
+def _segment_intersects_rect(
+    segment: Tuple[Tuple[float, float], Tuple[float, float]],
+    rect: Tuple[float, float, float, float],
+) -> bool:
+    """Conservatively test a routed segment against a rectangle interior."""
+
+    (start_x, start_y), (end_x, end_y) = segment
+    low_x, high_x = min(start_x, end_x), max(start_x, end_x)
+    low_y, high_y = min(start_y, end_y), max(start_y, end_y)
+    if abs(start_y - end_y) < 1e-9:
+        return rect[1] < start_y < rect[3] and low_x < rect[2] and high_x > rect[0]
+    if abs(start_x - end_x) < 1e-9:
+        return rect[0] < start_x < rect[2] and low_y < rect[3] and high_y > rect[1]
+    return low_x < rect[2] and high_x > rect[0] and low_y < rect[3] and high_y > rect[1]
+
+
+def _text_rect_is_clear(
+    rect: Tuple[float, float, float, float],
+    body_rects: Sequence[Tuple[float, float, float, float]],
+    wire_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+    occupied_text: Sequence[Tuple[float, float, float, float]],
+) -> bool:
+    padded = _expand_rect(rect, _TEXT_CLEARANCE)
+    if any(_rects_overlap(padded, body) for body in body_rects):
+        return False
+    if any(_segment_intersects_rect(segment, padded) for segment in wire_segments):
+        return False
+    return not any(_rects_overlap(padded, other) for other in occupied_text)
+
+
+def _property_text_candidates(
+    body: Tuple[float, float, float, float],
+    width: float,
+    height: float,
+    grid: float,
+) -> Sequence[Tuple[float, float, str, Tuple[float, float, float, float]]]:
+    """Generate expanding field positions around one symbol body."""
+
+    left, top, right, bottom = body
+    center_x, center_y = (left + right) / 2.0, (top + bottom) / 2.0
+    candidates: List[Tuple[float, float, str, Tuple[float, float, float, float]]] = []
+    step = max(grid, height + _TEXT_CLEARANCE)
+    for ring in range(_TEXT_SEARCH_RINGS):
+        distance = _TEXT_CLEARANCE + height / 2.0 + ring * step
+        top_y, bottom_y = top - distance, bottom + distance
+        candidates.extend([
+            (left, top_y, "left", (left, top_y - height / 2.0, left + width, top_y + height / 2.0)),
+            (right, top_y, "right", (right - width, top_y - height / 2.0, right, top_y + height / 2.0)),
+            (left, bottom_y, "left", (left, bottom_y - height / 2.0, left + width, bottom_y + height / 2.0)),
+            (right, bottom_y, "right", (right - width, bottom_y - height / 2.0, right, bottom_y + height / 2.0)),
+            (right + distance, center_y, "left", (right + distance, center_y - height / 2.0, right + distance + width, center_y + height / 2.0)),
+            (left - distance, center_y, "right", (left - distance - width, center_y - height / 2.0, left - distance, center_y + height / 2.0)),
+        ])
+    return candidates
+
+
+def _label_text_candidates(
+    segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+    width: float,
+    height: float,
+) -> Sequence[Tuple[Tuple[float, float], List[str], Tuple[float, float, float, float]]]:
+    """Generate label glyph boxes offset from, but anchored to, net copper."""
+
+    candidates: List[Tuple[Tuple[float, float], List[str], Tuple[float, float, float, float]]] = []
+    ordered = sorted(segments, key=lambda segment: -math.hypot(segment[1][0] - segment[0][0], segment[1][1] - segment[0][1]))
+    for (start_x, start_y), (end_x, end_y) in ordered:
+        for fraction in (0.5, 0.25, 0.75, 0.0, 1.0):
+            anchor_x = start_x + (end_x - start_x) * fraction
+            anchor_y = start_y + (end_y - start_y) * fraction
+            anchor = (anchor_x, anchor_y)
+            if abs(start_y - end_y) < 1e-9:
+                candidates.extend([
+                    (anchor, ["left", "bottom"], (anchor_x, anchor_y - _TEXT_CLEARANCE - height, anchor_x + width, anchor_y - _TEXT_CLEARANCE)),
+                    (anchor, ["right", "bottom"], (anchor_x - width, anchor_y - _TEXT_CLEARANCE - height, anchor_x, anchor_y - _TEXT_CLEARANCE)),
+                    (anchor, ["left", "top"], (anchor_x, anchor_y + _TEXT_CLEARANCE, anchor_x + width, anchor_y + _TEXT_CLEARANCE + height)),
+                    (anchor, ["right", "top"], (anchor_x - width, anchor_y + _TEXT_CLEARANCE, anchor_x, anchor_y + _TEXT_CLEARANCE + height)),
+                ])
+            elif abs(start_x - end_x) < 1e-9:
+                candidates.extend([
+                    (anchor, ["left"], (anchor_x + _TEXT_CLEARANCE, anchor_y - height / 2.0, anchor_x + _TEXT_CLEARANCE + width, anchor_y + height / 2.0)),
+                    (anchor, ["right"], (anchor_x - _TEXT_CLEARANCE - width, anchor_y - height / 2.0, anchor_x - _TEXT_CLEARANCE, anchor_y + height / 2.0)),
+                ])
+    return candidates
+
+
+def _stub_is_clear(
+    stub: Tuple[Tuple[float, float], Tuple[float, float]],
+    body_rects: Sequence[Tuple[float, float, float, float]],
+    foreign_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+    occupied_text: Sequence[Tuple[float, float, float, float]],
+) -> bool:
+    if any(_segment_intersects_rect(stub, _expand_rect(body, _TEXT_CLEARANCE)) for body in body_rects):
+        return False
+    if any(_segments_create_junction(stub, segment) for segment in foreign_segments):
+        return False
+    return not any(_segment_intersects_rect(stub, _expand_rect(rect, _TEXT_CLEARANCE)) for rect in occupied_text)
+
+
+def _layout_visible_text(
+    records: Sequence[Dict[str, Any]],
+    net_order: Sequence[str],
+    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]],
+    lead_stubs_by_net: Mapping[str, Sequence[Tuple[Tuple[float, float], Tuple[float, float]]]],
+    grid: float,
+    page_width: float,
+    page_height: float,
+) -> Dict[str, Tuple[Tuple[float, float], List[str], bool]]:
+    """Place every visible field and label without graphical overlap."""
+
+    body_rects = [_record_body_rect(record) for record in records]
+    text_body_rects = [_record_body_rect(record, "text_bounds") for record in records]
+    wire_segments_by_net = {
+        name: list(lead_stubs_by_net.get(name, ())) + list(segments_by_net.get(name, ()))
+        for name in net_order
+    }
+    wire_segments = [segment for segments in wire_segments_by_net.values() for segment in segments]
+    occupied_text: List[Tuple[float, float, float, float]] = []
+    for record in records:
+        record["property_layout"] = {}
+        visible_fields = [("Value", str(record["value"]))]
+        if not record["power"]:
+            visible_fields.insert(0, ("Reference", str(record["reference"])))
+        body = _record_body_rect(record, "text_bounds")
+        for key, value in visible_fields:
+            width, height = _measure_text_bounds(value)
+            chosen = None
+            for anchor_x, anchor_y, justification, rect in _property_text_candidates(body, width, height, grid):
+                if rect[0] < 0.0 or rect[1] < 0.0 or rect[2] > page_width or rect[3] > page_height:
+                    continue
+                if _text_rect_is_clear(rect, text_body_rects, wire_segments, occupied_text):
+                    chosen = (anchor_x, anchor_y, justification, rect)
+                    break
+            if chosen is None:
+                fallback_index = 1
+                while chosen is None:
+                    fallback_y = page_height + fallback_index * (height + 2 * _TEXT_CLEARANCE)
+                    fallback_rect = (0.0, fallback_y - height / 2.0, width, fallback_y + height / 2.0)
+                    if _text_rect_is_clear(fallback_rect, text_body_rects, wire_segments, occupied_text):
+                        chosen = (0.0, fallback_y, "left", fallback_rect)
+                    fallback_index += 1
+            record["property_layout"][key] = chosen[:3]
+            occupied_text.append(chosen[3])
+
+    label_layout: Dict[str, Tuple[Tuple[float, float], List[str], bool]] = {}
+    content_bottom = max(
+        [rect[3] for rect in body_rects]
+        + [max(segment[0][1], segment[1][1]) for segment in wire_segments]
+        + [page_height / 2.0]
+    )
+    parking_lane = 0
+    for node_name in net_order:
+        if node_name in _GROUND_NODE_NAMES or not wire_segments_by_net.get(node_name):
+            continue
+        width = _text_width(node_name)
+        chosen_label = None
+        for anchor, justification, rect in _label_text_candidates(wire_segments_by_net[node_name], width, _TEXT_BOUND_HEIGHT):
+            if _text_rect_is_clear(rect, text_body_rects, wire_segments, occupied_text):
+                chosen_label = (anchor, justification, rect)
+                break
+        if chosen_label is None:
+            extension_points = sorted({
+                (
+                    segment[0][0] + (segment[1][0] - segment[0][0]) * fraction,
+                    segment[0][1] + (segment[1][1] - segment[0][1]) * fraction,
+                )
+                for segment in wire_segments_by_net[node_name]
+                for fraction in (0.25, 0.5, 0.75, 0.0, 1.0)
+            })
+            foreign_segments = [segment for name, segments in wire_segments_by_net.items() if name != node_name for segment in segments]
+            for lane_offset in range(1, _TEXT_SEARCH_RINGS + 1):
+                target_y = content_bottom + (parking_lane + lane_offset) * (_TEXT_BOUND_HEIGHT + 2 * _TEXT_CLEARANCE)
+                for start in extension_points:
+                    end = (start[0], target_y)
+                    stub = (start, end)
+                    if not _stub_is_clear(stub, text_body_rects, foreign_segments, occupied_text):
+                        continue
+                    for anchor, justification, rect in _label_text_candidates([stub], width, _TEXT_BOUND_HEIGHT):
+                        if anchor != end:
+                            continue
+                        if _text_rect_is_clear(rect, text_body_rects, wire_segments + [stub], occupied_text):
+                            segments_by_net[node_name].append(stub)
+                            wire_segments_by_net[node_name].append(stub)
+                            wire_segments.append(stub)
+                            chosen_label = (anchor, justification, rect)
+                            parking_lane += lane_offset
+                            break
+                    if chosen_label is not None:
+                        break
+                if chosen_label is not None:
+                    break
+        if chosen_label is not None:
+            label_layout[node_name] = (chosen_label[0], chosen_label[1], False)
+            occupied_text.append(chosen_label[2])
+        else:
+            hidden_point = _label_point_on_segments(wire_segments_by_net[node_name])
+            if hidden_point is not None:
+                label_layout[node_name] = (hidden_point, [], True)
+    return label_layout
+
+
 def _build_label_nodes(  # Build label nodes on every non-ground net's copper.
     root_uuid: str,  # Accept the schematic root UUID for deterministic identifiers.
     net_order: Sequence[str],  # Accept the net ordering.
     segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]],  # Accept the routed segments.
+    label_layout: Optional[Mapping[str, Tuple[Tuple[float, float], Sequence[str], bool]]] = None,  # Accept label anchors, justification, and visibility.
 ) -> List[SExp]:  # Return the generated label nodes.
     label_nodes: List[SExp] = []  # Collect the generated label nodes.
     label_counter = 0  # Count labels for deterministic identifiers.
     for node_name in net_order:  # Walk every net in order.
         if node_name in _GROUND_NODE_NAMES:  # Ground nets carry no labels.
             continue  # Move to the next net.
-        segments = segments_by_net.get(node_name, [])  # Read the net wire segments.
-        label_point = _label_point_on_segments(segments)  # Resolve the label position on the copper.
-        if label_point is None:  # Skip nets without any copper.
+        layout = (label_layout or {}).get(node_name)
+        if layout is None:  # Never fall back to an unchecked midpoint that may overlap a symbol or wire.
             continue  # Move to the next net.
+        label_point = layout[0]
+        justification = list(layout[1])
+        hidden = bool(layout[2])
+        effects_children = [SExp(name="font", children=[SExp(name="size", children=[SExp(value=_NET_LABEL_FONT_SIZE), SExp(value=_NET_LABEL_FONT_SIZE)])])]
+        if justification:
+            effects_children.append(SExp(name="justify", children=[SExp(value=value) for value in justification]))
+        if hidden:
+            effects_children.append(SExp(value="hide", _originally_bare=True))
         label_counter += 1  # Advance the label counter.
         label_nodes.append(  # Append the generated label node.
             SExp(name="label", children=[  # Build the label list node.
                 SExp(value=node_name, _originally_quoted=True),  # Label text carries the original node name; KiCad requires a quoted string here.
                 SExp(name="at", children=[SExp(value=label_point[0]), SExp(value=label_point[1]), SExp(value=0)]),  # Label position on the wire.
-                SExp(name="effects", children=[SExp(name="font", children=[SExp(name="size", children=[SExp(value=1.27), SExp(value=1.27)])])]),  # Label text effects.
+                SExp(name="effects", children=effects_children),  # Label text effects.
                 SExp(name="uuid", children=[SExp(value=_derive_uuid(root_uuid, f"label/{label_counter}"))]),  # Label identifier.
             ])  # Finish the label node.
         )  # Append the label node to the list.
@@ -1464,20 +1752,26 @@ def _build_instance_properties(record: Dict[str, Any]) -> List[SExp]:  # Build t
 
 
 def _property_node(reference: str, key: str, value: str, record: Dict[str, Any], visible: bool) -> SExp:  # Build one property node for an instance.
+    layout = record.get("property_layout", {}).get(key)
+    property_x = layout[0] if layout is not None else record["x"]
+    property_y = layout[1] if layout is not None else record["y"] + _PROPERTY_STEP
+    justification = layout[2] if layout is not None else "left"
+    symbol_angle = float(record.get("angle", 0.0)) % 360.0
+    property_angle = (-symbol_angle) % 360.0  # KiCad composes field and parent angles, so counter-rotate every parent rotation to keep the collision-checked horizontal text box.
     children: List[SExp] = [  # Start the property children.
         SExp(value=key),  # Property key atom.
         SExp(value=value, _originally_quoted=True),  # Property value atom; KiCad requires a quoted string here.
-        SExp(name="at", children=[SExp(value=record["x"]), SExp(value=record["y"] + _PROPERTY_STEP), SExp(value=0)]),  # Property position.
+        SExp(name="at", children=[SExp(value=property_x), SExp(value=property_y), SExp(value=property_angle)]),  # Collision-aware position with horizontal rendered text.
         SExp(name="show_name", children=[SExp(value="no")]),  # Property name visibility flag.
-        SExp(name="do_not_autoplace", children=[SExp(value="no")]),  # Autoplace flag.
+        SExp(name="do_not_autoplace", children=[SExp(value="yes")]),  # Preserve the collision-aware position when KiCad opens or renders the schematic.
     ]  # Finish the base property children.
     if not visible:  # Hide non-visible properties.
         children.append(SExp(name="hide", children=[SExp(value="yes")]))  # Append the hide flag.
     effects_children: List[SExp] = [  # Start the text effects children.
         SExp(name="font", children=[SExp(name="size", children=[SExp(value=1.27), SExp(value=1.27)])]),  # Font size.
     ]  # Finish the base effects children.
-    if key in {"Reference", "Value"}:  # Left-justify the visible fields.
-        effects_children.append(SExp(name="justify", children=[SExp(value="left")]))  # Append the left justification.
+    if key in {"Reference", "Value"}:  # Justify the visible fields so the rendered text box equals the collision-checked box.
+        effects_children.append(SExp(name="justify", children=[SExp(value=justification)]))  # KiCad names the anchored text-box edge exactly like the layout rectangles, so the justification maps directly.
     children.append(SExp(name="effects", children=effects_children))  # Append the text effects.
     return SExp(name="property", children=children)  # Return the assembled property node.
 
@@ -1523,12 +1817,25 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
 def _rename_embedded_symbol(symbol_node: SExp, lib_id: str) -> SExp:  # Rename an embedded symbol definition to its full library identifier.
     renamed_children: List[SExp] = []  # Collect the renamed children.
     first_atom_replaced = False  # Track whether the leading name atom was replaced.
+    annotation_sections: Set[str] = set()
     for child in symbol_node.children:  # Walk the symbol children.
         if not first_atom_replaced and child.is_atom:  # Replace the leading name atom only.
             renamed_children.append(SExp(value=lib_id))  # Emit the full library identifier.
             first_atom_replaced = True  # Mark the name atom as replaced.
+        elif not child.is_atom and child.name in {"pin_names", "pin_numbers"}:  # Hide annotations that commonly overlap compact symbol graphics.
+            annotation_sections.add(child.name)
+            annotation_children = [grandchild for grandchild in child.children if grandchild.name != "hide"]
+            annotation_children.append(SExp(name="hide", children=[SExp(value="yes")]))
+            renamed_children.append(SExp(name=child.name, children=annotation_children))
         else:  # Keep all remaining children unchanged.
             renamed_children.append(child)  # Preserve the child node.
+    insertion_index = 1 if renamed_children and renamed_children[0].is_atom else 0
+    missing_annotations: List[SExp] = []
+    if "pin_numbers" not in annotation_sections:
+        missing_annotations.append(SExp(name="pin_numbers", children=[SExp(name="hide", children=[SExp(value="yes")])]))
+    if "pin_names" not in annotation_sections:
+        missing_annotations.append(SExp(name="pin_names", children=[SExp(name="offset", children=[SExp(value=0)]), SExp(name="hide", children=[SExp(value="yes")])]))
+    renamed_children[insertion_index:insertion_index] = missing_annotations
     return SExp(name="symbol", children=renamed_children)  # Return the renamed symbol node.
 
 

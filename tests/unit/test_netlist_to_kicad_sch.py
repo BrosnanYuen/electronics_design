@@ -12,6 +12,7 @@ from electronics_design import is_valid_ltspice_netlist_file  # Import the LTspi
 from electronics_design import kicad_sch_to_ltspice_netlist  # Import the KiCad schematic to LTspice netlist conversion API.
 from electronics_design import ltspice_netlist_structure_cmp  # Import the LTspice netlist structural comparison helper.
 from electronics_design import ltspice_netlist_to_kicad_sch  # Import the netlist-to-KiCad-schematic conversion API.
+from electronics_design.kicad_sexp_parser import parse_string  # Inspect generated annotation visibility and labels.
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]  # Resolve the project root from the current test file.
 _NETLIST_DIRECTORY = _ROOT_DIRECTORY / "kicad_convert" / "netlist"  # Point at the checked-in LTspice netlist files.
@@ -49,6 +50,40 @@ class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-sc
                         (True, ""),  # Expect success with an empty message.
                         msg=f"{output_path.name} should be valid but returned: {validation[1]}",  # Report the failure with the returned message.
                     )  # Finish the validation assertion.
+                    generated_text = output_path.read_text(encoding="utf-8")
+                    generated_root = parse_string(generated_text)
+                    lib_symbols = generated_root.find_child("lib_symbols")
+                    self.assertIsNotNone(lib_symbols)
+                    assert lib_symbols is not None
+                    for embedded_symbol in lib_symbols.find_children("symbol"):
+                        for annotation_name in ("pin_names", "pin_numbers"):
+                            annotation = embedded_symbol.find_child(annotation_name)
+                            self.assertIsNotNone(annotation, msg=f"{annotation_name} visibility must be explicit.")
+                            assert annotation is not None
+                            hide = annotation.find_child("hide")
+                            self.assertIsNotNone(hide, msg=f"{annotation_name} must be hidden to avoid symbol overlap.")
+                    for symbol_instance in generated_root.find_children("symbol"):
+                        symbol_at = symbol_instance.find_child("at")
+                        self.assertIsNotNone(symbol_at)
+                        assert symbol_at is not None
+                        symbol_position = [child.value for child in symbol_at.children if child.value is not None]
+                        symbol_angle = float(symbol_position[2]) if len(symbol_position) > 2 else 0.0
+                        for property_node in symbol_instance.find_children("property"):
+                            property_atoms = [child.value for child in property_node.children if child.value is not None]
+                            if not property_atoms or property_atoms[0] not in {"Reference", "Value"}:
+                                continue
+                            placement_lock = property_node.find_child("do_not_autoplace")
+                            self.assertIsNotNone(placement_lock, msg=f"{property_atoms[0]} must declare its placement lock.")
+                            assert placement_lock is not None
+                            lock_atoms = [child.value for child in placement_lock.children if child.value is not None]
+                            self.assertEqual(lock_atoms, ["yes"], msg=f"{property_atoms[0]} must retain its collision-free generated position.")
+                            if property_node.find_child("hide") is None:
+                                property_at = property_node.find_child("at")
+                                self.assertIsNotNone(property_at)
+                                assert property_at is not None
+                                property_position = [child.value for child in property_at.children if child.value is not None]
+                                property_angle = float(property_position[2]) if len(property_position) > 2 else 0.0
+                                self.assertAlmostEqual((symbol_angle + property_angle) % 180.0, 0.0, msg=f"{property_atoms[0]} must render horizontally so its collision bounds remain valid.")
                     round_trip_path = Path(temporary_directory) / f"{net_path.stem}.net"  # Derive the scratch round-trip netlist path.
                     round_trip_result = kicad_sch_to_ltspice_netlist(str(output_path), str(round_trip_path), _CONVERT_SETTINGS)  # Convert the schematic back into a netlist.
                     self.assertEqual(  # Require the reverse conversion to succeed.
