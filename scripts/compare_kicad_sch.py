@@ -1,0 +1,851 @@
+"""Compare two KiCad schematic (.kicad_sch) files for structural, connectivity,
+and relative-layout (symbol position + orientation, wire geometry) differences.
+
+Run modes
+---------
+Single pair:
+    compare_kicad_sch.py <file_a> <file_b> [--tolerance FLOAT] [--verbose]
+
+Directory mode (compares files with matching names in two directories):
+    compare_kicad_sch.py <dir_a> <dir_b> [--tolerance FLOAT] [--verbose]
+
+The comparison is translation/rotation/scale tolerant: symbol positions are
+compared only as *relative* geometry after finding the best rigid transform
+(rotation in 90-degree steps, optional mirror, uniform scale) that aligns the
+matched symbol positions.  Symbol orientations, wire geometry, electrical
+connectivity, and header/property metadata are compared directly.
+
+Exit status is 0 when every compared pair matches, otherwise 1.
+"""
+
+from __future__ import annotations
+
+import argparse
+import math
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional, Sequence, Set, Tuple
+
+_ROOT_DIRECTORY = Path(__file__).resolve().parents[1]
+_SOURCE_DIRECTORY = _ROOT_DIRECTORY / "src"
+
+if str(_SOURCE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_SOURCE_DIRECTORY))
+
+from electronics_design.kicad_sexp_parser import SExp, parse_string
+
+_POINT_TOLERANCE = 1e-4
+
+
+def _first_atom(node: Optional[SExp]) -> str:
+    if node is None:
+        return ""
+    for child in node.children:
+        if child.is_atom:
+            return str(child.value)
+    return ""
+
+
+def _atom_values(node: Optional[SExp]) -> List[object]:
+    if node is None:
+        return []
+    return [child.value for child in node.children if child.is_atom]
+
+
+class _UnionFind:
+    def __init__(self) -> None:
+        self._parent: Dict[str, str] = {}
+
+    def add(self, key: str) -> None:
+        if key not in self._parent:
+            self._parent[key] = key
+
+    def find(self, key: str) -> str:
+        root = key
+        while self._parent[root] != root:
+            root = self._parent[root]
+        while self._parent[key] != key:
+            nxt = self._parent[key]
+            self._parent[key] = root
+            key = nxt
+        return root
+
+    def union(self, first: str, second: str) -> None:
+        root_a = self.find(first)
+        root_b = self.find(second)
+        if root_a != root_b:
+            self._parent[root_b] = root_a
+
+
+def _point_key(x: float, y: float) -> str:
+    return f"{round(x, 4)}|{round(y, 4)}"
+
+
+def _point_on_segment(px: float, py: float, segment: Tuple[float, float, float, float]) -> bool:
+    start_x, start_y, end_x, end_y = segment
+    if px < min(start_x, end_x) - _POINT_TOLERANCE or px > max(start_x, end_x) + _POINT_TOLERANCE:
+        return False
+    if py < min(start_y, end_y) - _POINT_TOLERANCE or py > max(start_y, end_y) + _POINT_TOLERANCE:
+        return False
+    delta_x = end_x - start_x
+    delta_y = end_y - start_y
+    length_squared = delta_x * delta_x + delta_y * delta_y
+    if length_squared == 0.0:
+        return abs(px - start_x) <= _POINT_TOLERANCE and abs(py - start_y) <= _POINT_TOLERANCE
+    projection = ((px - start_x) * delta_x + (py - start_y) * delta_y) / length_squared
+    if projection < -1e-9 or projection > 1.0 + 1e-9:
+        return False
+    closest_x = start_x + projection * delta_x
+    closest_y = start_y + projection * delta_y
+    return abs(px - closest_x) <= _POINT_TOLERANCE and abs(py - closest_y) <= _POINT_TOLERANCE
+
+
+def _transform_point(local_x: float, local_y: float, origin_x: float, origin_y: float, angle: float, mirror: str) -> Tuple[float, float]:
+    if mirror == "x":
+        local_y = -local_y
+    elif mirror == "y":
+        local_x = -local_x
+    radians = math.radians(angle)
+    cosine = math.cos(radians)
+    sine = math.sin(radians)
+    rotated_x = local_x * cosine - local_y * sine
+    rotated_y = local_x * sine + local_y * cosine
+    return origin_x + rotated_x, origin_y - rotated_y
+
+
+class SymbolRecord:
+    __slots__ = ("reference", "lib_id", "x", "y", "angle", "mirror", "unit", "body_style", "value", "properties", "pin_numbers", "power", "pins")
+
+    def __init__(self) -> None:
+        self.reference = ""
+        self.lib_id = ""
+        self.x = 0.0
+        self.y = 0.0
+        self.angle = 0.0
+        self.mirror = ""
+        self.unit = 1
+        self.body_style = 1
+        self.value = ""
+        self.properties: Dict[str, str] = {}
+        self.pin_numbers: List[str] = []
+        self.power = False
+        self.pins: Dict[str, Tuple[float, float]] = {}
+
+
+class Schematic:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.version = ""
+        self.generator = ""
+        self.paper = ""
+        self.lib_symbols: Dict[str, SExp] = {}
+        self.symbols: List[SymbolRecord] = []
+        self.wires: List[Tuple[float, float, float, float]] = []
+        self.labels: List[Tuple[float, float, str]] = []
+        self.texts: List[str] = []
+        self.junctions: List[Tuple[float, float]] = []
+        self.nets: Dict[str, Set[Tuple[str, str]]] = {}
+        self.net_wire_segments: Dict[str, int] = {}
+        self.net_wire_length: Dict[str, float] = {}
+        self.total_wire_length = 0.0
+        self._parse()
+
+    def _parse(self) -> None:
+        text = self.path.read_text(encoding="utf-8", errors="replace")
+        root = parse_string(text)
+        self.version = _first_atom(root.find_child("version"))
+        self.generator = _first_atom(root.find_child("generator"))
+        self.paper = _first_atom(root.find_child("paper"))
+        lib_symbols_node = root.find_child("lib_symbols")
+        if lib_symbols_node is not None:
+            for symbol_node in lib_symbols_node.find_children("symbol"):
+                name = _first_atom(symbol_node)
+                if name:
+                    self.lib_symbols[name] = symbol_node
+        union_find = _UnionFind()
+        segments: List[Tuple[float, float, float, float]] = []
+        for wire_node in root.find_children("wire"):
+            points_node = wire_node.find_child("pts")
+            if points_node is None:
+                continue
+            coordinates: List[Tuple[float, float]] = []
+            for xy_node in points_node.find_children("xy"):
+                values = _atom_values(xy_node)
+                if len(values) >= 2:
+                    coordinates.append((float(values[0]), float(values[1])))
+            for position in range(len(coordinates) - 1):
+                start_x, start_y = coordinates[position]
+                end_x, end_y = coordinates[position + 1]
+                start_key = _point_key(start_x, start_y)
+                end_key = _point_key(end_x, end_y)
+                union_find.add(start_key)
+                union_find.add(end_key)
+                union_find.union(start_key, end_key)
+                segment = (start_x, start_y, end_x, end_y)
+                segments.append(segment)
+                self.wires.append(segment)
+        for junction_x, junction_y in self._collect_junction_positions(root):
+            self.junctions.append((junction_x, junction_y))
+            key = _point_key(junction_x, junction_y)
+            union_find.add(key)
+            for segment in segments:
+                if _point_on_segment(junction_x, junction_y, segment):
+                    union_find.union(key, _point_key(segment[0], segment[1]))
+                    break
+        for first in segments:
+            for second in segments:
+                if first is second:
+                    continue
+                if _point_on_segment(first[0], first[1], second):
+                    union_find.union(_point_key(first[0], first[1]), _point_key(second[0], second[1]))
+                if _point_on_segment(first[2], first[3], second):
+                    union_find.union(_point_key(first[2], first[3]), _point_key(second[0], second[1]))
+        self.labels = self._collect_labels(root)
+        net_names: Dict[str, str] = {}
+        for label_x, label_y, label_text in self.labels:
+            key = self._attach_point(union_find, segments, label_x, label_y)
+            net_root = union_find.find(key)
+            if label_text != "" and net_root not in net_names:
+                net_names[net_root] = label_text
+        self.symbols = self._parse_instances(root)
+        for record in self.symbols:
+            if record.power:
+                for pin_number in record.pins:
+                    pin_x, pin_y = record.pins[pin_number]
+                    key = self._attach_point(union_find, segments, pin_x, pin_y)
+                    net_root = union_find.find(key)
+                    value = record.value
+                    if value != "" and net_root not in net_names:
+                        net_names[net_root] = value
+        for record in self.symbols:
+            record.pin_numbers = list(record.pins.keys())
+        for record in self.symbols:
+            for pin_number, (pin_x, pin_y) in record.pins.items():
+                key = self._attach_point(union_find, segments, pin_x, pin_y)
+                net_root = union_find.find(key)
+                net_name = net_names.get(net_root, "")
+                if net_name == "":
+                    net_name = f"__NET_{net_root}"
+                self.nets.setdefault(net_name, set()).add((record.reference, pin_number))
+        for segment in segments:
+            key = _point_key(segment[0], segment[1])
+            net_root = union_find.find(key)
+            net_name = net_names.get(net_root, f"__NET_{net_root}")
+            segment_length = math.hypot(segment[2] - segment[0], segment[3] - segment[1])
+            self.net_wire_segments[net_name] = self.net_wire_segments.get(net_name, 0) + 1
+            self.net_wire_length[net_name] = self.net_wire_length.get(net_name, 0.0) + segment_length
+            self.total_wire_length += segment_length
+        for text_node in root.find_children("text"):
+            values = _atom_values(text_node)
+            if values:
+                self.texts.append(str(values[0]))
+
+    def _collect_junction_positions(self, root: SExp) -> List[Tuple[float, float]]:
+        positions: List[Tuple[float, float]] = []
+        for junction_node in root.find_children("junction"):
+            values = _atom_values(junction_node.find_child("at"))
+            if len(values) >= 2:
+                positions.append((float(values[0]), float(values[1])))
+        return positions
+
+    def _collect_labels(self, root: SExp) -> List[Tuple[float, float, str]]:
+        entries: List[Tuple[float, float, str]] = []
+        for tag in ("label", "global_label", "hierarchical_label"):
+            for label_node in root.find_children(tag):
+                text_values = [child.value for child in label_node.children if child.is_atom]
+                label_text = str(text_values[0]) if text_values else ""
+                at_values = _atom_values(label_node.find_child("at"))
+                if len(at_values) >= 2:
+                    entries.append((float(at_values[0]), float(at_values[1]), label_text))
+        return entries
+
+    def _attach_point(self, union_find: _UnionFind, segments: Sequence[Tuple[float, float, float, float]], x: float, y: float) -> str:
+        key = _point_key(x, y)
+        union_find.add(key)
+        for segment in segments:
+            if _point_on_segment(x, y, segment):
+                union_find.union(key, _point_key(segment[0], segment[1]))
+                break
+        return key
+
+    def _parse_instances(self, root: SExp) -> List[SymbolRecord]:
+        records: List[SymbolRecord] = []
+        for instance_node in root.find_children("symbol"):
+            record = SymbolRecord()
+            record.lib_id = _first_atom(instance_node.find_child("lib_id"))
+            at_values = _atom_values(instance_node.find_child("at"))
+            if len(at_values) >= 2:
+                record.x = float(at_values[0])
+                record.y = float(at_values[1])
+            if len(at_values) > 2:
+                record.angle = float(at_values[2])
+            unit_values = _atom_values(instance_node.find_child("unit"))
+            if unit_values:
+                record.unit = int(unit_values[0])
+            style_values = _atom_values(instance_node.find_child("body_style"))
+            if style_values:
+                record.body_style = int(style_values[0])
+            mirror_values = _atom_values(instance_node.find_child("mirror"))
+            if mirror_values:
+                record.mirror = str(mirror_values[0])
+            record.properties = self._collect_properties(instance_node)
+            record.reference = record.properties.get("Reference", "")
+            record.value = record.properties.get("Value", "")
+            symbol_node = self.lib_symbols.get(record.lib_id)
+            if symbol_node is None:
+                continue
+            record.power = symbol_node.find_child("power") is not None
+            symbol_name = record.lib_id.split(":", 1)[1] if ":" in record.lib_id else record.lib_id
+            pin_geometry = self._extract_symbol_pins(symbol_node, record.unit, record.body_style, symbol_name)
+            for pin_number, (local_x, local_y) in pin_geometry.items():
+                absolute_x, absolute_y = _transform_point(local_x, local_y, record.x, record.y, record.angle, record.mirror)
+                record.pins[pin_number] = (absolute_x, absolute_y)
+            records.append(record)
+        return records
+
+    @staticmethod
+    def _collect_properties(node: SExp) -> Dict[str, str]:
+        properties: Dict[str, str] = {}
+        for property_node in node.find_children("property"):
+            values = _atom_values(property_node)
+            if len(values) >= 2:
+                properties[str(values[0])] = str(values[1])
+        return properties
+
+    def _extract_symbol_pins(self, symbol_node: SExp, unit: int, body_style: int, symbol_name: str) -> Dict[str, Tuple[float, float]]:
+        unit_prefix = f"{symbol_name}_{unit}_"
+        preferred_name = f"{symbol_name}_{unit}_{body_style}"
+        fallback_name = f"{symbol_name}_{unit}_1"
+        sub_symbols = symbol_node.find_children("symbol")
+        candidates: List[SExp] = []
+        seen: Set[int] = set()
+
+        def queue_candidate(sub_symbol: SExp) -> None:
+            if id(sub_symbol) in seen:
+                return
+            seen.add(id(sub_symbol))
+            candidates.append(sub_symbol)
+
+        for sub_symbol in sub_symbols:
+            name = _first_atom(sub_symbol)
+            if name in (preferred_name, fallback_name):
+                queue_candidate(sub_symbol)
+        for sub_symbol in sub_symbols:
+            name = _first_atom(sub_symbol)
+            if name and name.startswith(unit_prefix):
+                queue_candidate(sub_symbol)
+        for sub_symbol in sub_symbols:
+            name = _first_atom(sub_symbol)
+            if name and name.startswith(f"{symbol_name}_0_"):
+                queue_candidate(sub_symbol)
+        for sub_symbol in sub_symbols:
+            name = _first_atom(sub_symbol)
+            if name and name.endswith(f"_{unit}_{body_style}"):
+                queue_candidate(sub_symbol)
+        for sub_symbol in sub_symbols:
+            name = _first_atom(sub_symbol)
+            if name and name.endswith("_0_1"):
+                queue_candidate(sub_symbol)
+        for candidate in candidates:
+            pins = self._collect_pin_geometry(candidate)
+            if not pins:
+                continue
+            if unit != 0:
+                for shared_sub_symbol in sub_symbols:
+                    shared_name = _first_atom(shared_sub_symbol)
+                    if shared_name is None:
+                        continue
+                    if shared_name.startswith(f"{symbol_name}_0_") or shared_name.endswith("_0_1"):
+                        for number, pin in self._collect_pin_geometry(shared_sub_symbol).items():
+                            pins.setdefault(number, pin)
+            return pins
+        return {}
+
+    @staticmethod
+    def _collect_pin_geometry(sub_symbol: SExp) -> Dict[str, Tuple[float, float]]:
+        pins: Dict[str, Tuple[float, float]] = {}
+        for pin_node in sub_symbol.find_children("pin"):
+            at_values = _atom_values(pin_node.find_child("at"))
+            number_values = _atom_values(pin_node.find_child("number"))
+            if len(at_values) < 2 or not number_values:
+                continue
+            pins[str(number_values[0])] = (float(at_values[0]), float(at_values[1]))
+        return pins
+
+
+def _normalize_lib_id(lib_id: str) -> str:
+    nickname, separator, name = lib_id.rpartition(":")
+    if nickname in ("Device", "power", "Simulation_SPICE"):
+        return name
+    return name if separator else lib_id
+
+
+def _signature_lib_id(lib_id: str) -> str:
+    return _normalize_lib_id(lib_id)
+
+
+def _best_rigid_transform(gt_positions: List[Tuple[float, float]], gen_positions: List[Tuple[float, float]]) -> Tuple[float, float, float]:
+    n = len(gt_positions)
+    if n == 0:
+        return 0.0, 1.0, 0.0
+    gt_centroid_x = sum(p[0] for p in gt_positions) / n
+    gt_centroid_y = sum(p[1] for p in gt_positions) / n
+    gen_centroid_x = sum(p[0] for p in gen_positions) / n
+    gen_centroid_y = sum(p[1] for p in gen_positions) / n
+    best_score = float("inf")
+    best_angle = 0.0
+    best_scale = 1.0
+    best_mirror = 1.0
+    for mirror_x in (1.0, -1.0):
+        for angle in (0.0, 90.0, 180.0, 270.0):
+            radians = math.radians(angle)
+            cosine = math.cos(radians)
+            sine = math.sin(radians)
+            numerator = 0.0
+            denominator = 0.0
+            for (gx, gy), (ox, oy) in zip(gt_positions, gen_positions):
+                dx = ox - gen_centroid_x
+                dy = (oy - gen_centroid_y) * mirror_x
+                rx = dx * cosine - dy * sine
+                ry = dx * sine + dy * cosine
+                target_x = gx - gt_centroid_x
+                target_y = gy - gt_centroid_y
+                numerator += rx * target_x + ry * target_y
+                denominator += rx * rx + ry * ry
+            if denominator > 0 and numerator > 0:
+                scale = numerator / denominator
+            elif denominator > 0:
+                target_norm = sum((gx - gt_centroid_x) ** 2 + (gy - gt_centroid_y) ** 2 for gx, gy in gt_positions)
+                scale = math.sqrt(target_norm / denominator) if target_norm > 0 else 1.0
+            else:
+                scale = 1.0
+            error = 0.0
+            for (gx, gy), (ox, oy) in zip(gt_positions, gen_positions):
+                dx = ox - gen_centroid_x
+                dy = (oy - gen_centroid_y) * mirror_x
+                rx = dx * cosine - dy * sine
+                ry = dx * sine + dy * cosine
+                error += (gt_centroid_x + scale * rx - gx) ** 2 + (gt_centroid_y + scale * ry - gy) ** 2
+            if error < best_score:
+                best_score = error
+                best_angle = angle
+                best_scale = scale
+                best_mirror = mirror_x
+    return best_angle, best_scale, best_mirror
+
+
+def _transform_position(x: float, y: float, centroid: Tuple[float, float], angle: float, scale: float, mirror: float) -> Tuple[float, float]:
+    radians = math.radians(angle)
+    cosine = math.cos(radians)
+    sine = math.sin(radians)
+    dx = x - centroid[0]
+    dy = (y - centroid[1]) * mirror
+    rx = dx * cosine - dy * sine
+    ry = dx * sine + dy * cosine
+    return centroid[0] + scale * rx, centroid[1] + scale * ry
+
+
+_PWR_FLAG_LIB = "power:PWR_FLAG"
+
+
+def _is_graphical_marker(record: SymbolRecord) -> bool:
+    return record.lib_id == _PWR_FLAG_LIB or record.lib_id.startswith("power:")
+
+
+def _electrical_equivalent(first: Schematic, second: Schematic, kicad_path: str) -> Tuple[bool, str]:
+    import tempfile
+
+    from electronics_design import kicad_sch_to_ltspice_netlist
+    from electronics_design import ltspice_netlist_structure_cmp
+
+    settings = {"kicad_path": kicad_path}
+    try:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            net_a = str(Path(temporary_directory) / "a.net")
+            net_b = str(Path(temporary_directory) / "b.net")
+            ok_a, message_a, _ = kicad_sch_to_ltspice_netlist(str(first.path), net_a, settings)
+            if not ok_a:
+                return False, f"file A netlist conversion failed: {message_a}"
+            ok_b, message_b, _ = kicad_sch_to_ltspice_netlist(str(second.path), net_b, settings)
+            if not ok_b:
+                return False, f"file B netlist conversion failed: {message_b}"
+            equal = ltspice_netlist_structure_cmp(net_a, net_b)
+            return bool(equal), ""
+    except ImportError as exc:  # The optional netlist back-end is unavailable.
+        return False, f"netlist back-end unavailable: {exc}"
+
+
+def _angular_difference(first: float, second: float) -> float:
+    difference = (first - second) % 360.0
+    return min(difference, 360.0 - difference)
+
+
+def _connection_label(members: Set[Tuple[str, str]]) -> str:
+    return "{" + ", ".join(f"{reference}:{pin}" for reference, pin in sorted(members)) + "}"
+
+
+def _report_wire_length_scores(first: Schematic, second: Schematic, relative_tolerance: float) -> Tuple[float, List[str]]:
+    lines: List[str] = []
+    second_by_members: Dict[frozenset, List[str]] = {}
+    for net_name, members in second.nets.items():
+        second_by_members.setdefault(frozenset(members), []).append(net_name)
+    used_second: Set[str] = set()
+    pairs: List[Tuple[str, float, float, Set[Tuple[str, str]]]] = []
+    unmatched_first: List[Tuple[str, Set[Tuple[str, str]]]] = []
+    for net_name, members in first.nets.items():
+        key = frozenset(members)
+        candidates = [candidate for candidate in second_by_members.get(key, []) if candidate not in used_second]
+        if candidates:
+            second_net = candidates[0]
+            used_second.add(second_net)
+            pairs.append((net_name, first.net_wire_length.get(net_name, 0.0), second.net_wire_length.get(second_net, 0.0), members))
+        else:
+            unmatched_first.append((net_name, members))
+    matched_second = set(second.nets) - used_second
+    within = 0
+    for _net_name, first_length, second_length, members in pairs:
+        larger = max(first_length, second_length)
+        relative_difference = abs(first_length - second_length) / larger if larger > 0 else 0.0
+        if relative_difference <= relative_tolerance:
+            within += 1
+        lines.append(
+            f"    wire length for {_connection_label(members)}: A={first_length:7.2f}mm B={second_length:7.2f}mm "
+            f"rel-diff={relative_difference*100:5.1f}%"
+        )
+    total = len(pairs)
+    score = 100.0 * within / total if total else 100.0
+    lines.append(f"  Score wire length per connection: {score:.1f}% ({within}/{total} connections within {relative_tolerance*100:.0f}% relative difference)")
+    if unmatched_first or matched_second:
+        lines.append(f"  Connections without an exact member match: {len(unmatched_first)} only-A, {len(matched_second)} only-B")
+    return score, lines
+
+
+def _report_symbol_layout(schematic_a: Schematic, schematic_b: Schematic, matched: List[Tuple[SymbolRecord, SymbolRecord]]) -> Tuple[bool, List[str]]:
+    lines: List[str] = []
+    problems: List[str] = []
+    if not matched:
+        lines.append("  No matched symbols for relative-layout comparison.")
+        return True, lines
+    count = len(matched)
+    gt_positions = [(record_a.x, record_a.y) for record_a, _ in matched]
+    gen_positions = [(record_b.x, record_b.y) for _, record_b in matched]
+    angle, scale, mirror = _best_rigid_transform(gt_positions, gen_positions)
+    gt_centroid = (sum(p[0] for p in gt_positions) / count, sum(p[1] for p in gt_positions) / count)
+    gen_centroid = (sum(p[0] for p in gen_positions) / count, sum(p[1] for p in gen_positions) / count)
+    characteristic = max(1.0, max(record_a.x for record_a, _ in matched) - min(record_a.x for record_a, _ in matched))
+    position_tolerance = 0.05 * characteristic
+    total = 0.0
+    worst = 0.0
+    worst_pair = ""
+    position_within = 0
+    for record_a, record_b in matched:
+        px, py = _transform_position(record_b.x, record_b.y, gen_centroid, angle, scale, mirror)
+        distance = math.hypot(px - record_a.x, py - record_a.y)
+        total += distance
+        if distance <= position_tolerance:
+            position_within += 1
+        if distance > worst:
+            worst = distance
+            worst_pair = record_a.reference
+    mean_error = total / count
+    position_score = 100.0 * position_within / count
+
+    distance_pairs = 0
+    distance_within = 0
+    for first_index in range(count):
+        for second_index in range(first_index + 1, count):
+            gt_distance = math.hypot(
+                gt_positions[first_index][0] - gt_positions[second_index][0],
+                gt_positions[first_index][1] - gt_positions[second_index][1],
+            )
+            gen_distance = math.hypot(
+                gen_positions[first_index][0] - gen_positions[second_index][0],
+                gen_positions[first_index][1] - gen_positions[second_index][1],
+            )
+            distance_pairs += 1
+            if gt_distance <= 1e-6:
+                distance_within += 1 if gen_distance <= position_tolerance else 0
+            else:
+                scaled = gen_distance / scale if scale > 0 else gen_distance
+                if abs(scaled - gt_distance) <= position_tolerance:
+                    distance_within += 1
+    distance_score = 100.0 * distance_within / distance_pairs if distance_pairs else 100.0
+
+    orientation_within = 0
+    for record_a, record_b in matched:
+        expected_b_angle = record_b.angle
+        if mirror < 0:
+            expected_b_angle = -expected_b_angle
+        expected_b_angle = (expected_b_angle + angle) % 360.0
+        if _angular_difference(record_a.angle, expected_b_angle) <= 0.5:
+            orientation_within += 1
+    orientation_score = 100.0 * orientation_within / count
+
+    combined_score = 0.6 * position_score + 0.4 * orientation_score
+    lines.append(f"  Best rigid transform: rotation={angle:g}deg mirror={'-' if mirror < 0 else '+'} scale={scale:.4f}")
+    lines.append(f"  Relative position residual: mean={mean_error:.3f}mm worst={worst:.3f}mm (at '{worst_pair}')")
+    lines.append(
+        f"  Score relative position: {position_score:.1f}% ({position_within}/{count} symbols within {position_tolerance:.2f}mm)"
+    )
+    lines.append(
+        f"  Score pairwise distance : {distance_score:.1f}% ({distance_within}/{distance_pairs} pairs within {position_tolerance:.2f}mm)"
+    )
+    lines.append(
+        f"  Score orientation       : {orientation_score:.1f}% ({orientation_within}/{count} symbols, global rotation {angle:g}deg accounted)"
+    )
+    lines.append(f"  Combined relative-layout score: {combined_score:.1f}%")
+    lines.append(f"  Relative layout match: {'YES' if worst <= position_tolerance else 'NO'} (worst tolerance {position_tolerance:.3f}mm)")
+    if worst > position_tolerance:
+        problems.append(f"relative symbol layout mismatch (worst residual {worst:.3f}mm)")
+    return not problems, lines
+
+
+def _orientation_equivalent(first: SymbolRecord, second: SymbolRecord) -> bool:
+    return abs(first.angle - second.angle) < 1e-6 and first.mirror == second.mirror
+
+
+def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: float, verbose: bool, kicad_path: str, wire_length_tolerance: float) -> Tuple[bool, List[str], List[str]]:
+    lines: List[str] = []
+    hard_problems: List[str] = []
+    differences: List[str] = []
+    if first.version != second.version:
+        differences.append(f"version differs ({first.version} vs {second.version})")
+    if first.generator != second.generator:
+        differences.append(f"generator differs ({first.generator} vs {second.generator})")
+    if first.paper != second.paper:
+        hard_problems.append(f"paper differs ({first.paper} vs {second.paper})")
+    lines.append(f"  Header: version={first.version} vs {second.version} generator={first.generator} vs {second.generator} paper={first.paper} vs {second.paper}")
+
+    symbols_a = {record.reference: record for record in first.symbols}
+    symbols_b = {record.reference: record for record in second.symbols}
+    refs_a = set(symbols_a)
+    refs_b = set(symbols_b)
+    common = sorted(refs_a & refs_b)
+    only_a = sorted(refs_a - refs_b)
+    only_b = sorted(refs_b - refs_a)
+    lines.append(f"  Symbols: {len(refs_a)} in A, {len(refs_b)} in B, {len(common)} matched, {len(only_a)} only-A, {len(only_b)} only-B")
+    for reference in only_a:
+        record = symbols_a[reference]
+        marker = " (graphical marker)" if _is_graphical_marker(record) else ""
+        lines.append(f"    only in A: {reference} ({record.lib_id}){marker}")
+    for reference in only_b:
+        record = symbols_b[reference]
+        marker = " (graphical marker)" if _is_graphical_marker(record) else ""
+        lines.append(f"    only in B: {reference} ({record.lib_id}){marker}")
+
+    matched: List[Tuple[SymbolRecord, SymbolRecord]] = []
+    lib_mismatch = 0
+    value_mismatch = 0
+    orientation_mismatch = 0
+    for reference in common:
+        record_a = symbols_a[reference]
+        record_b = symbols_b[reference]
+        matched.append((record_a, record_b))
+        if _signature_lib_id(record_a.lib_id) != _signature_lib_id(record_b.lib_id):
+            lib_mismatch += 1
+            lines.append(f"    lib_id differs for {reference}: {record_a.lib_id} vs {record_b.lib_id}")
+        if record_a.value != record_b.value:
+            value_mismatch += 1
+            lines.append(f"    value differs for {reference}: '{record_a.value}' vs '{record_b.value}'")
+        if not _orientation_equivalent(record_a, record_b):
+            orientation_mismatch += 1
+            lines.append(f"    orientation differs for {reference}: angle={record_a.angle:g}/{record_a.mirror} vs {record_b.angle:g}/{record_b.mirror}")
+    lines.append(f"  Matched symbol properties: lib_id {len(common) - lib_mismatch}/{len(common)} OK, value {len(common) - value_mismatch}/{len(common)} OK, orientation {len(common) - orientation_mismatch}/{len(common)} OK")
+
+    layout_ok, layout_lines = _report_symbol_layout(first, second, matched)
+    lines.extend(layout_lines)
+    if not layout_ok:
+        differences.append("relative symbol layout differs beyond tolerance")
+
+    electrical_ok = True
+    if kicad_path:
+        electrical_ok, electrical_note = _electrical_equivalent(first, second, kicad_path)
+        if electrical_ok:
+            lines.append("  Electrical equivalence (netlist structure): MATCH")
+        else:
+            lines.append(f"  Electrical equivalence (netlist structure): DIFF - {electrical_note}")
+    else:
+        lines.append("  Electrical equivalence: skipped (pass --kicad-path to enable)")
+
+    nets_a = {net: members for net, members in first.nets.items()}
+    nets_b = {net: members for net, members in second.nets.items()}
+    members_a = set()
+    members_b = set()
+    for members in nets_a.values():
+        members_a.update(members)
+    for members in nets_b.values():
+        members_b.update(members)
+    missing_members = sorted(members_a - members_b)
+    extra_members = sorted(members_b - members_a)
+    if missing_members:
+        lines.append(f"  Connectivity members only in A: {missing_members}")
+    if extra_members:
+        lines.append(f"  Connectivity members only in B: {extra_members}")
+    lines.append(f"  Connectivity: {len(nets_a)} nets in A, {len(nets_b)} nets in B, members {len(members_a)}/{len(members_b)}")
+
+    electrical_symbol_problem = False
+    if not electrical_ok:
+        for reference in only_a:
+            if not _is_graphical_marker(symbols_a[reference]):
+                hard_problems.append(f"symbol '{reference}' only in file A")
+                electrical_symbol_problem = True
+        for reference in only_b:
+            if not _is_graphical_marker(symbols_b[reference]):
+                hard_problems.append(f"symbol '{reference}' only in file B")
+                electrical_symbol_problem = True
+        if not electrical_symbol_problem and not electrical_ok:
+            hard_problems.append("electrical equivalence check failed")
+        if missing_members:
+            hard_problems.append("connectivity members missing in B")
+        if extra_members:
+            hard_problems.append("connectivity members extra in B")
+        for reference in common:
+            record_a = symbols_a[reference]
+            record_b = symbols_b[reference]
+            if _signature_lib_id(record_a.lib_id) != _signature_lib_id(record_b.lib_id):
+                hard_problems.append(f"symbol '{reference}' lib_id differs ({record_a.lib_id} vs {record_b.lib_id})")
+    else:
+        for reference in only_a:
+            if not _is_graphical_marker(symbols_a[reference]):
+                differences.append(f"symbol '{reference}' present only in A (electrically matched by role)")
+        for reference in only_b:
+            if not _is_graphical_marker(symbols_b[reference]):
+                differences.append(f"symbol '{reference}' present only in B (electrically matched by role)")
+
+    wire_count_a = len(first.wires)
+    wire_count_b = len(second.wires)
+    lines.append(f"  Wires: {wire_count_a} segments/{first.total_wire_length:.2f}mm in A, {wire_count_b} segments/{second.total_wire_length:.2f}mm in B")
+    if abs(wire_count_a - wire_count_b) > tolerance:
+        differences.append(f"wire segment count differs ({wire_count_a} vs {wire_count_b})")
+    label_count_a = len(first.labels)
+    label_count_b = len(second.labels)
+    text_count_a = len(first.texts)
+    text_count_b = len(second.texts)
+    lines.append(f"  Labels: {label_count_a} vs {label_count_b}; texts: {text_count_a} vs {text_count_b}")
+    if label_count_a != label_count_b:
+        differences.append(f"label count differs ({label_count_a} vs {label_count_b})")
+    if text_count_a != text_count_b:
+        differences.append(f"text count differs ({text_count_a} vs {text_count_b})")
+    net_wire_mismatch = False
+    for net in sorted(set(nets_a) | set(nets_b)):
+        count_a = first.net_wire_segments.get(net, 0)
+        count_b = second.net_wire_segments.get(net, 0)
+        if count_a != count_b:
+            net_wire_mismatch = True
+            lines.append(f"    wire segments for net '{net}': {count_a} vs {count_b}")
+    if net_wire_mismatch:
+        differences.append("per-net wire segment counts differ")
+
+    wire_length_score, wire_length_lines = _report_wire_length_scores(first, second, wire_length_tolerance)
+    lines.extend(wire_length_lines)
+    if wire_length_score < 100.0:
+        differences.append(f"per-connection wire length score {wire_length_score:.1f}%")
+
+    if verbose:
+        lines.append("  Net memberships:")
+        for net in sorted(set(nets_a) | set(nets_b)):
+            members_a = sorted(nets_a.get(net, set()))
+            members_b = sorted(nets_b.get(net, set()))
+            status = "OK" if members_a == members_b else "DIFF"
+            lines.append(f"    [{status}] {net}: A={members_a} B={members_b}")
+        lines.append("  Library symbols embedded:")
+        libs_a = sorted(first.lib_symbols)
+        libs_b = sorted(second.lib_symbols)
+        if libs_a == libs_b:
+            lines.append(f"    OK ({len(libs_a)} identical)")
+        else:
+            lines.append(f"    A only: {sorted(set(libs_a) - set(libs_b))}")
+            lines.append(f"    B only: {sorted(set(libs_b) - set(libs_a))}")
+            differences.append("embedded lib_symbols sets differ")
+
+    if hard_problems:
+        lines.append(f"  Result: ELECTRICAL/STRUCTURAL ERROR ({len(hard_problems)} issue(s))")
+        lines.append(f"    hard: {hard_problems}")
+    elif differences:
+        lines.append(f"  Result: ELECTRICALLY EQUIVALENT, {len(differences)} representation/layout difference(s)")
+        lines.append(f"    differences: {differences}")
+    else:
+        lines.append("  Result: EXACT MATCH")
+    return not hard_problems, lines, differences
+
+
+def _compare_files(first_path: Path, second_path: Path, tolerance: float, verbose: bool, kicad_path: str, wire_length_tolerance: float) -> Tuple[bool, List[str]]:
+    lines: List[str] = []
+    lines.append(f"Comparing: {first_path.name}")
+    lines.append(f"  A: {first_path}")
+    lines.append(f"  B: {second_path}")
+    try:
+        first = Schematic(first_path)
+    except Exception as exc:  # noqa: BLE001 - report any parse failure directly.
+        lines.append(f"  ERROR parsing file A: {exc}")
+        return False, lines
+    try:
+        second = Schematic(second_path)
+    except Exception as exc:  # noqa: BLE001 - report any parse failure directly.
+        lines.append(f"  ERROR parsing file B: {exc}")
+        return False, lines
+    ok, detail, _differences = _compare_schematic_pair(first, second, tolerance, verbose, kicad_path, wire_length_tolerance)
+    lines.extend(detail)
+    return ok, lines
+
+
+def _build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Compare two KiCad schematic files for structural, connectivity, and relative-layout differences.")
+    parser.add_argument("first", help="First .kicad_sch file or directory.")
+    parser.add_argument("second", help="Second .kicad_sch file or directory.")
+    parser.add_argument("--tolerance", type=float, default=1.0, help="Tolerance for wire-count differences. Default: 1.0.")
+    parser.add_argument("--verbose", action="store_true", help="Print per-net and per-library detail.")
+    parser.add_argument("--kicad-path", default="/usr/share/kicad/", help="Root of the KiCad symbol libraries for the electrical equivalence check. Empty disables it.")
+    parser.add_argument("--wire-length-tolerance", type=float, default=0.25, help="Maximum relative wire-length difference per connection scored as a match. Default: 0.25 (25%%).")
+    return parser
+
+
+def main() -> int:
+    parser = _build_argument_parser()
+    arguments = parser.parse_args()
+    first_path = Path(arguments.first)
+    second_path = Path(arguments.second)
+    kicad_path = arguments.kicad_path
+    if kicad_path:
+        kicad_path = str(Path(kicad_path).expanduser())
+    if first_path.is_dir() and second_path.is_dir():
+        names_a = {path.stem: path for path in sorted(first_path.glob("*.kicad_sch"))}
+        names_b = {path.stem: path for path in sorted(second_path.glob("*.kicad_sch"))}
+        names = sorted(set(names_a) | set(names_b))
+        if not names:
+            print("No .kicad_sch files found in either directory.", file=sys.stderr)
+            return 1
+        all_ok = True
+        failures = 0
+        for name in names:
+            print(f"== {name} ==")
+            if name not in names_a:
+                print("  MISSING in file A directory")
+                all_ok = False
+                failures += 1
+                continue
+            if name not in names_b:
+                print("  MISSING in file B directory")
+                all_ok = False
+                failures += 1
+                continue
+            ok, lines = _compare_files(names_a[name], names_b[name], arguments.tolerance, arguments.verbose, kicad_path, arguments.wire_length_tolerance)
+            print("\n".join(lines))
+            if not ok:
+                all_ok = False
+                failures += 1
+        print(f"\nDirectory comparison: {len(names) - failures}/{len(names)} files matched.")
+        return 0 if all_ok else 1
+    if not first_path.is_file():
+        print(f"{first_path}: not a file", file=sys.stderr)
+        return 1
+    if not second_path.is_file():
+        print(f"{second_path}: not a file", file=sys.stderr)
+        return 1
+    ok, lines = _compare_files(first_path, second_path, arguments.tolerance, arguments.verbose, kicad_path, arguments.wire_length_tolerance)
+    print("\n".join(lines))
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
