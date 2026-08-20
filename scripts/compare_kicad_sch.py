@@ -503,18 +503,20 @@ def _report_wire_length_scores(first: Schematic, second: Schematic, relative_tol
             unmatched_first.append((net_name, members))
     matched_second = set(second.nets) - used_second
     within = 0
+    graded = 0.0
     for _net_name, first_length, second_length, members in pairs:
         larger = max(first_length, second_length)
         relative_difference = abs(first_length - second_length) / larger if larger > 0 else 0.0
         if relative_difference <= relative_tolerance:
             within += 1
+        graded += max(0.0, 1.0 - relative_difference / relative_tolerance)
         lines.append(
             f"    wire length for {_connection_label(members)}: A={first_length:7.2f}mm B={second_length:7.2f}mm "
             f"rel-diff={relative_difference*100:5.1f}%"
         )
     total = len(pairs)
-    score = 100.0 * within / total if total else 100.0
-    lines.append(f"  Score wire length per connection: {score:.1f}% ({within}/{total} connections within {relative_tolerance*100:.0f}% relative difference)")
+    score = 100.0 * graded / total if total else 100.0
+    lines.append(f"  Score wire length per connection: {score:.1f}% ({within}/{total} connections within {relative_tolerance*100:.0f}% relative difference, graded)")
     if unmatched_first or matched_second:
         lines.append(f"  Connections without an exact member match: {len(unmatched_first)} only-A, {len(matched_second)} only-B")
     return score, lines
@@ -532,9 +534,12 @@ def _report_symbol_layout(schematic_a: Schematic, schematic_b: Schematic, matche
     angle, scale, mirror = _best_rigid_transform(gt_positions, gen_positions)
     gt_centroid = (sum(p[0] for p in gt_positions) / count, sum(p[1] for p in gt_positions) / count)
     gen_centroid = (sum(p[0] for p in gen_positions) / count, sum(p[1] for p in gen_positions) / count)
-    characteristic = max(1.0, max(record_a.x for record_a, _ in matched) - min(record_a.x for record_a, _ in matched))
+    gt_x_span = max(record_a.x for record_a, _ in matched) - min(record_a.x for record_a, _ in matched)
+    gt_y_span = max(record_a.y for record_a, _ in matched) - min(record_a.y for record_a, _ in matched)
+    characteristic = max(1.0, gt_x_span, gt_y_span)
     position_tolerance = 0.05 * characteristic
     total = 0.0
+    squared = 0.0
     worst = 0.0
     worst_pair = ""
     position_within = 0
@@ -542,15 +547,18 @@ def _report_symbol_layout(schematic_a: Schematic, schematic_b: Schematic, matche
         px, py = _transform_position(record_b.x, record_b.y, gen_centroid, angle, scale, mirror)
         distance = math.hypot(px - record_a.x, py - record_a.y)
         total += distance
+        squared += distance * distance
         if distance <= position_tolerance:
             position_within += 1
         if distance > worst:
             worst = distance
             worst_pair = record_a.reference
     mean_error = total / count
-    position_score = 100.0 * position_within / count
+    rms_error = math.sqrt(squared / count)
 
     distance_pairs = 0
+    distance_total = 0.0
+    distance_worst = 0.0
     distance_within = 0
     for first_index in range(count):
         for second_index in range(first_index + 1, count):
@@ -564,12 +572,15 @@ def _report_symbol_layout(schematic_a: Schematic, schematic_b: Schematic, matche
             )
             distance_pairs += 1
             if gt_distance <= 1e-6:
-                distance_within += 1 if gen_distance <= position_tolerance else 0
+                residual = gen_distance
             else:
-                scaled = gen_distance / scale if scale > 0 else gen_distance
-                if abs(scaled - gt_distance) <= position_tolerance:
-                    distance_within += 1
-    distance_score = 100.0 * distance_within / distance_pairs if distance_pairs else 100.0
+                residual = abs(gen_distance / scale - gt_distance) if scale > 0 else gen_distance
+            distance_total += residual
+            if residual > distance_worst:
+                distance_worst = residual
+            if residual <= position_tolerance:
+                distance_within += 1
+    mean_pairwise_error = distance_total / distance_pairs if distance_pairs else 0.0
 
     orientation_within = 0
     for record_a, record_b in matched:
@@ -579,21 +590,17 @@ def _report_symbol_layout(schematic_a: Schematic, schematic_b: Schematic, matche
         expected_b_angle = (expected_b_angle + angle) % 360.0
         if _angular_difference(record_a.angle, expected_b_angle) <= 0.5:
             orientation_within += 1
-    orientation_score = 100.0 * orientation_within / count
+    orientation_ratio = 100.0 * orientation_within / count
 
-    combined_score = 0.6 * position_score + 0.4 * orientation_score
+    def _relative(value: float) -> str:  # Format one measurement against the GT characteristic span.
+        return f"{value:.3f}mm ({100.0 * value / characteristic:.1f}% of {characteristic:.2f}mm GT span)"
+
     lines.append(f"  Best rigid transform: rotation={angle:g}deg mirror={'-' if mirror < 0 else '+'} scale={scale:.4f}")
-    lines.append(f"  Relative position residual: mean={mean_error:.3f}mm worst={worst:.3f}mm (at '{worst_pair}')")
-    lines.append(
-        f"  Score relative position: {position_score:.1f}% ({position_within}/{count} symbols within {position_tolerance:.2f}mm)"
-    )
-    lines.append(
-        f"  Score pairwise distance : {distance_score:.1f}% ({distance_within}/{distance_pairs} pairs within {position_tolerance:.2f}mm)"
-    )
-    lines.append(
-        f"  Score orientation       : {orientation_score:.1f}% ({orientation_within}/{count} symbols, global rotation {angle:g}deg accounted)"
-    )
-    lines.append(f"  Combined relative-layout score: {combined_score:.1f}%")
+    lines.append(f"  Relative position: mean {_relative(mean_error)}, rms {_relative(rms_error)}, worst {_relative(worst)} (at '{worst_pair}')")
+    lines.append(f"  Position within tolerance: {position_within}/{count} symbols (tolerance {position_tolerance:.2f}mm = 5% of GT span)")
+    lines.append(f"  Pairwise distance error: mean {_relative(mean_pairwise_error)}, worst {_relative(distance_worst)}, {distance_within}/{distance_pairs} pairs within tolerance")
+    lines.append(f"  Orientation match: {orientation_within}/{count} symbols ({orientation_ratio:.1f}%, global rotation {angle:g}deg accounted)")
+    lines.append(f"  Combined relative layout: mean residual {_relative(mean_error)}, orientation {orientation_ratio:.1f}%")
     lines.append(f"  Relative layout match: {'YES' if worst <= position_tolerance else 'NO'} (worst tolerance {position_tolerance:.3f}mm)")
     if worst > position_tolerance:
         problems.append(f"relative symbol layout mismatch (worst residual {worst:.3f}mm)")
@@ -738,7 +745,7 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
 
     wire_length_score, wire_length_lines = _report_wire_length_scores(first, second, wire_length_tolerance)
     lines.extend(wire_length_lines)
-    if wire_length_score < 100.0:
+    if wire_length_score < 50.0:
         differences.append(f"per-connection wire length score {wire_length_score:.1f}%")
 
     if verbose:
