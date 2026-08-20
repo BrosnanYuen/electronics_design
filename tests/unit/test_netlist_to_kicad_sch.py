@@ -31,9 +31,16 @@ _CONVERT_SETTINGS = {  # Pin the settings so generated files are reproducible.
 
 
 class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-schematic conversion tests together.
-    def test_all_netlists_convert_to_valid_kicad_schematics(self) -> None:  # Verify every netlist converts to a valid KiCad schematic that round-trips structurally.
-        net_files = sorted(_NETLIST_DIRECTORY.glob("*.net"))  # Collect all LTspice netlist files in the fixture directory.
+    def test_all_generated_netlists_are_valid(self) -> None:  # Verify every artifact generated from the authoritative KiCad schematics is a valid LTspice netlist.
+        net_files = sorted(_NETLIST_DIRECTORY.glob("*.net"))  # Collect all generated LTspice netlist files.
         self.assertGreater(len(net_files), 0, msg="kicad_convert/netlist/ must contain LTspice netlist files.")  # Require the source files to exist.
+        for net_path in net_files:  # Walk every generated artifact.
+            with self.subTest(netlist=net_path.name):  # Isolate failures per netlist file.
+                validation = is_valid_ltspice_netlist_file(str(net_path))  # Validate the generated netlist directly.
+                self.assertEqual(validation, (True, ""), msg=f"{net_path.name} should be valid but returned: {validation[1]}")  # Require a valid generated artifact.
+
+    def test_reference_netlist_converts_to_valid_kicad_schematic(self) -> None:  # Exercise the inverse converter with the supported reference deck without treating generated artifacts as ground truth.
+        net_files = [_NETLIST_DIRECTORY / "NPN1.net"]  # Use the compact reference deck for inverse-conversion and structural round-trip coverage.
         with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the generated schematics and round-trip netlists.
             for net_path in net_files:  # Walk every LTspice netlist file.
                 with self.subTest(netlist=net_path.name):  # Isolate failures per netlist file.

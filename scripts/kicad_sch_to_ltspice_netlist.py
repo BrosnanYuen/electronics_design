@@ -50,6 +50,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional single output .net path. Only valid with exactly one input schematic file.",
     )
+    parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Optional output directory for the generated .net files. Defaults to each input file's directory.",
+    )
     return parser
 
 
@@ -65,9 +70,15 @@ def main() -> int:
     if arguments.out is not None and len(arguments.kicad_sch_filepaths) != 1:
         print("--out can only be used with a single input schematic file.", file=sys.stderr)
         return 1
+    if arguments.out_dir is not None and arguments.out is not None:
+        print("--out-dir and --out are mutually exclusive.", file=sys.stderr)
+        return 1
     exit_code = 0
     for kicad_sch_filepath in arguments.kicad_sch_filepaths:
-        output_path = arguments.out if arguments.out is not None else str(Path(kicad_sch_filepath).with_suffix(".net"))
+        if arguments.out_dir is not None:
+            output_path = str(Path(arguments.out_dir) / f"{Path(kicad_sch_filepath).stem}.net")
+        else:
+            output_path = arguments.out if arguments.out is not None else str(Path(kicad_sch_filepath).with_suffix(".net"))
         result = kicad_sch_to_ltspice_netlist(kicad_sch_filepath, output_path, convert_settings)
         if not result[0]:
             print(f"{kicad_sch_filepath}: {result[1]}", file=sys.stderr)

@@ -28,6 +28,7 @@ ElementParseResult = Tuple[bool, List["ParsedElement"], int, str]  # Represent p
 
 _DIRECTIVE_PATTERN = re.compile(r"^\.(?P<name>[A-Za-z]+)(?:\s|$)")  # Match an LTspice dot-directive name.
 _NODE_VOLTAGE_REFERENCE_PATTERN = re.compile(r"V\(\s*([^(),\s]+)(?:\s*,\s*([^()\s]+))?\s*\)", re.IGNORECASE)  # Match node references inside LTspice voltage expressions.
+_KICAD_SINGLETON_LABEL_PATTERN = re.compile(r"^\*\s*KICAD_SINGLETON_LABEL\s+(\S+)\s*$", re.IGNORECASE)  # Match converter metadata for intentionally single-port labeled nets.
 
 _VALID_DEVICE_PREFIXES = {  # Define the supported leading element prefixes from the LTspice manual.
     "A",  # Special function device prefix.
@@ -171,7 +172,7 @@ _FOOTER_DIRECTIVES = {  # Define directives that are acceptable in the footer re
     "end",  # Allow the terminal .end directive in the footer.
 }  # Finish the footer directive whitelist.
 
-_EXEMPT_NODE_PREFIXES = ("NC", "NC_", "NC-")  # Exempt explicit no-connect node names from connectivity checks.
+_EXEMPT_NODE_PREFIXES = ("NC", "NC_", "NC-", "N_WIRE_")  # Exempt explicit no-connect pins and physically drawn dangling-wire nodes from port-count checks.
 
 _PNG_BACKGROUND = (248, 250, 252)  # Use a light background for generated network graph images.
 _PNG_EDGE_COLOR = (148, 163, 184)  # Use a muted line color for component-to-component edges.
@@ -542,10 +543,13 @@ def _validate_connectivity(lines: Sequence[str]) -> Tuple[bool, int]:  # Validat
     elements = parse_result[1]  # Extract the parsed elements after confirming parsing succeeded.
     node_counts = _count_element_nodes(elements)  # Count how many times each relevant node appears across all element ports and expression references.
     positional_owners = _positional_node_owners(elements)  # Index which elements carry each node as an explicit positional port.
+    singleton_labels = {match.group(1) for raw_line in lines if (match := _KICAD_SINGLETON_LABEL_PATTERN.fullmatch(raw_line.strip())) is not None}  # Read narrow converter-authored exemptions.
     for element in elements:  # Walk elements in source order so the earliest problem line is reported.
         for node_name in element.nodes:  # Check each connectivity node attached to the element.
             if _is_exempt_node(node_name):  # Skip ground and explicit no-connect nodes.
                 continue  # Move to the next node because exempt nodes do not need multiple connections.
+            if node_name in singleton_labels:  # Preserve KiCad labels intentionally attached to a single simulated port.
+                continue  # Accept the converter-declared singleton without weakening validation for other nodes.
             node_occurrences = node_counts.get(node_name, 0)  # Look up how many ports reference this node.
             if node_occurrences < 2:  # Require at least two references to consider the node connected.
                 if _node_owners_are_behavioral_only(positional_owners.get(node_name, ())):  # Accept probe nodes whose only positional port sits on a behavioral source.
@@ -614,7 +618,7 @@ def _validate_device_tokens(tokens: Sequence[str]) -> Tuple[bool, str]:  # Valid
         return False, "invalid_prefix"  # Signal an invalid-prefix failure.
     if len(instance_name) < 2 and prefix != "K":  # Permit LTspice mutual-coupling statements like K L1 L2 0.9 used in the fixture corpus.
         return False, "short_instance_name"  # Signal an instance-name failure.
-    if re.match(r"^[A-Za-z@&]\d+[A-Za-z].*$", instance_name) is not None:  # Reject merged instance-name and node-name patterns such as R1Vcc.
+    if re.match(r"^[A-Za-z@&]\d+[A-Za-z]+$", instance_name) is not None:  # Reject merged instance-name and node-name patterns such as R1Vcc or R1OUT.
         return False, "merged_instance_name"  # Signal an instance-name spacing failure.
     if _is_two_node_behavioral_controlled_source(prefix, tokens):  # Accept LTspice's behavioral E/G source form with only output nodes and an expression payload.
         return True, ""  # Return success when the reduced-node behavioral form is structurally valid.
@@ -654,7 +658,9 @@ def _extract_nodes(tokens: Sequence[str]) -> Tuple[bool, List[str]]:  # Extract 
         return True, []  # Return an empty node list.
     if prefix == "L":  # Handle inductors with two nodes.
         return True, list(tokens[1:3])  # Return the two node tokens.
-    if prefix == "M":  # Handle MOSFET devices with drain, gate, source, and bulk.
+    if prefix == "M" and len(tokens) >= 8 and any(token.lower() == "thermal" for token in tokens[7:]):  # Handle LTspice VDMOS devices with explicit junction and case thermal terminals.
+        return True, list(tokens[1:6])  # Return drain, gate, source, junction-temperature, and case-temperature nodes.
+    if prefix == "M":  # Handle ordinary MOSFET devices with drain, gate, source, and bulk.
         return True, list(tokens[1:5])  # Return the four node tokens.
     if prefix == "O":  # Handle lossy transmission lines with four nodes.
         return True, list(tokens[1:5])  # Return the four node tokens.
