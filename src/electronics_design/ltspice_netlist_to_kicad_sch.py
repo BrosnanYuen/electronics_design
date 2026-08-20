@@ -79,7 +79,6 @@ _PLACEMENT_STEP_X = 25.4  # Initial placement row column spacing in mm.
 _PLACEMENT_Y = 100.0  # Initial placement row Y coordinate in mm.
 _PIN_EXIT_STEP_X = 1.27  # Candidate horizontal side-exit spacing for fallback trunk routing.
 _POWER_STUB_LENGTH = 3.81  # Default stub length in mm for power-only nets.
-_TRUNK_FALLBACK_GAP = 15.24  # Vertical gap below the page for fallback net trunks.
 
 _PROPERTY_STEP = 2.54  # Vertical offset between stacked instance properties.
 _TEXT_FONT_SIZE = 1.27  # Visible schematic text height in mm.
@@ -180,8 +179,8 @@ def ltspice_netlist_to_kicad_sch(  # Convert one LTspice netlist into one KiCad 
     device's LTspice ``.asy`` file is searched under the configured
     ``custom_search_paths``, ``ltspice_wine_path``, and ``ltspice_windows_path``
     roots and converted with :func:`ltspice_asy_to_kicad_symbol`. Independent
-    voltage sources whose negative node is ground become KiCad power symbols;
-    the global ground net receives a ``GND`` power symbol. Wires are routed
+    voltage sources remain explicit two-pin simulation symbols,
+    and the global ground net receives a ``GND`` power symbol. Wires are routed
     orthogonally along per-net trunks so the schematic physically connects
     every pin of every net.
 
@@ -400,7 +399,7 @@ def _build_model_types(lines: Sequence[str], settings: Dict[str, Any]) -> Dict[s
     return model_types  # Return the merged model type mapping.
 
 
-def _candidate_lib_ids(element: ParsedElement, model_types: Dict[str, str]) -> List[str]:  # Derive candidate KiCad library identifiers for one device.
+def _candidate_lib_ids(element: ParsedElement, model_types: Dict[str, str], generated_by_converter: bool = False) -> List[str]:  # Derive candidate KiCad library identifiers for one device.
     prefix = element.prefix  # Read the device prefix.
     payload = element.tokens[1 + len(element.nodes):]  # Read the value/model payload tokens.
     payload_text = payload[0] if payload else ""  # Read the primary model or value token.
@@ -422,7 +421,8 @@ def _candidate_lib_ids(element: ParsedElement, model_types: Dict[str, str]) -> L
         if payload_text and model_type not in {"NPN", "PNP"}:  # Propose a model-named transistor symbol when it differs from the class name.
             candidates.append(f"Transistor_BJT:{payload_text}")  # Append the model-named transistor symbol.
         polarity = "PNP" if model_type == "PNP" else "NPN"  # Resolve the BJT polarity class.
-        if len(element.nodes) == 4:  # Preserve an explicit substrate node with the four-pin simulation symbol.
+        synthetic_ground_substrate = generated_by_converter and len(element.nodes) == 4 and element.nodes[-1] in _GROUND_NODE_NAMES  # The inverse converter adds ground to ordinary three-pin transistors.
+        if len(element.nodes) == 4 and not synthetic_ground_substrate:  # Preserve only an authored explicit substrate with the four-pin simulation symbol.
             polarity += "_Substrate"  # Use the substrate variant of the simulation symbol.
         candidates.append(f"Simulation_SPICE:{polarity}")  # Always propose the polarity-matched simulation symbol.
         return candidates  # Return the BJT candidates.
@@ -432,25 +432,37 @@ def _candidate_lib_ids(element: ParsedElement, model_types: Dict[str, str]) -> L
         if payload_text and model_type not in {"NMOS", "PMOS"}:  # Propose a model-named FET symbol when it differs from the class name.
             candidates.append(f"Transistor_FET:{payload_text}")  # Append the model-named FET symbol.
         polarity = "PMOS" if model_type == "PMOS" else "NMOS"  # Resolve the MOSFET polarity class.
-        if len(element.nodes) == 4:  # Preserve an explicit substrate node with the four-pin simulation symbol.
+        synthetic_ground_substrate = generated_by_converter and len(element.nodes) == 4 and element.nodes[-1] in _GROUND_NODE_NAMES  # The inverse converter adds ground to ordinary three-pin transistors.
+        if len(element.nodes) == 4 and not synthetic_ground_substrate:  # Preserve only an authored explicit substrate with the four-pin simulation symbol.
             polarity += "_Substrate"  # Use the substrate variant of the simulation symbol.
         candidates.append(f"Simulation_SPICE:{polarity}")  # Always propose the polarity-matched simulation symbol.
         return candidates  # Return the MOSFET candidates.
     if prefix == "J":  # JFETs map to the polarity-matched simulation symbol.
         model_type = model_types.get(payload_text, payload_text).upper()  # Resolve the model type from the netlist and library .model lines.
         return [f"Simulation_SPICE:{'PJFET' if model_type == 'PJF' else 'NJFET'}"]  # Return the polarity-matched simulation symbol candidate.
-    if prefix == "V":  # Voltage sources prefer power symbols named after their positive node when ground-referenced.
+    if prefix == "V":  # Voltage sources normally remain explicit two-pin devices in the reconstructed schematic.
+        reference = str(element.tokens[0]) if element.tokens else ""  # Read the source reference for inverse-converter power-symbol recovery.
         positive_node = element.nodes[0] if element.nodes else ""  # Read the source positive node.
         negative_node = element.nodes[1] if len(element.nodes) > 1 else ""  # Read the source negative node.
-        if negative_node not in _GROUND_NODE_NAMES or positive_node in _GROUND_NODE_NAMES:  # Use a two-pin source for floating or inverted supplies.
-            return ["Simulation_SPICE:VDC"]  # Return the two-pin simulation voltage source.
-        if payload_text == "0":  # A zero-volt source is a sensing source, not a supply; keep it as a two-pin device.
-            return ["Simulation_SPICE:VDC"]  # Return the two-pin simulation voltage source.
-        candidates = []  # Collect voltage source candidates.
-        candidates.append(f"power:{positive_node}")  # Prefer a power symbol named after the node.
-        candidates.append("power:VCC")  # Append the generic supply power symbol.
-        candidates.append("Simulation_SPICE:VDC")  # Append the two-pin simulation voltage source as a fallback.
-        return candidates  # Return the voltage source candidates.
+        if generated_by_converter and re.fullmatch(r"V_PWR\d+", reference, flags=re.IGNORECASE) and negative_node in _GROUND_NODE_NAMES:  # Recognize the stable card emitted for a KiCad power symbol.
+            candidates = []  # Collect exact semantic power-symbol candidates before generic source fallbacks.
+            if payload_text and payload_text != "0":  # Prefer the authored power-symbol value when it names a library entry.
+                candidates.append(f"power:{payload_text}")  # Recover symbols such as +12V whose node name may be normalized.
+            if positive_node and positive_node not in _GROUND_NODE_NAMES:  # Also try the electrical node name.
+                candidates.append(f"power:{positive_node}")  # Recover ordinary VCC/VDD-style power symbols.
+            candidates.extend(["power:VCC", "Simulation_SPICE:VDC"])  # Retain portable fallbacks when a project-specific power symbol is unavailable.
+            return list(dict.fromkeys(candidates))  # Return deterministic unique candidates.
+        source_text = " ".join(payload).upper()  # Inspect the source waveform without changing its authored payload.
+        waveform_candidates = (  # Prefer the KiCad simulation symbol matching the source's waveform.
+            ("PULSE", "Simulation_SPICE:VPULSE"),
+            ("SINE", "Simulation_SPICE:VSIN"),
+            ("EXP", "Simulation_SPICE:VEXP"),
+            ("PWL", "Simulation_SPICE:VPWL"),
+            ("SFFM", "Simulation_SPICE:VSFFM"),
+        )
+        candidates = [lib_id for keyword, lib_id in waveform_candidates if re.search(rf"(?:^|\s){keyword}\s*\(", source_text)]
+        candidates.append("Simulation_SPICE:VDC")  # Use the ordinary source for DC, AC, and unsupported waveforms.
+        return candidates
     if prefix == "I":  # Current sources map to the standard simulation current source.
         return ["Simulation_SPICE:IDC"]  # Return the current source candidate.
     if prefix == "X":  # Subcircuit calls prefer a symbol named after the subcircuit name.
@@ -494,7 +506,7 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
         short_name = _split_lib_id(lib_id)[1]  # Read the short symbol name for pin extraction.
         pins_result = _extract_symbol_pins(symbol_node, 1, 1, short_name)  # Check that the symbol carries usable pin graphics.
         if pins_result[0] and _subcircuit_round_trips(element, symbol_node):  # Require usable pin graphics and a round-trippable subcircuit identity.
-            if symbol_node.find_child("power") is not None or len(pins_result[1]) == len(element.nodes):  # Power symbols carry one pin regardless of node count; others must match exactly.
+            if symbol_node.find_child("power") is not None or _symbol_pin_count_matches(element, len(pins_result[1]), allow_generic_subcircuits):  # Power symbols carry one pin; converter-added substrates may reconstruct as three-pin symbols.
                 return True, (lib_id, symbol_node), "", 0  # Return the resolved symbol.
     asy_names = list(_PREFIX_ASY_FALLBACKS.get(element.prefix, ()))  # Read the prefix ASY fallback names.
     if element.prefix in {"D", "J", "M", "Q", "Z"}:  # Prefer a model-specific ASY when discrete-device node counts exceed generic symbols.
@@ -530,7 +542,7 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
         if symbol_node is None:  # Skip generated files without the expected symbol.
             continue  # Move to the next ASY name.
         fallback_pins_result = _extract_symbol_pins(symbol_node, 1, 1, stem)  # Check the generated symbol pin graphics.
-        if not fallback_pins_result[0] or len(fallback_pins_result[1]) != len(element.nodes):  # Require a pin-count match before embedding.
+        if not fallback_pins_result[0] or not _symbol_pin_count_matches(element, len(fallback_pins_result[1]), allow_generic_subcircuits):  # Require a round-trippable pin-count match before embedding.
             continue  # Move to the next ASY name.
         embedded_lib_id = f"{stem}:{stem}"  # Qualify the embedded symbol so kicad_path never shadows it.
         return True, (embedded_lib_id, symbol_node), "", 0  # Return the embedded fallback symbol.
@@ -540,7 +552,7 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
             continue  # Move to the next bare candidate.
         short_name = _split_lib_id(lib_id)[1]  # Read the short symbol name for pin extraction.
         pins_result = _extract_symbol_pins(symbol_node, 1, 1, short_name)  # Validate the candidate pin graphics.
-        if pins_result[0] and len(pins_result[1]) == len(element.nodes) and _subcircuit_round_trips(element, symbol_node):  # Require usable geometry, an exact pin-count match, and a round-trippable identity.
+        if pins_result[0] and _symbol_pin_count_matches(element, len(pins_result[1]), allow_generic_subcircuits) and _subcircuit_round_trips(element, symbol_node):  # Require usable geometry, a round-trippable pin count, and a round-trippable identity.
             return True, (lib_id, symbol_node), "", 0  # Return the library-wide resolution.
     if element.prefix == "X" and allow_generic_subcircuits:  # Fall back only when the trusted generator marker proves the deck's schematic provenance.
         payload = element.tokens[1 + len(element.nodes):]  # Read the payload tokens after the connectivity nodes.
@@ -551,6 +563,20 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
     detail = "', '".join(lib_ids)  # Join the candidate identifiers for the error message.
     message = f"UNKNOWN_SYMBOL: Unable to resolve a KiCad symbol for device '{element.tokens[0]}' in kicad_path candidates ['{detail}'] or the configured LTspice ASY search paths"  # Explain the failed resolution.
     return False, None, message, element.line_number  # Return the unknown symbol error with the element line.
+
+
+def _symbol_pin_count_matches(element: ParsedElement, pin_count: int, generated_by_converter: bool) -> bool:
+    """Accept exact shapes and inverse-converter three-pin transistor shapes."""
+
+    if pin_count == len(element.nodes):
+        return True
+    return (
+        generated_by_converter
+        and element.prefix in {"Q", "M"}
+        and len(element.nodes) == 4
+        and element.nodes[-1] in _GROUND_NODE_NAMES
+        and pin_count == 3
+    )
 
 
 def _polarity_asy_fallback_names(element: ParsedElement, model_types: Dict[str, str]) -> Tuple[str, ...]:  # Derive polarity-matched ASY fallback names for transistor devices.
@@ -599,7 +625,7 @@ def _build_component_records(  # Resolve symbols and build one component record 
             return False, None, message, element.line_number  # Return the unsupported device error with the element line.
         if not element.nodes:  # Skip node-free statements such as K mutual-inductance couplings.
             continue  # Move to the next element because these statements contribute no schematic connectivity.
-        candidate_ids = _candidate_lib_ids(element, model_types)  # Derive the candidate library identifiers.
+        candidate_ids = _candidate_lib_ids(element, model_types, allow_generic_subcircuits)  # Derive the candidate library identifiers, including safe inverse-converter hints.
         extra_asy_names = _polarity_asy_fallback_names(element, model_types)  # Derive polarity-matched ASY fallback names.
         resolution_key = (tuple(candidate_ids), tuple(extra_asy_names), prefix, len(element.nodes))  # Key resolution by all shape-affecting inputs.
         cached_symbol = resolved_symbols.get(resolution_key)  # Reuse an earlier identical resolution.
@@ -645,7 +671,8 @@ def _build_one_record(  # Build one component record from a resolved device and 
             message = f"UNSUPPORTED_DEVICE: voltage source '{element.tokens[0]}' has a floating negative node '{element.nodes[1]}'; use a ground-referenced source"  # Explain the floating supply limitation.
             return False, None, message, element.line_number  # Return the unsupported device error.
         value = " ".join(payload)  # Join the source payload tokens into one value string.
-        reference = "#" + element.tokens[0]  # Power references carry the hash prefix for the reverse conversion.
+        power_match = re.fullmatch(r"V_PWR(\d+)", str(element.tokens[0]), flags=re.IGNORECASE)  # Recover the reference convention used before inverse conversion.
+        reference = f"#PWR{power_match.group(1)}" if power_match is not None else "#" + element.tokens[0]  # Power references carry the hash prefix for reverse conversion.
         record: Dict[str, Any] = {  # Assemble the voltage source record.
             "element": element,  # Store the parsed element.
             "prefix": prefix,  # Store the device prefix.
@@ -675,8 +702,17 @@ def _build_one_record(  # Build one component record from a resolved device and 
         instance_sim_name = payload[0]  # The first payload token is the model or subcircuit name.
         instance_sim_params = " ".join(payload[1:])  # Remaining tokens are true instance parameters.
         value = instance_sim_name  # Keep the visible value free of duplicated instance parameters.
+    elif prefix == "L" and len(payload) > 1:  # Keep LTspice's default series resistance out of the visible component value.
+        value = payload[0]  # Display the authored inductance itself.
+        instance_sim_params = " ".join(payload[1:])  # Preserve Rser and other authored parameters for simulation and round-trip fidelity.
     elif prefix == "T":  # Transmission-line defaults in the library must not override authored Zo/Td values.
         instance_sim_params = " ".join(payload)  # Store the complete line parameter payload as an instance override.
+    elif prefix in {"V", "I"}:  # Source-library defaults must not replace the authored LTspice waveform or AC clause.
+        source_phrase = " ".join(payload)
+        escaped_source = source_phrase.replace("\\", "\\\\").replace('"', '\\"')
+        instance_sim_params = f'model="{escaped_source}"'  # Preserve the complete source phrase as one generic model assignment.
+        if prefix == "V" and re.search(r"(?:^|\s)(?:PULSE|SINE|EXP|PWL|SFFM)\s*\(", source_phrase, flags=re.IGNORECASE):
+            value = short_name  # Show the waveform symbol type while retaining the authored source clause in Sim.Params.
     reference = element.tokens[0]  # Start with the netlist instance name.
     if prefix == "X":  # Map subcircuit references onto KiCad U references.
         if reference.startswith("X") and len(reference) > 1 and reference[1:2].isdigit():  # Strip the leading X for digit-suffixed names.
@@ -753,7 +789,7 @@ def _make_routing_orders(
 ) -> List[List[str]]:
     """Build complementary deterministic orders for negotiated route trials."""
 
-    names = [name for name in net_order if nets[name]]
+    names = [name for name in net_order if nets[name] and name not in _GROUND_NODE_NAMES]  # Global ground may use disconnected physical stubs and GND symbols.
 
     def span(name: str) -> float:
         xs = [pin[2] for pin in nets[name]]
@@ -803,6 +839,7 @@ def _route_trial(
     grid: float,
     page_width: float,
     page_height: float,
+    central_seed: bool = False,
 ) -> Tuple[GridRouter, Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]], Set[Tuple[float, float]], int]:
     """Route every net physically for one order and return the complete trial."""
 
@@ -818,6 +855,8 @@ def _route_trial(
     for name in routing_order:
         pins = nets[name]
         terminals = [(pin_x, pin_y) for _record_index, _pin_number, pin_x, pin_y in pins]
+        if central_seed:
+            terminals = _order_terminals_for_routing(terminals)  # Also evaluate a tree seeded at its Manhattan medoid.
         terminal_keys = {(round(pin_x, 6), round(pin_y, 6)) for pin_x, pin_y in terminals}  # Exempt this net's own terminals from the foreign-point audit.
         foreign_segments = [segment for routed_segments in segments_by_net.values() for segment in routed_segments]  # Collect all previously emitted foreign copper.
         segments = router.route(terminals, net_id=net_ids[name])
@@ -846,7 +885,7 @@ def _route_trial(
             router.unmark_cells(used_cells, net_ids[name])  # Release the incomplete route's occupancy.
             segments = None  # Force the complete physical trunk implementation.
         if segments is None:
-            trunk_y = -_TRUNK_FALLBACK_GAP * (fallback_count + 1)
+            trunk_y = -grid * (fallback_count + 1)  # Keep emergency trunks on adjacent grid lanes near the sheet.
             fallback_count += 1
             segments = _route_net_trunk_fallback(pins, grid, foreign_points, trunk_y, foreign_segments)
             router.mark_cells(_grid_cells_for_segments(router, segments), net_ids[name])  # Reserve in-page fallback copper against later hard routes.
@@ -859,6 +898,39 @@ def _route_trial(
         polyline_keys_by_net.setdefault(name, set()).update(endpoints)
         segments_by_net[name] = segments
     return router, segments_by_net, foreign_points, fallback_count
+
+
+def _order_terminals_for_routing(terminals: Sequence[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """Order terminals from a central seed to nearby peers for compact route trees."""
+
+    unique: List[Tuple[float, float]] = []
+    for terminal in terminals:
+        if terminal not in unique:
+            unique.append(terminal)
+    if len(unique) <= 2:
+        return unique
+    seed = min(
+        unique,
+        key=lambda point: (
+            sum(abs(point[0] - other[0]) + abs(point[1] - other[1]) for other in unique),
+            point[0],
+            point[1],
+        ),
+    )
+    remaining = [point for point in unique if point != seed]
+    ordered = [seed]
+    while remaining:
+        candidate = min(
+            remaining,
+            key=lambda point: (
+                min(abs(point[0] - placed[0]) + abs(point[1] - placed[1]) for placed in ordered),
+                point[0],
+                point[1],
+            ),
+        )
+        ordered.append(candidate)
+        remaining.remove(candidate)
+    return ordered
 
 
 def _segments_connect_terminals(  # Verify that one segment set forms a single electrical component containing every terminal.
@@ -940,6 +1012,8 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
         record["x"] = component.x  # Store the optimized X position.
         record["y"] = component.y  # Store the optimized Y position.
         record["angle"] = component.rotation  # Store the snapped rotation angle.
+    _compact_placement(records, grid, page_width, page_height)  # Remove unused whitespace while retaining collision-free, page-centered geometry.
+    _refine_symbol_orientations(records, grid, page_width, page_height)  # Turn pins toward their electrical peers before routing.
     _separate_foreign_pin_overlaps(records, grid, page_width, page_height)  # Prevent touching pin tips from silently shorting unrelated nets.
     nets, net_order = _collect_nets(records)  # Collect net memberships and absolute pin positions.
     for record in records:  # Block every ordinary symbol body on the routing grid.
@@ -952,27 +1026,34 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
     stable_names = [name for name in net_order if nets[name]]
     net_ids = {name: index + 1 for index, name in enumerate(stable_names)}
     trials = [
-        _route_trial(records, nets, order, net_ids, grid, page_width, page_height)
+        _route_trial(records, nets, order, net_ids, grid, page_width, page_height, central_seed)
         for order in routing_orders[:trial_limit]
-    ]
+        for central_seed in (False, True)
+    ]  # Evaluate both source-order and central-seed trees for each bounded net ordering.
     router, segments_by_net, foreign_points, fallback_count = min(
         trials,
         key=lambda trial: trace_cost(trial[1], trial[3]),
     )
-    segments_by_net = optimize_routed_traces(
+    routed_segments = segments_by_net  # Preserve the complete negotiated routes in case cleanup exposes an unsafe junction.
+    optimized_segments = optimize_routed_traces(
         segments_by_net,
         passes=int(settings.get("kicad_trace_optimization_passes", _TRACE_OPTIMIZATION_PASSES)),
         protected_points_by_net={name: [(pin[2], pin[3]) for pin in pins] for name, pins in nets.items()},
     )
-    if not _routed_nets_are_isolated(segments_by_net, nets):  # Replace any partial or cross-shortened negotiated result with complete isolated physical trunks.
-        segments_by_net = _route_all_nets_with_physical_trunks(nets, net_order, grid)  # Keep every component-to-component connection as copper.
-        router = _new_routing_grid(records, nets, net_ids, grid, page_width, page_height)  # Reset occupancy to the replacement geometry's routing context.
-        foreign_points = {(round(pin[2], 6), round(pin[3], 6)) for pins in nets.values() for pin in pins}  # Rebuild the point index from real terminals.
-        for routed_segments in segments_by_net.values():  # Index all replacement segment endpoints.
-            for start_point, end_point in routed_segments:
-                foreign_points.add((round(start_point[0], 6), round(start_point[1], 6)))
-                foreign_points.add((round(end_point[0], 6), round(end_point[1], 6)))
-    for node_name in net_order:  # Give singleton and otherwise empty nets real copper before labels and power symbols are attached.
+    if _routed_nets_are_isolated(optimized_segments, nets):  # Accept cleanup only when it retains complete, isolated physical copper.
+        segments_by_net = optimized_segments
+    elif _routed_nets_are_isolated(routed_segments, nets):  # Roll back cleanup locally instead of replacing every net with an all-net fallback.
+        segments_by_net = routed_segments
+    else:  # The per-net A* router and physical fallback are required to produce a complete isolated result.
+        return False, None, "WIRING_GENERATION_ERROR: routed nets are not complete and electrically isolated", 0
+    ground_attachments = _build_disconnected_ground_stubs(nets, records, segments_by_net, grid, page_width, page_height)  # Give every ground terminal a short local physical connection.
+    for ground_name, attachments in ground_attachments.items():  # Store the disconnected ground stubs under their semantic ground net.
+        segments_by_net[ground_name] = [segment for _pin, segment in attachments]  # GND symbols unify these intentionally disconnected copper islands.
+    if not _routed_nets_are_isolated(segments_by_net, nets):  # Verify the local ground stubs remain isolated from ordinary nets.
+        return False, None, "WIRING_GENERATION_ERROR: ground stubs are not electrically isolated", 0
+    for node_name in net_order:  # Give singleton and otherwise empty ordinary nets real copper before labels and power symbols are attached.
+        if node_name in _GROUND_NODE_NAMES:
+            continue
         _ensure_net_copper(node_name, nets, segments_by_net, router, foreign_points, grid, page_width, page_height)
     embedded_result = _resolve_ground_symbol(settings)  # Resolve the power:GND symbol definition for embedding.
     if not embedded_result[0]:  # Stop when the ground symbol cannot be resolved.
@@ -991,41 +1072,34 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
         _attach_symbol_on_net(record, segments_by_net.get(node_name, []), placed_bodies, grid, foreign_segments)  # Attach the power pin only to electrically exclusive copper.
     ground_records: List[Dict[str, Any]] = []  # Collect the generated GND power symbols.
     ground_counter = 0  # Count generated GND symbols for deterministic references.
-    for node_name in net_order:  # Walk every net to attach GND symbols to ground nets.
+    used_references = {str(record["reference"]) for record in records}  # Avoid colliding with recovered power-symbol references.
+    for node_name in net_order:  # Walk every net to attach GND symbols to ground-net stubs.
         if node_name not in _GROUND_NODE_NAMES:  # Skip non-ground nets.
             continue  # Move to the next net.
-        net_pins = nets.get(node_name, [])  # Read the ground net pins.
-        if not net_pins:  # Skip empty ground nets defensively.
+        attachments = ground_attachments.get(node_name, [])  # Read the independently stubbed ground terminals.
+        if not attachments:  # Skip empty ground nets defensively.
             continue  # Move to the next net.
-        ground_counter += 1  # Advance the GND counter.
-        ground_record: Dict[str, Any] = {  # Assemble the generated GND power symbol record.
-            "element": None,  # GND symbols carry no netlist element.
-            "prefix": "P",  # Use a neutral prefix marker for ground symbols.
-            "reference": f"#PWR{ground_counter:02d}",  # Assign a deterministic power reference.
-            "value": "GND",  # Use the ground value so the reverse conversion maps the net to node 0.
-            "lib_id": ground_lib_id,  # Reference the resolved ground power symbol.
-            "symbol_props": {},  # Ground symbols need no simulation properties.
-            "pins": ground_pins,  # Store the resolved ground pin geometry.
-            "pin_map": {0: "1"},  # Ground symbols expose a single pin.
-            "power": True,  # Mark the record as a power symbol.
-            "symbol_node": ground_symbol_node,  # Store the resolved symbol node for body geometry.
-            "x": 0.0,  # Initialize the GND symbol X position.
-            "y": 0.0,  # Initialize the GND symbol Y position.
-            "angle": 0.0,  # Initialize the GND symbol angle.
-            "pin_positions": {},  # Pin positions are filled by the attachment step.
-        }  # Finish the ground record assembly.
-        ground_record["body_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND")  # Resolve the ground body bounds.
-        ground_record["text_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND", include_pins=False, combine_sections=True)  # Measure every rendered body section for text avoidance.
-        _ensure_net_copper(node_name, nets, segments_by_net, router, foreign_points, grid, page_width, page_height)  # Make sure the ground net carries wire copper.
-        foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]  # Collect other-net copper that must remain isolated from ground.
-        _attach_symbol_on_net(ground_record, segments_by_net.get(node_name, []), placed_bodies, grid, foreign_segments)  # Attach the GND pin only to electrically exclusive ground copper.
-        ground_records.append(ground_record)  # Append the ground symbol record.
+        for _ordinary_pin, ground_stub in attachments:  # Attach one power symbol to each disconnected ground island.
+            ground_counter += 1  # Advance the GND counter.
+            while f"#PWR{ground_counter:02d}" in used_references:  # Skip references already restored from V_PWR cards.
+                ground_counter += 1  # Advance to the next free power reference.
+            ground_reference = f"#PWR{ground_counter:02d}"  # Capture the unique deterministic reference.
+            used_references.add(ground_reference)  # Reserve it before building later ground symbols.
+            ground_record: Dict[str, Any] = {  # Assemble the generated GND power symbol record.
+                "element": None, "prefix": "P", "reference": ground_reference, "value": "GND",
+                "lib_id": ground_lib_id, "symbol_props": {}, "pins": ground_pins, "pin_map": {0: "1"},
+                "power": True, "symbol_node": ground_symbol_node, "x": 0.0, "y": 0.0, "angle": 0.0, "pin_positions": {},
+            }
+            ground_record["body_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND")
+            ground_record["text_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND", include_pins=False, combine_sections=True)
+            foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]
+            _attach_symbol_on_net(ground_record, [ground_stub], placed_bodies, grid, foreign_segments)
+            ground_records.append(ground_record)
     all_records = records + ground_records  # Combine the component and ground records.
     lead_stubs_by_net = _build_pin_lead_stubs(nets, segments_by_net, all_records, grid)  # Build pin lead stubs so every pin owns a segment start.
     label_layout = _layout_visible_text(all_records, net_order, segments_by_net, lead_stubs_by_net, grid, page_width, page_height)  # Place visible fields and net labels away from symbols, wires, and other text.
     wire_nodes = _build_wire_nodes(root_uuid, net_order, segments_by_net, lead_stubs_by_net)  # Build the wire nodes for every routed segment and pin stub.
-    label_nodes = _build_label_nodes(root_uuid, net_order, segments_by_net, label_layout)  # Build collision-free label nodes on non-ground nets.
-    label_nodes.extend(_build_ground_label_nodes(root_uuid, nets))  # Mark every physically wired ground terminal so disconnected ground islands remain node 0.
+    label_nodes = _build_label_nodes(root_uuid, net_order, segments_by_net, label_layout)  # Label authored names; physical copper carries internal and ground nets.
     symbol_nodes = _build_symbol_instance_nodes(all_records, root_uuid)  # Build the symbol instance nodes.
     embedded_extra = {ground_lib_id: ground_symbol_node}  # Collect the ground symbol for embedding.
     return True, (wire_nodes, label_nodes, symbol_nodes, embedded_extra), "", 0  # Return the assembled schematic body.
@@ -1040,7 +1114,7 @@ def _routed_nets_are_isolated(
     net_names = list(nets)
     for node_name, pins in nets.items():
         terminals = [(pin[2], pin[3]) for pin in pins]
-        if len(terminals) > 1 and not _segments_connect_terminals(segments_by_net.get(node_name, ()), terminals):
+        if node_name not in _GROUND_NODE_NAMES and len(terminals) > 1 and not _segments_connect_terminals(segments_by_net.get(node_name, ()), terminals):
             return False
     for first_index, first_name in enumerate(net_names):
         first_segments = segments_by_net.get(first_name, ())
@@ -1057,30 +1131,67 @@ def _routed_nets_are_isolated(
     return True
 
 
-def _route_all_nets_with_physical_trunks(
+def _build_disconnected_ground_stubs(
     nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
-    net_order: Sequence[str],
+    records: Sequence[Dict[str, Any]],
+    segments_by_net: Mapping[str, Sequence[Tuple[Tuple[float, float], Tuple[float, float]]]],
     grid: float,
-) -> Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]]:
-    """Physically route every multi-pin net on its own isolated trunk."""
+    page_width: float,
+    page_height: float,
+) -> Dict[str, List[Tuple[Tuple[int, str, float, float], Tuple[Tuple[float, float], Tuple[float, float]]]]]:
+    """Build one short physical stub per ground pin for local GND symbols."""
 
-    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]] = {}
-    foreign_points = {(round(pin[2], 6), round(pin[3], 6)) for pins in nets.values() for pin in pins}
-    trunk_index = 0
-    for node_name in net_order:
-        pins = list(nets.get(node_name, ()))
-        if len(pins) <= 1:
-            segments_by_net[node_name] = []
-            continue
-        foreign_segments = [segment for routed in segments_by_net.values() for segment in routed]
-        trunk_index += 1
-        trunk_y = -_TRUNK_FALLBACK_GAP * trunk_index
-        segments = _route_net_trunk_fallback(pins, grid, foreign_points, trunk_y, foreign_segments)
-        segments_by_net[node_name] = segments
-        for start_point, end_point in segments:
-            foreign_points.add((round(start_point[0], 6), round(start_point[1], 6)))
-            foreign_points.add((round(end_point[0], 6), round(end_point[1], 6)))
-    return segments_by_net
+    attachments: Dict[str, List[Tuple[Tuple[int, str, float, float], Tuple[Tuple[float, float], Tuple[float, float]]]]] = {}
+    ordinary_segments = [
+        segment
+        for node_name, routed in segments_by_net.items()
+        if node_name not in _GROUND_NODE_NAMES
+        for segment in routed
+    ]
+    all_pins = {
+        (round(pin[2], 6), round(pin[3], 6))
+        for node_pins in nets.values()
+        for pin in node_pins
+    }
+    body_rects = [_record_body_rect(record) for record in records if not record["power"]]
+    stub_length = max(_POWER_STUB_LENGTH, 2.0 * grid)
+
+    for node_name in (name for name in nets if name in _GROUND_NODE_NAMES):
+        used_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+        for pin in nets[node_name]:
+            record_index, _pin_number, pin_x, pin_y = pin
+            owner_rect = _record_body_rect(records[record_index])
+            directions = [
+                (abs(pin_y - owner_rect[3]), 0, 0.0, 1.0),
+                (abs(pin_x - owner_rect[0]), 1, -1.0, 0.0),
+                (abs(pin_x - owner_rect[2]), 2, 1.0, 0.0),
+                (abs(pin_y - owner_rect[1]), 3, 0.0, -1.0),
+            ]
+            directions.sort()
+            chosen: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
+            for _edge_distance, _priority, direction_x, direction_y in directions:
+                endpoint = (pin_x + direction_x * stub_length, pin_y + direction_y * stub_length)
+                candidate = ((pin_x, pin_y), endpoint)
+                if endpoint[0] < grid or endpoint[1] < grid or endpoint[0] > page_width - grid or endpoint[1] > page_height - grid:
+                    continue
+                if any(
+                    point != (round(pin_x, 6), round(pin_y, 6)) and _point_on_segment_local(point[0], point[1], candidate)
+                    for point in all_pins
+                ):
+                    continue
+                if any(_segments_create_junction(candidate, foreign) for foreign in ordinary_segments):
+                    continue
+                if any(_segment_intersects_rect(candidate, body) for body in body_rects if body != owner_rect):
+                    continue
+                chosen = candidate
+                break
+            if chosen is None:
+                endpoint_y = min(max(grid, pin_y + stub_length), page_height - grid)
+                chosen = ((pin_x, pin_y), (pin_x, endpoint_y))
+            used_segments.append(chosen)
+            attachments.setdefault(node_name, []).append((pin, chosen))
+        ordinary_segments.extend(used_segments)
+    return attachments
 
 
 def _layout_parameters(settings: Dict[str, Any]) -> Tuple[float, int, float, float]:  # Resolve the validated layout parameters.
@@ -1118,6 +1229,121 @@ def _build_placer(records: Sequence[Dict[str, Any]], page_width: float, page_hei
         index += 1  # Advance the layout index.
     placer.create_springs_from_nets(net_pins)  # Create the star-topology net springs.
     return placer  # Return the prepared placer.
+
+
+def _compact_placement(
+    records: Sequence[Dict[str, Any]],
+    grid: float,
+    page_width: float,
+    page_height: float,
+) -> None:
+    """Center and uniformly compact a placement as far as body clearance allows."""
+
+    ordinary = [record for record in records if not record["power"]]
+    if not ordinary:
+        return
+    centroid_x = sum(float(record["x"]) for record in ordinary) / len(ordinary)
+    centroid_y = sum(float(record["y"]) for record in ordinary) / len(ordinary)
+    target_x = round((page_width / 2.0) / grid) * grid
+    target_y = round((page_height / 2.0) / grid) * grid
+    original = [(float(record["x"]), float(record["y"])) for record in ordinary]
+    clearance = max(grid, _SYMBOL_BODY_PADDING)
+
+    for scale_percent in range(35, 101, 5):
+        scale = scale_percent / 100.0
+        for record, (original_x, original_y) in zip(ordinary, original):
+            record["x"] = round((target_x + (original_x - centroid_x) * scale) / grid) * grid
+            record["y"] = round((target_y + (original_y - centroid_y) * scale) / grid) * grid
+        if _placement_is_clear(ordinary, clearance, page_width, page_height):
+            return
+
+    for record, (original_x, original_y) in zip(ordinary, original):
+        record["x"] = round((target_x + original_x - centroid_x) / grid) * grid
+        record["y"] = round((target_y + original_y - centroid_y) / grid) * grid
+
+
+def _placement_is_clear(
+    records: Sequence[Dict[str, Any]],
+    clearance: float,
+    page_width: float,
+    page_height: float,
+) -> bool:
+    """Return whether symbol bodies fit on-page with the requested clearance."""
+
+    rects = [_record_body_rect(record) for record in records]
+    for rect in rects:
+        if rect[0] < clearance or rect[1] < clearance or rect[2] > page_width - clearance or rect[3] > page_height - clearance:
+            return False
+    for first_index, first in enumerate(rects):
+        expanded = (first[0] - clearance, first[1] - clearance, first[2] + clearance, first[3] + clearance)
+        if any(_rects_overlap(expanded, second) for second in rects[first_index + 1:]):
+            return False
+    return True
+
+
+def _refine_symbol_orientations(
+    records: Sequence[Dict[str, Any]],
+    grid: float,
+    page_width: float,
+    page_height: float,
+) -> None:
+    """Choose quarter-turns that shorten pin-to-peer Manhattan distances."""
+
+    ordinary = [record for record in records if not record["power"]]
+    if len(ordinary) < 2:
+        return
+    clearance = max(grid / 2.0, 0.635)
+
+    def peer_positions(skip_record: Dict[str, Any]) -> Dict[str, List[Tuple[float, float]]]:
+        peers: Dict[str, List[Tuple[float, float]]] = {}
+        for other in ordinary:
+            if other is skip_record:
+                continue
+            for node_index, pin_number in other["pin_map"].items():
+                local_x, local_y, _pin_name = other["pins"][pin_number]
+                point = _transform_point(local_x, local_y, other["x"], other["y"], other["angle"], "")
+                peers.setdefault(other["element"].nodes[node_index], []).append(point)
+        return peers
+
+    for _pass in range(3):
+        changed = False
+        for record in ordinary:
+            peers = peer_positions(record)
+            original_angle = float(record["angle"]) % 360.0
+            other_rects = [_record_body_rect(other) for other in ordinary if other is not record]
+            best_angle = original_angle
+            best_cost = float("inf")
+            candidates = [original_angle] + [angle for angle in (0.0, 90.0, 180.0, 270.0) if angle != original_angle]
+            for candidate_angle in candidates:
+                record["angle"] = candidate_angle
+                rect = _record_body_rect(record)
+                expanded = (rect[0] - clearance, rect[1] - clearance, rect[2] + clearance, rect[3] + clearance)
+                if rect[0] < 0.0 or rect[1] < 0.0 or rect[2] > page_width or rect[3] > page_height:
+                    continue
+                if any(_rects_overlap(expanded, other_rect) for other_rect in other_rects):
+                    continue
+                cost = 0.0
+                connection_count = 0
+                for node_index, pin_number in record["pin_map"].items():
+                    node_name = record["element"].nodes[node_index]
+                    targets = peers.get(node_name, ())
+                    if not targets:
+                        continue
+                    local_x, local_y, _pin_name = record["pins"][pin_number]
+                    pin_x, pin_y = _transform_point(local_x, local_y, record["x"], record["y"], candidate_angle, "")
+                    target_x = sum(point[0] for point in targets) / len(targets)
+                    target_y = sum(point[1] for point in targets) / len(targets)
+                    cost += abs(pin_x - target_x) + abs(pin_y - target_y)
+                    connection_count += 1
+                if connection_count == 0:
+                    cost = 0.0 if candidate_angle == original_angle else 1.0
+                if cost < best_cost - 1e-9:
+                    best_cost = cost
+                    best_angle = candidate_angle
+            record["angle"] = best_angle
+            changed = changed or best_angle != original_angle
+        if not changed:
+            break
 
 
 def _separate_foreign_pin_overlaps(  # Move symbols whose pin tips coincide with pins belonging to other nets.
@@ -1945,6 +2171,8 @@ def _build_label_nodes(  # Build label nodes on every non-ground net's copper.
     for node_name in net_order:  # Walk every net in order.
         if node_name in _GROUND_NODE_NAMES:  # Ground nets carry no labels.
             continue  # Move to the next net.
+        if re.fullmatch(r"N\d+", node_name, flags=re.IGNORECASE):  # Auto-numbered internal nets need no label because their pins are physically connected.
+            continue  # Avoid clutter while preserving authored semantic net names.
         layout = (label_layout or {}).get(node_name)
         if layout is None:  # Never fall back to an unchecked midpoint that may overlap a symbol or wire.
             continue  # Move to the next net.
@@ -1966,34 +2194,6 @@ def _build_label_nodes(  # Build label nodes on every non-ground net's copper.
             ])  # Finish the label node.
         )  # Append the label node to the list.
     return label_nodes  # Return the generated label nodes.
-
-
-def _build_ground_label_nodes(
-    root_uuid: str,
-    nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
-) -> List[SExp]:
-    """Attach an electrically explicit node-0 label at every ground terminal."""
-
-    nodes: List[SExp] = []
-    counter = 0
-    seen: Set[Tuple[float, float]] = set()
-    for ground_name in _GROUND_NODE_NAMES:
-        for _record_index, _pin_number, pin_x, pin_y in nets.get(ground_name, ()):
-            point = (round(pin_x, 6), round(pin_y, 6))
-            if point in seen:
-                continue
-            seen.add(point)
-            counter += 1
-            nodes.append(SExp(name="label", children=[
-                SExp(value="0", _originally_quoted=True),
-                SExp(name="at", children=[SExp(value=pin_x), SExp(value=pin_y), SExp(value=0)]),
-                SExp(name="effects", children=[
-                    SExp(name="font", children=[SExp(name="size", children=[SExp(value=_NET_LABEL_FONT_SIZE), SExp(value=_NET_LABEL_FONT_SIZE)])]),
-                    SExp(value="hide", _originally_bare=True),
-                ]),
-                SExp(name="uuid", children=[SExp(value=_derive_uuid(root_uuid, f"ground-label/{counter}"))]),
-            ]))
-    return nodes
 
 
 def _label_point_on_segments(  # Pick a point that lies exactly on one net's copper.
