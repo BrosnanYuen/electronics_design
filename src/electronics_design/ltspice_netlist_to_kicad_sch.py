@@ -236,7 +236,8 @@ def _build_schematic_text(lines: Sequence[str], input_path: str, settings: Dict[
         if not routing_result[0]:  # Stop when routing reports a failure.
             return routing_result  # Return the routing error unchanged.
         schematic_nodes = routing_result[1]  # Read the assembled schematic body nodes.
-        text = _assemble_schematic(input_path, settings, embedded_symbols, schematic_nodes)  # Assemble the final schematic text.
+        simulation_text_nodes = _build_simulation_text_nodes(lines, _root_uuid(input_path))  # Preserve the source deck's simulator directives and node-free K statements.
+        text = _assemble_schematic(input_path, settings, embedded_symbols, schematic_nodes, simulation_text_nodes)  # Assemble the final schematic text.
         return True, text, "", 0  # Return the generated schematic text.
     finally:  # Always clean up the scratch directory.
         try:  # Attempt the recursive cleanup.
@@ -253,6 +254,35 @@ _MODEL_DIRECTIVE_PATTERN = re.compile(r"^\.model\b", re.IGNORECASE)  # Detect .m
 
 _UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")  # Recognize UTF-16 byte order marks when reading library files.
 _UTF8_BOM = b"\xef\xbb\xbf"  # Recognize the UTF-8 byte order mark.
+
+
+def _build_simulation_text_nodes(lines: Sequence[str], root_uuid: str) -> List[SExp]:  # Convert netlist simulation statements into top-level KiCad text records.
+    statements: List[str] = []  # Preserve supported statements in their source order.
+    for raw_line in lines:  # Walk the original physical netlist lines.
+        stripped_line = raw_line.strip()  # Normalize surrounding whitespace without changing the statement payload.
+        if not stripped_line:  # Ignore blank records.
+            continue  # Move to the next source line.
+        lowered = stripped_line.lower()  # Normalize only for footer filtering.
+        if stripped_line.startswith("."):  # Preserve every validated dot directive except the converter-owned footer.
+            if lowered in {".backanno", ".end"}:  # Avoid duplicating the reverse converter's terminal records.
+                continue  # Skip the footer statement.
+            statements.append(stripped_line)  # Keep the directive verbatim.
+            continue  # Move to the next source line.
+        if stripped_line[:1].upper() == "K":  # Preserve mutual-inductance statements, which have no electrical node pins.
+            statements.append(stripped_line)  # Keep the complete K device card verbatim.
+    text_nodes: List[SExp] = []  # Collect graphical simulation text records.
+    for index, statement in enumerate(statements, start=1):  # Build one independently readable text node per statement.
+        text_nodes.append(SExp(name="text", children=[  # Create a top-level text record consumed by the reverse converter.
+            SExp(value=statement, _originally_quoted=True),  # Store the exact simulation statement.
+            SExp(name="exclude_from_sim", children=[SExp(value="no")]),  # Keep the statement active during simulation.
+            SExp(name="at", children=[SExp(value=0.0), SExp(value=-5.0 * index), SExp(value=0.0)]),  # Park directives outside the routed drawing.
+            SExp(name="effects", children=[  # Give the record valid KiCad text effects.
+                SExp(name="font", children=[SExp(name="size", children=[SExp(value=1.27), SExp(value=1.27)])]),
+                SExp(name="justify", children=[SExp(value="left")]),
+            ]),
+            SExp(name="uuid", children=[SExp(value=_derive_uuid(root_uuid, f"simulation-text/{index}"))]),  # Assign a deterministic identifier.
+        ]))
+    return text_nodes  # Return every preserved simulator statement.
 
 
 def _parse_model_types(lines: Sequence[str]) -> Dict[str, str]:  # Parse inline .model lines into model-name to polarity-type mappings.
@@ -467,6 +497,10 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
             if symbol_node.find_child("power") is not None or len(pins_result[1]) == len(element.nodes):  # Power symbols carry one pin regardless of node count; others must match exactly.
                 return True, (lib_id, symbol_node), "", 0  # Return the resolved symbol.
     asy_names = list(_PREFIX_ASY_FALLBACKS.get(element.prefix, ()))  # Read the prefix ASY fallback names.
+    if element.prefix in {"D", "J", "M", "Q", "Z"}:  # Prefer a model-specific ASY when discrete-device node counts exceed generic symbols.
+        payload = element.tokens[1 + len(element.nodes):]  # Read the model and parameter tokens after the connectivity nodes.
+        if payload:  # Propose a model-specific symbol only when the netlist names one.
+            asy_names.insert(0, payload[0] + _ASY_EXTENSION)  # Search configured symbol roots for the named device first.
     if element.prefix == "X":  # Subcircuit fallbacks use the subcircuit name as the ASY basename.
         payload = element.tokens[1 + len(element.nodes):]  # Read the payload tokens after the connectivity nodes.
         subcircuit_name = payload[0] if payload else ""  # Read the first payload token as the subcircuit name.
@@ -634,7 +668,15 @@ def _build_one_record(  # Build one component record from a resolved device and 
     if not payload:  # Require a value or model payload on ordinary components.
         message = f"MISSING_COMPONENT_PAYLOAD: device '{element.tokens[0]}' has no value or model payload"  # Explain the missing payload.
         return False, None, message, element.line_number  # Return the payload error.
-    value = " ".join(payload)  # Preserve the full value payload so the reverse conversion restores it token for token.
+    value = " ".join(payload)  # Preserve the full value payload by default.
+    instance_sim_name = ""  # Store an explicit model/subcircuit name when the reverse converter needs one.
+    instance_sim_params = ""  # Store instance parameters separately from the displayed value.
+    if prefix in {"X", "D", "J", "M", "Q", "Z"}:  # Split model-bearing device payloads into KiCad simulation fields.
+        instance_sim_name = payload[0]  # The first payload token is the model or subcircuit name.
+        instance_sim_params = " ".join(payload[1:])  # Remaining tokens are true instance parameters.
+        value = instance_sim_name  # Keep the visible value free of duplicated instance parameters.
+    elif prefix == "T":  # Transmission-line defaults in the library must not override authored Zo/Td values.
+        instance_sim_params = " ".join(payload)  # Store the complete line parameter payload as an instance override.
     reference = element.tokens[0]  # Start with the netlist instance name.
     if prefix == "X":  # Map subcircuit references onto KiCad U references.
         if reference.startswith("X") and len(reference) > 1 and reference[1:2].isdigit():  # Strip the leading X for digit-suffixed names.
@@ -653,6 +695,8 @@ def _build_one_record(  # Build one component record from a resolved device and 
         "pin_map": pin_map,  # Store the node-to-pin mapping.
         "power": False,  # Mark the record as an ordinary component.
         "symbol_node": symbol_node,  # Store the resolved symbol node for body geometry.
+        "instance_sim_name": instance_sim_name,  # Preserve the explicit simulation model/subcircuit name.
+        "instance_sim_params": instance_sim_params,  # Preserve true per-instance parameters.
         "x": 0.0,  # Initialize the placement X.
         "y": 0.0,  # Initialize the placement Y.
         "angle": 0.0,  # Initialize the placement angle.
@@ -798,6 +842,9 @@ def _route_trial(
         ):
             router.unmark_cells(used_cells, net_ids[name])  # Release the rejected A* occupancy before falling back.
             segments = None  # Force an isolated route around every foreign terminal.
+        if segments is not None and not _segments_connect_terminals(segments, terminals):  # Reject partial router results that leave same-net pins isolated.
+            router.unmark_cells(used_cells, net_ids[name])  # Release the incomplete route's occupancy.
+            segments = None  # Force the complete physical trunk implementation.
         if segments is None:
             trunk_y = -_TRUNK_FALLBACK_GAP * (fallback_count + 1)
             fallback_count += 1
@@ -812,6 +859,38 @@ def _route_trial(
         polyline_keys_by_net.setdefault(name, set()).update(endpoints)
         segments_by_net[name] = segments
     return router, segments_by_net, foreign_points, fallback_count
+
+
+def _segments_connect_terminals(  # Verify that one segment set forms a single electrical component containing every terminal.
+    segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+    terminals: Sequence[Tuple[float, float]],
+) -> bool:
+    if len(terminals) <= 1:  # A singleton needs a copper stub later but has no peer terminal to connect here.
+        return True
+    if not segments:  # Multi-terminal nets cannot be connected without copper.
+        return False
+    adjacency: Dict[int, Set[int]] = {index: set() for index in range(len(segments))}  # Build segment connectivity by KiCad endpoint contacts.
+    for first_index, first in enumerate(segments):
+        for second_index in range(first_index + 1, len(segments)):
+            second = segments[second_index]
+            if _segments_create_junction(first, second):
+                adjacency[first_index].add(second_index)
+                adjacency[second_index].add(first_index)
+    terminal_segments: List[int] = []  # Map every terminal to at least one carrying segment.
+    for terminal in terminals:
+        carrying = next((index for index, segment in enumerate(segments) if _point_on_segment_local(terminal[0], terminal[1], segment)), None)
+        if carrying is None:
+            return False
+        terminal_segments.append(carrying)
+    reachable = {terminal_segments[0]}  # Traverse from the first terminal's carrying segment.
+    pending = [terminal_segments[0]]
+    while pending:
+        current = pending.pop()
+        for neighbor in adjacency[current]:
+            if neighbor not in reachable:
+                reachable.add(neighbor)
+                pending.append(neighbor)
+    return all(segment_index in reachable for segment_index in terminal_segments)  # Require every terminal in the same copper component.
 
 
 def _grid_cells_for_segments(  # Rasterize orthogonal world-space segments onto the routing grid.
@@ -885,6 +964,16 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
         passes=int(settings.get("kicad_trace_optimization_passes", _TRACE_OPTIMIZATION_PASSES)),
         protected_points_by_net={name: [(pin[2], pin[3]) for pin in pins] for name, pins in nets.items()},
     )
+    if not _routed_nets_are_isolated(segments_by_net, nets):  # Replace any partial or cross-shortened negotiated result with complete isolated physical trunks.
+        segments_by_net = _route_all_nets_with_physical_trunks(nets, net_order, grid)  # Keep every component-to-component connection as copper.
+        router = _new_routing_grid(records, nets, net_ids, grid, page_width, page_height)  # Reset occupancy to the replacement geometry's routing context.
+        foreign_points = {(round(pin[2], 6), round(pin[3], 6)) for pins in nets.values() for pin in pins}  # Rebuild the point index from real terminals.
+        for routed_segments in segments_by_net.values():  # Index all replacement segment endpoints.
+            for start_point, end_point in routed_segments:
+                foreign_points.add((round(start_point[0], 6), round(start_point[1], 6)))
+                foreign_points.add((round(end_point[0], 6), round(end_point[1], 6)))
+    for node_name in net_order:  # Give singleton and otherwise empty nets real copper before labels and power symbols are attached.
+        _ensure_net_copper(node_name, nets, segments_by_net, router, foreign_points, grid, page_width, page_height)
     embedded_result = _resolve_ground_symbol(settings)  # Resolve the power:GND symbol definition for embedding.
     if not embedded_result[0]:  # Stop when the ground symbol cannot be resolved.
         return embedded_result  # Return the ground symbol error.
@@ -936,9 +1025,62 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
     label_layout = _layout_visible_text(all_records, net_order, segments_by_net, lead_stubs_by_net, grid, page_width, page_height)  # Place visible fields and net labels away from symbols, wires, and other text.
     wire_nodes = _build_wire_nodes(root_uuid, net_order, segments_by_net, lead_stubs_by_net)  # Build the wire nodes for every routed segment and pin stub.
     label_nodes = _build_label_nodes(root_uuid, net_order, segments_by_net, label_layout)  # Build collision-free label nodes on non-ground nets.
+    label_nodes.extend(_build_ground_label_nodes(root_uuid, nets))  # Mark every physically wired ground terminal so disconnected ground islands remain node 0.
     symbol_nodes = _build_symbol_instance_nodes(all_records, root_uuid)  # Build the symbol instance nodes.
     embedded_extra = {ground_lib_id: ground_symbol_node}  # Collect the ground symbol for embedding.
     return True, (wire_nodes, label_nodes, symbol_nodes, embedded_extra), "", 0  # Return the assembled schematic body.
+
+
+def _routed_nets_are_isolated(
+    segments_by_net: Mapping[str, Sequence[Tuple[Tuple[float, float], Tuple[float, float]]]],
+    nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
+) -> bool:
+    """Require complete per-net copper with no KiCad endpoint junctions between nets."""
+
+    net_names = list(nets)
+    for node_name, pins in nets.items():
+        terminals = [(pin[2], pin[3]) for pin in pins]
+        if len(terminals) > 1 and not _segments_connect_terminals(segments_by_net.get(node_name, ()), terminals):
+            return False
+    for first_index, first_name in enumerate(net_names):
+        first_segments = segments_by_net.get(first_name, ())
+        for second_name in net_names[first_index + 1:]:
+            second_segments = segments_by_net.get(second_name, ())
+            if any(_segments_create_junction(first, second) for first in first_segments for second in second_segments):
+                return False
+            first_terminals = [(pin[2], pin[3]) for pin in nets[first_name]]
+            second_terminals = [(pin[2], pin[3]) for pin in nets[second_name]]
+            if any(_point_on_segment_local(point[0], point[1], segment) for point in first_terminals for segment in second_segments):
+                return False
+            if any(_point_on_segment_local(point[0], point[1], segment) for point in second_terminals for segment in first_segments):
+                return False
+    return True
+
+
+def _route_all_nets_with_physical_trunks(
+    nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
+    net_order: Sequence[str],
+    grid: float,
+) -> Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]]:
+    """Physically route every multi-pin net on its own isolated trunk."""
+
+    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]] = {}
+    foreign_points = {(round(pin[2], 6), round(pin[3], 6)) for pins in nets.values() for pin in pins}
+    trunk_index = 0
+    for node_name in net_order:
+        pins = list(nets.get(node_name, ()))
+        if len(pins) <= 1:
+            segments_by_net[node_name] = []
+            continue
+        foreign_segments = [segment for routed in segments_by_net.values() for segment in routed]
+        trunk_index += 1
+        trunk_y = -_TRUNK_FALLBACK_GAP * trunk_index
+        segments = _route_net_trunk_fallback(pins, grid, foreign_points, trunk_y, foreign_segments)
+        segments_by_net[node_name] = segments
+        for start_point, end_point in segments:
+            foreign_points.add((round(start_point[0], 6), round(start_point[1], 6)))
+            foreign_points.add((round(end_point[0], 6), round(end_point[1], 6)))
+    return segments_by_net
 
 
 def _layout_parameters(settings: Dict[str, Any]) -> Tuple[float, int, float, float]:  # Resolve the validated layout parameters.
@@ -1707,19 +1849,6 @@ def _label_text_candidates(
     return candidates
 
 
-def _stub_is_clear(
-    stub: Tuple[Tuple[float, float], Tuple[float, float]],
-    body_rects: Sequence[Tuple[float, float, float, float]],
-    foreign_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
-    occupied_text: Sequence[Tuple[float, float, float, float]],
-) -> bool:
-    if any(_segment_intersects_rect(stub, _expand_rect(body, _TEXT_CLEARANCE)) for body in body_rects):
-        return False
-    if any(_segments_create_junction(stub, segment) for segment in foreign_segments):
-        return False
-    return not any(_segment_intersects_rect(stub, _expand_rect(rect, _TEXT_CLEARANCE)) for rect in occupied_text)
-
-
 def _layout_visible_text(
     records: Sequence[Dict[str, Any]],
     net_order: Sequence[str],
@@ -1731,7 +1860,6 @@ def _layout_visible_text(
 ) -> Dict[str, Tuple[Tuple[float, float], List[str], bool]]:
     """Place every visible field and label without graphical overlap."""
 
-    body_rects = [_record_body_rect(record) for record in records]
     text_body_rects = [_record_body_rect(record, "text_bounds") for record in records]
     wire_segments_by_net = {
         name: list(lead_stubs_by_net.get(name, ())) + list(segments_by_net.get(name, ()))
@@ -1766,60 +1894,44 @@ def _layout_visible_text(
             occupied_text.append(chosen[3])
 
     label_layout: Dict[str, Tuple[Tuple[float, float], List[str], bool]] = {}
-    content_bottom = max(
-        [rect[3] for rect in body_rects]
-        + [max(segment[0][1], segment[1][1]) for segment in wire_segments]
-        + [page_height / 2.0]
-    )
-    parking_lane = 0
     for node_name in net_order:
         if node_name in _GROUND_NODE_NAMES or not wire_segments_by_net.get(node_name):
             continue
         width = _text_width(node_name)
         chosen_label = None
+        foreign_label_segments = [segment for other_name, segments in wire_segments_by_net.items() if other_name != node_name for segment in segments]
         for anchor, justification, rect in _label_text_candidates(wire_segments_by_net[node_name], width, _TEXT_BOUND_HEIGHT):
+            if any(_point_on_segment_local(anchor[0], anchor[1], segment) for segment in foreign_label_segments):
+                continue
             if _text_rect_is_clear(rect, text_body_rects, wire_segments, occupied_text):
                 chosen_label = (anchor, justification, rect)
                 break
         if chosen_label is None:
-            extension_points = sorted({
-                (
-                    segment[0][0] + (segment[1][0] - segment[0][0]) * fraction,
-                    segment[0][1] + (segment[1][1] - segment[0][1]) * fraction,
-                )
-                for segment in wire_segments_by_net[node_name]
-                for fraction in (0.25, 0.5, 0.75, 0.0, 1.0)
-            })
-            foreign_segments = [segment for name, segments in wire_segments_by_net.items() if name != node_name for segment in segments]
-            for lane_offset in range(1, _TEXT_SEARCH_RINGS + 1):
-                target_y = content_bottom + (parking_lane + lane_offset) * (_TEXT_BOUND_HEIGHT + 2 * _TEXT_CLEARANCE)
-                for start in extension_points:
-                    end = (start[0], target_y)
-                    stub = (start, end)
-                    if not _stub_is_clear(stub, text_body_rects, foreign_segments, occupied_text):
-                        continue
-                    for anchor, justification, rect in _label_text_candidates([stub], width, _TEXT_BOUND_HEIGHT):
-                        if anchor != end:
-                            continue
-                        if _text_rect_is_clear(rect, text_body_rects, wire_segments + [stub], occupied_text):
-                            segments_by_net[node_name].append(stub)
-                            wire_segments_by_net[node_name].append(stub)
-                            wire_segments.append(stub)
-                            chosen_label = (anchor, justification, rect)
-                            parking_lane += lane_offset
-                            break
-                    if chosen_label is not None:
-                        break
-                if chosen_label is not None:
-                    break
-        if chosen_label is not None:
-            label_layout[node_name] = (chosen_label[0], chosen_label[1], False)
-            occupied_text.append(chosen_label[2])
-        else:
-            hidden_point = _label_point_on_segments(wire_segments_by_net[node_name])
+            hidden_point = _exclusive_label_point(wire_segments_by_net[node_name], foreign_label_segments)
             if hidden_point is not None:
                 label_layout[node_name] = (hidden_point, [], True)
+            continue
+        label_layout[node_name] = (chosen_label[0], chosen_label[1], False)
+        occupied_text.append(chosen_label[2])
     return label_layout
+
+
+def _exclusive_label_point(
+    own_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+    foreign_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+) -> Optional[Tuple[float, float]]:
+    """Choose a point on one net's copper that is not also a foreign-net crossing."""
+
+    ordered = sorted(own_segments, key=lambda segment: -math.hypot(segment[1][0] - segment[0][0], segment[1][1] - segment[0][1]))
+    for segment in ordered:
+        for fraction in (0.5, 0.25, 0.75, 0.125, 0.875, 0.0, 1.0):
+            point = (
+                segment[0][0] + (segment[1][0] - segment[0][0]) * fraction,
+                segment[0][1] + (segment[1][1] - segment[0][1]) * fraction,
+            )
+            if not any(_point_on_segment_local(point[0], point[1], foreign) for foreign in foreign_segments):
+                return point
+    return None
 
 
 def _build_label_nodes(  # Build label nodes on every non-ground net's copper.
@@ -1854,6 +1966,34 @@ def _build_label_nodes(  # Build label nodes on every non-ground net's copper.
             ])  # Finish the label node.
         )  # Append the label node to the list.
     return label_nodes  # Return the generated label nodes.
+
+
+def _build_ground_label_nodes(
+    root_uuid: str,
+    nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
+) -> List[SExp]:
+    """Attach an electrically explicit node-0 label at every ground terminal."""
+
+    nodes: List[SExp] = []
+    counter = 0
+    seen: Set[Tuple[float, float]] = set()
+    for ground_name in _GROUND_NODE_NAMES:
+        for _record_index, _pin_number, pin_x, pin_y in nets.get(ground_name, ()):
+            point = (round(pin_x, 6), round(pin_y, 6))
+            if point in seen:
+                continue
+            seen.add(point)
+            counter += 1
+            nodes.append(SExp(name="label", children=[
+                SExp(value="0", _originally_quoted=True),
+                SExp(name="at", children=[SExp(value=pin_x), SExp(value=pin_y), SExp(value=0)]),
+                SExp(name="effects", children=[
+                    SExp(name="font", children=[SExp(name="size", children=[SExp(value=_NET_LABEL_FONT_SIZE), SExp(value=_NET_LABEL_FONT_SIZE)])]),
+                    SExp(value="hide", _originally_bare=True),
+                ]),
+                SExp(name="uuid", children=[SExp(value=_derive_uuid(root_uuid, f"ground-label/{counter}"))]),
+            ]))
+    return nodes
 
 
 def _label_point_on_segments(  # Pick a point that lies exactly on one net's copper.
@@ -1936,6 +2076,10 @@ def _build_instance_properties(record: Dict[str, Any]) -> List[SExp]:  # Build t
     properties.append(  # Append the Description property.
         _property_node(record["reference"], "Description", description_value, record, visible=False)  # Description property hidden.
     )  # Append the Description property to the list.
+    if record.get("instance_sim_name"):  # Preserve an explicit model or subcircuit name independently of the display value.
+        properties.append(_property_node(record["reference"], "Sim.Name", str(record["instance_sim_name"]), record, visible=False))
+    if record.get("instance_sim_params"):  # Preserve authored per-instance parameters over library defaults.
+        properties.append(_property_node(record["reference"], "Sim.Params", str(record["instance_sim_params"]), record, visible=False))
     return properties  # Return the generated property nodes.
 
 
@@ -1969,6 +2113,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
     settings: Dict[str, Any],  # Accept the normalized settings.
     embedded_symbols: Dict[str, SExp],  # Accept the embedded symbol definitions.
     body_parts: Tuple[List[SExp], List[SExp], List[SExp], Dict[str, SExp]],  # Accept the assembled body nodes.
+    simulation_text_nodes: Sequence[SExp],  # Accept source simulator directives and node-free device cards.
 ) -> str:  # Return the final schematic text.
     root_uuid = _root_uuid(input_path)  # Derive the deterministic schematic root UUID.
     version = settings.get("kicad_sch_version") or datetime.date.today().strftime("%Y%m%d")  # Resolve the format version.
@@ -1988,6 +2133,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
         SExp(name="lib_symbols", children=lib_symbol_nodes),  # Embedded symbol definitions.
     ]  # Finish the header children.
     root_children.extend(wire_nodes)  # Append the routed wires.
+    root_children.extend(simulation_text_nodes)  # Append preserved simulator statements as active schematic text.
     root_children.extend(label_nodes)  # Append the net labels.
     root_children.extend(symbol_nodes)  # Append the symbol instances.
     root_children.append(  # Append the closing sheet instance section.

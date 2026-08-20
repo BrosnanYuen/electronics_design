@@ -1,0 +1,24 @@
+Version 4.1
+SymbolType CELL
+RECTANGLE Normal -32 -40 64 40
+LINE Normal 32 -40 32 40
+WINDOW 0 72 -16 Left 2
+WINDOW 3 72 16 Left 2
+SYMATTR Prefix M
+SYMATTR Value IRFP240
+SYMATTR Description Five-terminal thermal NMOS
+PIN 32 -64 TOP 8
+PINATTR PinName D
+PINATTR SpiceOrder 1
+PIN -64 0 LEFT 8
+PINATTR PinName G
+PINATTR SpiceOrder 2
+PIN 32 64 BOTTOM 8
+PINATTR PinName S
+PINATTR SpiceOrder 3
+PIN 96 -80 RIGHT 8
+PINATTR PinName Tj
+PINATTR SpiceOrder 4
+PIN 96 -48 RIGHT 8
+PINATTR PinName Tcase
+PINATTR SpiceOrder 5

@@ -10,6 +10,7 @@ import unittest  # Use the standard library test framework.
 from electronics_design import is_valid_kicad_sch_file  # Import the KiCad schematic whole-file validator.
 from electronics_design import is_valid_ltspice_netlist_file  # Import the LTspice netlist whole-file validator.
 from electronics_design import kicad_sch_to_ltspice_netlist  # Import the KiCad schematic to LTspice netlist conversion API.
+from electronics_design import ltspice_netlist_footer_cmp  # Import the directive and model-footer comparison helper.
 from electronics_design import ltspice_netlist_structure_cmp  # Import the LTspice netlist structural comparison helper.
 from electronics_design import ltspice_netlist_to_kicad_sch  # Import the netlist-to-KiCad-schematic conversion API.
 from electronics_design.kicad_sexp_parser import parse_string  # Inspect generated annotation visibility and labels.
@@ -109,6 +110,28 @@ class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-sc
                         structure_matches,  # Check the structural comparison result.
                         msg=f"{round_trip_path.name} must match {net_path.name} structurally.",  # Report the structural mismatch.
                     )  # Finish the structural assertion.
+
+    def test_known_bug_decks_preserve_structure_and_footer(self) -> None:  # Prevent regressions in every conversion-loss category recorded in BUGS.md.
+        representative_stems = (  # Cover parameters/directives, singleton labels, ground, transmission lines, and thermal MOSFET symbols.
+            "Class-D",  # Exercise subcircuit parameters, options, and library directives.
+            "741_subckt",  # Exercise singleton net labels and included model libraries.
+            "ICL8038subckt",  # Exercise many ground connections on a large schematic.
+            "ibis2",  # Exercise four-node transmission lines and their true Td parameter.
+            "royer1",  # Exercise preservation of unresolved model includes.
+            "F5TurboV2thermal-short",  # Exercise model-specific five-pin thermal MOSFET ASY lookup.
+        )  # Finish the representative regression corpus.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Isolate all generated round-trip artifacts.
+            for stem in representative_stems:  # Convert and compare every representative deck.
+                with self.subTest(netlist=stem):  # Report failures by source deck.
+                    net_path = _NETLIST_DIRECTORY / f"{stem}.net"  # Resolve the authoritative source netlist.
+                    schematic_path = Path(temporary_directory) / f"{stem}.kicad_sch"  # Derive the generated schematic path.
+                    round_trip_path = Path(temporary_directory) / f"{stem}.roundtrip.net"  # Derive the reverse-converted netlist path.
+                    forward_result = ltspice_netlist_to_kicad_sch(str(net_path), str(schematic_path), _CONVERT_SETTINGS)  # Generate the KiCad schematic.
+                    self.assertEqual(forward_result, (True, "OK", 0), msg=f"{stem} forward conversion failed: {forward_result}")  # Require successful forward conversion.
+                    reverse_result = kicad_sch_to_ltspice_netlist(str(schematic_path), str(round_trip_path), _CONVERT_SETTINGS)  # Convert the generated schematic back.
+                    self.assertEqual(reverse_result, (True, "OK", 0), msg=f"{stem} reverse conversion failed: {reverse_result}")  # Require successful reverse conversion.
+                    self.assertTrue(ltspice_netlist_structure_cmp(str(net_path), str(round_trip_path)), msg=f"{stem} lost or rewired an element or net.")  # Require identical circuit structure.
+                    self.assertTrue(ltspice_netlist_footer_cmp(str(net_path), str(round_trip_path)), msg=f"{stem} lost a directive, include, model, or instance parameter.")  # Require identical simulation metadata.
 
     def test_missing_input_returns_invalid_netlist_file(self) -> None:  # Verify the missing input error contract.
         with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the call.
