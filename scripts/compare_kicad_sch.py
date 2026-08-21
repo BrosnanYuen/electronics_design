@@ -142,6 +142,7 @@ class Schematic:
         self.symbols: List[SymbolRecord] = []
         self.wires: List[Tuple[float, float, float, float]] = []
         self.labels: List[Tuple[float, float, str]] = []
+        self.no_connects: List[Tuple[float, float]] = []
         self.texts: List[str] = []
         self.junctions: List[Tuple[float, float]] = []
         self.nets: Dict[str, Set[Tuple[str, str]]] = {}
@@ -201,6 +202,10 @@ class Schematic:
                 if _point_on_segment(first[2], first[3], second):
                     union_find.union(_point_key(first[2], first[3]), _point_key(second[0], second[1]))
         self.labels = self._collect_labels(root)
+        for no_connect_node in root.find_children("no_connect"):
+            values = _atom_values(no_connect_node.find_child("at"))
+            if len(values) >= 2:
+                self.no_connects.append((float(values[0]), float(values[1])))
         net_names: Dict[str, str] = {}
         for label_x, label_y, label_text in self.labels:
             key = self._attach_point(union_find, segments, label_x, label_y)
@@ -522,6 +527,42 @@ def _report_wire_length_scores(first: Schematic, second: Schematic, relative_tol
     return score, lines
 
 
+def _count_unconnected_wires(schematic: Schematic) -> Tuple[int, int]:  # Count wire segments with a free endpoint plus the total free endpoints.
+    connection_points: List[Tuple[float, float]] = []  # Collect symbol pins, NC markers, and net labels.
+    for record in schematic.symbols:  # Walk every symbol instance.
+        for pin_x, pin_y in record.pins.values():  # Walk the absolute pin positions.
+            connection_points.append((pin_x, pin_y))  # Register the pin position.
+    for no_x, no_y in schematic.no_connects:  # Walk the no-connect markers.
+        connection_points.append((no_x, no_y))  # Register the marker position.
+    for label_x, label_y, _label_text in schematic.labels:  # Walk the net labels.
+        connection_points.append((label_x, label_y))  # Register the label position.
+    wires = schematic.wires  # Read the wire segments.
+    unconnected = 0  # Count wires with at least one free endpoint.
+    free_endpoints = 0  # Count the free endpoints themselves.
+    for index, segment in enumerate(wires):  # Walk every wire segment.
+        endpoints = ((segment[0], segment[1]), (segment[2], segment[3]))  # Read the two endpoints.
+        free_ends = 0  # Count the free endpoints of this wire.
+        for end_x, end_y in endpoints:  # Walk the endpoints.
+            connected = False  # Assume the endpoint is free.
+            for other_index, other in enumerate(wires):  # Walk the other wire segments.
+                if other_index == index:  # Skip the wire itself.
+                    continue  # Move to the next segment.
+                if _point_on_segment(end_x, end_y, other):  # The endpoint touches another wire.
+                    connected = True  # The endpoint is connected.
+                    break  # Stop searching for this endpoint.
+            if not connected:  # No wire contact at this endpoint.
+                for point_x, point_y in connection_points:  # Walk the symbol/NC/label positions.
+                    if abs(end_x - point_x) <= _POINT_TOLERANCE and abs(end_y - point_y) <= _POINT_TOLERANCE:  # The endpoint coincides with a connection point.
+                        connected = True  # The endpoint is connected.
+                        break  # Stop searching for this endpoint.
+            if not connected:  # The endpoint contacts nothing.
+                free_ends += 1  # Count the free endpoint.
+        if free_ends:  # At least one endpoint of this wire is free.
+            unconnected += 1  # Count the wire as unconnected.
+        free_endpoints += free_ends  # Accumulate the free endpoints.
+    return unconnected, free_endpoints  # Return the wire and endpoint counts.
+
+
 def _report_symbol_layout(schematic_a: Schematic, schematic_b: Schematic, matched: List[Tuple[SymbolRecord, SymbolRecord]]) -> Tuple[bool, List[str]]:
     lines: List[str] = []
     problems: List[str] = []
@@ -724,6 +765,11 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
     lines.append(f"  Wires: {wire_count_a} segments/{first.total_wire_length:.2f}mm in A, {wire_count_b} segments/{second.total_wire_length:.2f}mm in B")
     if abs(wire_count_a - wire_count_b) > tolerance:
         differences.append(f"wire segment count differs ({wire_count_a} vs {wire_count_b})")
+    unconnected_a, free_ends_a = _count_unconnected_wires(first)
+    unconnected_b, free_ends_b = _count_unconnected_wires(second)
+    lines.append(f"  Unconnected wires: {unconnected_a} in A, {unconnected_b} in B ({free_ends_a}/{free_ends_b} free endpoints that contact no wire, symbol pin, NC marker, or net label)")
+    if unconnected_a != unconnected_b:
+        differences.append(f"unconnected wire count differs ({unconnected_a} vs {unconnected_b})")
     label_count_a = len(first.labels)
     label_count_b = len(second.labels)
     text_count_a = len(first.texts)
