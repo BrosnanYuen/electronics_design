@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Postpone annotation evaluation for forward references.
 
+from collections import Counter  # Count color-class and signature frequencies for canonical graph ordering.
 from dataclasses import dataclass  # Use a small record type for parsed element lines.
 from html import escape  # Escape text safely when emitting SVG output.
 from itertools import combinations  # Build component-to-component projected edges for plotting.
@@ -347,8 +348,8 @@ def ltspice_netlist_structure_cmp(filepath1: str, filepath2: str) -> bool:  # Co
     second_parse_result = _load_parsed_elements(filepath2)  # Parse the second input file into device elements after format validation.
     if not second_parse_result[0]:  # Stop when internal parsing unexpectedly fails after validation.
         return False  # Return False because the second graph cannot be built reliably.
-    first_graph = _build_networkx_graph(first_parse_result[1], include_visual_labels=False, include_zero_node_elements=False)  # Build the normalized comparison graph for the first file without node-free statements.
-    second_graph = _build_networkx_graph(second_parse_result[1], include_visual_labels=False, include_zero_node_elements=False)  # Build the normalized comparison graph for the second file without node-free statements.
+    first_graph = _build_canonical_comparison_graph(first_parse_result[1])  # Build the normalized comparison graph for the first file with a canonical hash-independent node order.
+    second_graph = _build_canonical_comparison_graph(second_parse_result[1])  # Build the normalized comparison graph for the second file with the same canonical node order.
     matcher = isomorphism.MultiGraphMatcher(  # Create a multigraph isomorphism matcher for the two normalized graphs.
         first_graph,  # Provide the normalized graph built from the first netlist.
         second_graph,  # Provide the normalized graph built from the second netlist.
@@ -821,6 +822,97 @@ def _build_networkx_graph(elements: Sequence[ParsedElement], include_visual_labe
 
 def _component_node_id(element: ParsedElement) -> str:  # Build a unique graph node id for one parsed component.
     return f"component:{element.line_number}:{element.tokens[0]}"  # Combine line number and instance token into a stable unique id.
+
+
+def _build_canonical_comparison_graph(elements: Sequence[ParsedElement]) -> nx.MultiGraph:  # Build a comparison multigraph whose node ids follow a canonical hash-independent order.
+    components: List[Tuple[ParsedElement, Tuple[str, Tuple[str, ...]]]] = []  # Collect parsed elements together with their structural signatures.
+    net_degrees: Dict[str, int] = {}  # Count how many device ports attach to each net name.
+    for element in elements:  # Walk every parsed device element in source order.
+        if not element.nodes:  # Skip node-free statements such as K couplings and FRA analyzers.
+            continue  # Move to the next element because node-free statements cannot contribute to the topology.
+        components.append((element, _component_signature(element)))  # Record the element with its instance-name-free signature.
+        for node_name in element.nodes:  # Walk every connectivity node attached to the element.
+            net_degrees[node_name] = net_degrees.get(node_name, 0) + 1  # Accumulate the port count for the net.
+    net_classes = {name: _comparison_net_class(name) for name in net_degrees}  # Derive the normalized net class for every net name.
+    color_ids: Dict[object, int] = {}  # Intern every refinement color to a compact integer id.
+    def intern_color(color_value: object) -> int:  # Return the compact id for one color value.
+        if color_value not in color_ids:  # Check whether the color has been seen before.
+            color_ids[color_value] = len(color_ids)  # Assign the next unused integer id to a new color.
+        return color_ids[color_value]  # Return the interned id.
+    component_colors: List[int] = [intern_color(("component", signature)) for _element, signature in components]  # Initialize the component refinement colors from their signatures.
+    net_colors: Dict[str, int] = {name: intern_color(("net", net_classes[name])) for name in net_degrees}  # Initialize the net refinement colors from their classes.
+    previous_color_multiset: Optional[Tuple[int, ...]] = None  # Track the previous round's color multiset for the convergence check.
+    for _iteration in range(2 * (len(components) + len(net_degrees)) + 1):  # Refine colors until the partition stabilizes (bounded by the node count).
+        refined_component_colors = []  # Collect the next-round component colors.
+        for element_index, (element, _signature) in enumerate(components):  # Walk every component in its fixed source index order.
+            neighbor_entries = []  # Collect the port-labeled neighbor colors of the component.
+            for port, node_name in enumerate(element.nodes):  # Walk every port of the component in pin order.
+                neighbor_entries.append((port, net_colors[node_name]))  # Record the port position together with the neighbor net color id.
+            refined_component_colors.append(intern_color((component_colors[element_index], tuple(sorted(neighbor_entries)))))  # Intern the combined previous-color-plus-neighborhood signature.
+        refined_net_colors: Dict[str, int] = {}  # Collect the next-round net colors.
+        for node_name in net_colors:  # Walk every net in a stable insertion order.
+            neighbor_entries = []  # Collect the port-labeled neighbor colors of the net.
+            for element_index, (element, _signature) in enumerate(components):  # Walk every component to find its ports on this net.
+                for port, port_node in enumerate(element.nodes):  # Walk every port of the component in pin order.
+                    if port_node == node_name:  # Keep only the ports attached to the current net.
+                        neighbor_entries.append((port, component_colors[element_index]))  # Record the port position together with the neighbor component color id.
+            refined_net_colors[node_name] = intern_color((net_colors[node_name], tuple(sorted(neighbor_entries))))  # Intern the combined previous-color-plus-neighborhood signature.
+        component_colors = refined_component_colors  # Publish the refined component colors for the next round.
+        net_colors = refined_net_colors  # Publish the refined net colors for the next round.
+        color_multiset = tuple(sorted(component_colors)) + tuple(sorted(net_colors.values()))  # Build the aggregate color multiset for the convergence check.
+        if color_multiset == previous_color_multiset:  # Stop once a full refinement round changes no color.
+            break  # The partition has stabilized at its fixpoint.
+        previous_color_multiset = color_multiset  # Remember this round's colors for the next comparison.
+    all_colors = list(component_colors) + list(net_colors.values())  # Combine every final color id for frequency counting.
+    color_frequencies = Counter(all_colors)  # Count how many nodes share each final refinement color.
+    ordered_components = sorted(  # Order components by discrimination power so the matcher anchors on rare nodes first.
+        range(len(components)),  # Sort by component index.
+        key=lambda index: (  # Build the canonical sorting key for one component.
+            color_frequencies[component_colors[index]],  # Rarest refined colors are anchored first.
+            -len(components[index][0].nodes),  # Higher-degree components come before lower-degree ones.
+            component_colors[index],  # The final color id itself is the primary structural tie-break.
+            components[index][1],  # The raw signature provides a deterministic secondary tie-break.
+            components[index][0].line_number,  # The source line number makes the order fully deterministic.
+        ),  # Finish the component key.
+    )  # Finish the component ordering.
+    ordered_nets = sorted(  # Order nets by the same discrimination principle.
+        net_degrees,  # Sort by net name with an explicit key.
+        key=lambda name: (  # Build the canonical sorting key for one net.
+            color_frequencies[net_colors[name]],  # Rarest refined colors are anchored first.
+            -net_degrees[name],  # Higher-degree nets come before lower-degree ones.
+            net_colors[name],  # The final color id itself is the primary structural tie-break.
+            net_classes[name],  # The raw class provides a deterministic secondary tie-break.
+            name,  # The net name makes the order fully deterministic.
+        ),  # Finish the net key.
+    )  # Finish the net ordering.
+    graph = nx.MultiGraph()  # Create the multigraph that will back the structural comparison.
+    net_ids = {  # Map each canonical net name to its disjoint integer node id.
+        name: len(ordered_components) + net_index  # Keep component and net id ranges disjoint.
+        for net_index, name in enumerate(ordered_nets)  # Walk the nets in the canonical order.
+    }  # Finish the net id mapping.
+    for name in ordered_nets:  # Insert every net node in the canonical order.
+        graph.add_node(  # Add one canonical net node to the graph.
+            net_ids[name],  # Provide the derived integer node id for the net.
+            kind="net",  # Mark this node as a net node.
+            net_class=net_classes[name],  # Preserve only the structural net class needed for comparison.
+        )  # Finish the net node.
+    for index in ordered_components:  # Insert every component node in the canonical order.
+        element, signature = components[index]  # Read the parsed element and its structural signature.
+        graph.add_node(  # Add one canonical component node to the graph.
+            index,  # Use the canonical component index as the integer node id.
+            kind="component",  # Mark this node as a component node.
+            prefix=element.prefix,  # Preserve the device prefix for comparison.
+            signature=signature,  # Store the instance-name-free structural signature for comparison.
+        )  # Finish the component node.
+    for index in ordered_components:  # Insert every component edge in the canonical order.
+        element, _signature = components[index]  # Read the parsed element for its connectivity nodes.
+        for port, node_name in enumerate(element.nodes):  # Walk every connectivity node attached to the component in pin order.
+            graph.add_edge(  # Connect the component pin to its net node with the port index preserved.
+                index,  # Provide the canonical component node id.
+                net_ids[node_name],  # Provide the canonical net node id.
+                port=port,  # Preserve the device-port position across the comparison.
+            )  # Finish the component-to-net edge.
+    return graph  # Return the completed canonical multigraph.
 
 
 def _net_node_id(node_name: str) -> str:  # Build a stable graph node id for one electrical net name.

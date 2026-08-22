@@ -21,10 +21,15 @@ Exit status is 0 when every compared pair matches, otherwise 1.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import math
+import os
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
+
+os.environ.setdefault("PYTHONHASHSEED", "0")  # Fix the hash seed so spawned workers run the graph-isomorphism search deterministically.
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[1]
 _SOURCE_DIRECTORY = _ROOT_DIRECTORY / "src"
@@ -113,8 +118,154 @@ def _transform_point(local_x: float, local_y: float, origin_x: float, origin_y: 
     return origin_x + rotated_x, origin_y - rotated_y
 
 
+def _symbol_body_bounds(symbol_node: SExp) -> Optional[Tuple[float, float, float, float]]:
+    """Measure the local bounding box of a library symbol's drawn graphics."""
+    xs: List[float] = []
+    ys: List[float] = []
+
+    def collect(node: SExp) -> None:
+        for child in node.children:
+            if child.name in ("polyline", "rectangle", "bezier"):
+                for xy_node in child.find_children("xy"):
+                    values = _atom_values(xy_node)
+                    if len(values) >= 2:
+                        xs.append(float(values[0]))
+                        ys.append(float(values[1]))
+            elif child.name == "circle":
+                center_values = _atom_values(child.find_child("center"))
+                radius_values = _atom_values(child.find_child("radius"))
+                if len(center_values) >= 2 and radius_values:
+                    radius = float(radius_values[0])
+                    xs.extend((float(center_values[0]) - radius, float(center_values[0]) + radius))
+                    ys.extend((float(center_values[1]) - radius, float(center_values[1]) + radius))
+            elif child.name == "arc":
+                for key in ("start", "mid", "end"):
+                    point_values = _atom_values(child.find_child(key))
+                    if len(point_values) >= 2:
+                        xs.append(float(point_values[0]))
+                        ys.append(float(point_values[1]))
+            elif child.name == "symbol":
+                collect(child)
+
+    collect(symbol_node)
+    if not xs:
+        return None
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _text_font_size(node: SExp) -> float:
+    """Read the font height of a text node's effects section."""
+    effects = node.find_child("effects")
+    if effects is None:
+        return 1.27
+    font = effects.find_child("font")
+    if font is None:
+        return 1.27
+    size_values = _atom_values(font.find_child("size"))
+    if not size_values:
+        return 1.27
+    try:
+        return float(size_values[0])
+    except (TypeError, ValueError):
+        return 1.27
+
+
+def _text_is_visible(node: SExp) -> bool:
+    """Decide whether a text node is actually rendered at a readable size."""
+    effects = node.find_child("effects")
+    if effects is not None and any(child.is_atom and str(child.value) == "hide" for child in effects.children):
+        return False
+    return _text_font_size(node) >= 0.5
+
+
+def _text_rect(x: float, y: float, text: str, font_size: float, angle: float = 0.0) -> Tuple[float, float, float, float]:
+    """Approximate the bounding box of one text string centered on its anchor."""
+    character_count = len(text)
+    width = font_size * (0.68 * character_count + 0.015 * max(0, character_count - 1))
+    height = font_size * 1.27
+    normalized = angle % 360.0
+    if abs(normalized - 90.0) < 1e-6 or abs(normalized - 270.0) < 1e-6:
+        width, height = height, width
+    return x - width / 2.0, y - height / 2.0, x + width / 2.0, y + height / 2.0
+
+
+def _collect_instance_text_rects(instance_node: SExp, record: SymbolRecord) -> List[Tuple[float, float, float, float]]:
+    """Collect the world-space text boxes of one symbol instance's visible fields."""
+    rects: List[Tuple[float, float, float, float]] = []
+    for property_node in instance_node.find_children("property"):
+        values = _atom_values(property_node)
+        if len(values) < 2:
+            continue
+        at_values = _atom_values(property_node.find_child("at"))
+        if len(at_values) < 2:
+            continue
+        if not _text_is_visible(property_node):
+            continue
+        anchor_x, anchor_y = _transform_point(float(at_values[0]), float(at_values[1]), record.x, record.y, record.angle, record.mirror)
+        rects.append(_text_rect(anchor_x, anchor_y, str(values[1]), _text_font_size(property_node), float(at_values[2]) if len(at_values) > 2 else 0.0))
+    return rects
+
+
+def _segment_clips_into_rect(segment: Tuple[float, float, float, float], rect: Tuple[float, float, float, float]) -> bool:
+    """Return whether a wire segment passes strictly through a rectangle interior."""
+    rect_x0, rect_y0, rect_x1, rect_y1 = rect
+    start_x, start_y, end_x, end_y = segment
+    delta_x = end_x - start_x
+    delta_y = end_y - start_y
+    p = (-delta_x, delta_x, -delta_y, delta_y)
+    q = (start_x - rect_x0, rect_x1 - start_x, start_y - rect_y0, rect_y1 - start_y)
+    u1, u2 = 0.0, 1.0
+    for pi, qi in zip(p, q):
+        if abs(pi) < 1e-12:
+            if qi < 0:
+                return False
+        else:
+            ratio = qi / pi
+            if pi < 0:
+                if ratio > u2:
+                    return False
+                if ratio > u1:
+                    u1 = ratio
+            else:
+                if ratio < u1:
+                    return False
+                if ratio < u2:
+                    u2 = ratio
+    if u2 - u1 < 1e-9:  # A single boundary touch is a legal pin contact, not an intersection.
+        return False
+    midpoint_x = start_x + (u1 + u2) / 2.0 * delta_x
+    midpoint_y = start_y + (u1 + u2) / 2.0 * delta_y
+    return rect_x0 < midpoint_x < rect_x1 and rect_y0 < midpoint_y < rect_y1
+
+
+def _rects_strict_overlap(first: Tuple[float, float, float, float], second: Tuple[float, float, float, float]) -> bool:
+    """Return whether two rectangles overlap by more than a boundary tolerance."""
+    epsilon = 1e-3
+    return first[0] < second[2] - epsilon and second[0] < first[2] - epsilon and first[1] < second[3] - epsilon and second[1] < first[3] - epsilon
+
+
+def _count_geometry_intersections(schematic: Schematic) -> Tuple[int, int, int]:
+    """Count wire-symbol, wire-text, and symbol-symbol geometry intersections."""
+    wire_symbol_intersections = 0
+    wire_text_intersections = 0
+    symbol_symbol_intersections = 0
+    bodies = [record for record in schematic.symbols if record.body_rect is not None]
+    for segment in schematic.wires:
+        for record in bodies:
+            if _segment_clips_into_rect(segment, record.body_rect):
+                wire_symbol_intersections += 1
+        for text_rect in schematic.text_rects:
+            if _segment_clips_into_rect(segment, text_rect):
+                wire_text_intersections += 1
+    for first_index, first in enumerate(bodies):
+        for second in bodies[first_index + 1:]:
+            if _rects_strict_overlap(first.body_rect, second.body_rect):
+                symbol_symbol_intersections += 1
+    return wire_symbol_intersections, wire_text_intersections, symbol_symbol_intersections
+
+
 class SymbolRecord:
-    __slots__ = ("reference", "lib_id", "x", "y", "angle", "mirror", "unit", "body_style", "value", "properties", "pin_numbers", "power", "pins")
+    __slots__ = ("reference", "lib_id", "x", "y", "angle", "mirror", "unit", "body_style", "value", "properties", "pin_numbers", "power", "pins", "body_rect", "text_rects")
 
     def __init__(self) -> None:
         self.reference = ""
@@ -130,6 +281,8 @@ class SymbolRecord:
         self.pin_numbers: List[str] = []
         self.power = False
         self.pins: Dict[str, Tuple[float, float]] = {}
+        self.body_rect: Optional[Tuple[float, float, float, float]] = None
+        self.text_rects: List[Tuple[float, float, float, float]] = []
 
 
 class Schematic:
@@ -144,6 +297,7 @@ class Schematic:
         self.labels: List[Tuple[float, float, str]] = []
         self.no_connects: List[Tuple[float, float]] = []
         self.texts: List[str] = []
+        self.text_rects: List[Tuple[float, float, float, float]] = []
         self.junctions: List[Tuple[float, float]] = []
         self.nets: Dict[str, Set[Tuple[str, str]]] = {}
         self.net_wire_segments: Dict[str, int] = {}
@@ -244,6 +398,17 @@ class Schematic:
             values = _atom_values(text_node)
             if values:
                 self.texts.append(str(values[0]))
+        for tag in ("text", "label", "global_label", "hierarchical_label"):
+            for text_node in root.find_children(tag):
+                text_values = [child.value for child in text_node.children if child.is_atom]
+                if not text_values:
+                    continue
+                at_values = _atom_values(text_node.find_child("at"))
+                if len(at_values) < 2:
+                    continue
+                if not _text_is_visible(text_node):
+                    continue
+                self.text_rects.append(_text_rect(float(at_values[0]), float(at_values[1]), str(text_values[0]), _text_font_size(text_node), float(at_values[2]) if len(at_values) > 2 else 0.0))
 
     def _collect_junction_positions(self, root: SExp) -> List[Tuple[float, float]]:
         positions: List[Tuple[float, float]] = []
@@ -305,6 +470,12 @@ class Schematic:
             for pin_number, (local_x, local_y) in pin_geometry.items():
                 absolute_x, absolute_y = _transform_point(local_x, local_y, record.x, record.y, record.angle, record.mirror)
                 record.pins[pin_number] = (absolute_x, absolute_y)
+            local_bounds = _symbol_body_bounds(symbol_node)  # Measure the drawn body in local coordinates.
+            if local_bounds is not None:  # Transform the body corners into schematic space.
+                corners = [(local_bounds[0], local_bounds[1]), (local_bounds[2], local_bounds[1]), (local_bounds[2], local_bounds[3]), (local_bounds[0], local_bounds[3])]
+                world_points = [_transform_point(corner_x, corner_y, record.x, record.y, record.angle, record.mirror) for corner_x, corner_y in corners]
+                record.body_rect = (min(point[0] for point in world_points), min(point[1] for point in world_points), max(point[0] for point in world_points), max(point[1] for point in world_points))
+            record.text_rects = _collect_instance_text_rects(instance_node, record)  # Collect visible field boxes.
             records.append(record)
         return records
 
@@ -765,6 +936,19 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
     lines.append(f"  Wires: {wire_count_a} segments/{first.total_wire_length:.2f}mm in A, {wire_count_b} segments/{second.total_wire_length:.2f}mm in B")
     if abs(wire_count_a - wire_count_b) > tolerance:
         differences.append(f"wire segment count differs ({wire_count_a} vs {wire_count_b})")
+    intersections_a = _count_geometry_intersections(first)
+    intersections_b = _count_geometry_intersections(second)
+    lines.append(
+        f"  Geometry intersections: wires x symbols {intersections_a[0]} in A / {intersections_b[0]} in B; "
+        f"wires x text {intersections_a[1]} in A / {intersections_b[1]} in B; "
+        f"symbols x symbols {intersections_a[2]} in A / {intersections_b[2]} in B"
+    )
+    if intersections_b[0] > intersections_a[0]:
+        differences.append(f"wire-symbol intersections exceed ground truth ({intersections_b[0]} vs {intersections_a[0]})")
+    if intersections_b[1] > intersections_a[1]:
+        differences.append(f"wire-text intersections exceed ground truth ({intersections_b[1]} vs {intersections_a[1]})")
+    if intersections_b[2] > intersections_a[2]:
+        differences.append(f"symbol-symbol intersections exceed ground truth ({intersections_b[2]} vs {intersections_a[2]})")
     unconnected_a, free_ends_a = _count_unconnected_wires(first)
     unconnected_b, free_ends_b = _count_unconnected_wires(second)
     lines.append(f"  Unconnected wires: {unconnected_a} in A, {unconnected_b} in B ({free_ends_a}/{free_ends_b} free endpoints that contact no wire, symbol pin, NC marker, or net label)")
@@ -850,10 +1034,26 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--verbose", action="store_true", help="Print per-net and per-library detail.")
     parser.add_argument("--kicad-path", default="/usr/share/kicad/", help="Root of the KiCad symbol libraries for the electrical equivalence check. Empty disables it.")
     parser.add_argument("--wire-length-tolerance", type=float, default=0.25, help="Maximum relative wire-length difference per connection scored as a match. Default: 0.25 (25%%).")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=os.cpu_count() or 1,
+        help="Number of simultaneous directory comparisons. Default: one per CPU core.",
+    )
+    parser.add_argument(
+        "--pair-timeout",
+        type=float,
+        default=600.0,
+        help="Seconds allowed for one comparison pair before it is reported as timed out. Default: 600.",
+    )
     return parser
 
 
 def main() -> int:
+    try:  # Stream live progress even when stdout is redirected to a file.
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):  # Older interpreters may not support reconfigure.
+        pass
     parser = _build_argument_parser()
     arguments = parser.parse_args()
     first_path = Path(arguments.first)
@@ -868,27 +1068,71 @@ def main() -> int:
         if not names:
             print("No .kicad_sch files found in either directory.", file=sys.stderr)
             return 1
-        all_ok = True
+        missing = sorted(name for name in names if name not in names_a or name not in names_b)
+        pairs = [(name, names_a[name], names_b[name]) for name in names if name not in missing]
+        workers = max(1, arguments.workers)
+        print(f"Comparing {len(names)} schematics with {workers} worker(s)...")
         failures = 0
-        for name in names:
-            print(f"== {name} ==")
-            if name not in names_a:
-                print("  MISSING in file A directory")
-                all_ok = False
-                failures += 1
-                continue
-            if name not in names_b:
-                print("  MISSING in file B directory")
-                all_ok = False
-                failures += 1
-                continue
-            ok, lines = _compare_files(names_a[name], names_b[name], arguments.tolerance, arguments.verbose, kicad_path, arguments.wire_length_tolerance)
-            print("\n".join(lines))
-            if not ok:
-                all_ok = False
-                failures += 1
+        for name in missing:
+            side = "A" if name not in names_a else "B"
+            print(f"  MISSING in file {side} directory: {name}")
+            failures += 1
+        if workers > 1 and len(pairs) > 1:
+            executor = concurrent.futures.ProcessPoolExecutor(max_workers=workers)
+            try:
+                future_to_name = {
+                    executor.submit(
+                        _compare_files,
+                        first_path,
+                        second_path,
+                        arguments.tolerance,
+                        arguments.verbose,
+                        kicad_path,
+                        arguments.wire_length_tolerance,
+                    ): name
+                    for name, first_path, second_path in pairs
+                }
+                pending = set(future_to_name)
+                deadlines = {future: time.monotonic() + arguments.pair_timeout for future in pending}
+                while pending:
+                    remaining = max(0.0, min(deadlines[future] - time.monotonic() for future in pending))
+                    done, pending = concurrent.futures.wait(pending, timeout=remaining, return_when=concurrent.futures.FIRST_COMPLETED)
+                    for future in done:
+                        name = future_to_name[future]
+                        try:
+                            ok, lines = future.result()
+                        except Exception as exc:  # noqa: BLE001 - report any worker failure directly.
+                            ok, lines = False, [f"  ERROR comparing {name}: {exc}"]
+                        print(f"== {name} ==")
+                        print("\n".join(lines))
+                        if not ok:
+                            failures += 1
+                    expired = [future for future in pending if time.monotonic() >= deadlines[future]]
+                    for future in expired:
+                        name = future_to_name[future]
+                        print(f"== {name} ==")
+                        print(f"  TIMEOUT comparing {name} after {arguments.pair_timeout:g}s")
+                        future.cancel()
+                        pending.discard(future)
+                        failures += 1
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            for name, first_path, second_path in pairs:
+                ok, lines = _compare_files(
+                    first_path,
+                    second_path,
+                    arguments.tolerance,
+                    arguments.verbose,
+                    kicad_path,
+                    arguments.wire_length_tolerance,
+                )
+                print(f"== {name} ==")
+                print("\n".join(lines))
+                if not ok:
+                    failures += 1
         print(f"\nDirectory comparison: {len(names) - failures}/{len(names)} files matched.")
-        return 0 if all_ok else 1
+        return 0 if failures == 0 else 1
     if not first_path.is_file():
         print(f"{first_path}: not a file", file=sys.stderr)
         return 1
