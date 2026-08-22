@@ -11,7 +11,8 @@ topology:
    over a BFS-distance-directed net graph, so feedback is broken by
    construction and the resulting directed graph is acyclic.
 3. Rows inside each column are ordered with a deterministic barycenter sweep.
-4. Coordinates use a human column/row pitch centered on the A4 page.
+4. Coordinates use a human column/row pitch centered on the drawing page
+   (A4 by default, A3 for designs with more than 80 symbols).
 5. Symbol orientations are chosen from role templates using only the symbol's
    resolved pin geometry (never hard-coded coordinates or paths).
 

@@ -93,6 +93,12 @@ _K_STATEMENT_PATTERN = re.compile(r"^[Kk]\S+\s+\S+\s+\S+(?:\s+\S+)*\s+\S+$")  # 
 
 _SINGLETON_LABEL_MARKER = "* KICAD_SINGLETON_LABEL "  # Mark authored KiCad labels that intentionally have one simulated device port.
 
+_KICAD_LIB_ID_MARKER = "* KICAD_SYMBOL_LIB_ID "  # Record the original KiCad library identifier so the reverse converter restores the exact symbol.
+
+_KICAD_SIM_PINS_MARKER = "* KICAD_SIM_PINS "  # Record the authored Sim.Pins role mapping so the reverse converter restores it verbatim.
+
+_KICAD_VALUE_MARKER = "* KICAD_VALUE "  # Record the authored display value so the reverse converter restores it verbatim.
+
 
 class _UnionFind:  # Track merged electrical points with a lightweight disjoint-set structure.
     def __init__(self) -> None:  # Initialize the disjoint set.
@@ -445,7 +451,8 @@ def _wire_and_emit(components: List[Dict[str, object]], root: SExp, kicad_path: 
                     net_names[pin_root] = f"{_DANGLING_WIRE_PREFIX}{dangling_wire_counter:03d}"  # Assign a non-NC node name that records physical wiring.
                 else:  # Truly floating symbol pins remain explicit no-connects.
                     net_names[pin_root] = f"NC_{record['reference']}_{record['index']}_{pin_number}"  # Name the floating pin with a per-instance no-connect prefix.
-    model_source_lines = _prepare_model_source_lines(components, kicad_path)  # Resolve model libraries and self-contained fallback models.
+    schematic_directives = _collect_simulation_directives(root)  # Preserve supported simulation statements stored as schematic text.
+    model_source_lines = _prepare_model_source_lines(components, kicad_path, schematic_directives)  # Resolve model libraries and self-contained fallback models.
     emit_result = _emit_device_lines(components, net_names)  # Emit the LTspice device lines.
     if not emit_result[0]:  # Stop when device emission reports a failure.
         return emit_result  # Return the emission error unchanged.
@@ -549,15 +556,25 @@ def _expand_kicad_library_path(library: str, kicad_path: str) -> str:  # Resolve
     return re.sub(r"\$\{KICAD\d*_SYMBOL_DIR\}", lambda _match: symbols_path, library, flags=re.IGNORECASE)  # Expand versioned KiCad symbol variables without hard-coded paths.
 
 
-def _prepare_model_source_lines(components: List[Dict[str, object]], kicad_path: str) -> List[str]:  # Build unique includes and fallback model declarations.
+def _directive_library_reference(line: str) -> str:  # Read the library filename token from one include/library directive line.
+    tokens = line.strip().split()  # Split the directive into tokens.
+    if len(tokens) < 2:  # Skip malformed directives defensively.
+        return ""  # Return an empty reference for incomplete directives.
+    return tokens[1].strip().strip("\"'")  # Return the filename token without surrounding quotes.
+
+
+def _prepare_model_source_lines(components: List[Dict[str, object]], kicad_path: str, preserved_directives: Sequence[str] = ()) -> List[str]:  # Build unique includes and fallback model declarations.
     lines: List[str] = []  # Collect source lines in first-use order.
     seen: Set[str] = set()  # Deduplicate identical include and model statements.
+    preserved_library_files = {_directive_library_reference(line) for line in preserved_directives if _directive_library_reference(line) != ""}  # Index library references already preserved by schematic text.
     for record in components:  # Walk every emitted component.
         if record["exclude"] or record["power"]:  # Skip records that emit no ordinary device statement.
             continue  # Move to the next component.
         library = _record_property(record, "Sim.Library")  # Resolve the component model library.
         if library != "":  # Preserve model sources recorded by the schematic.
             expanded_library = _expand_kicad_library_path(library, kicad_path)  # Resolve KiCad installation variables from settings.
+            if expanded_library in preserved_library_files:  # The authored schematic text already preserves this library reference.
+                continue  # Avoid duplicating a library that lives in a text directive.
             include_line = f'.include "{expanded_library}"'  # Quote paths so spaces remain valid.
             if include_line.lower() not in seen:  # Emit each library once case-insensitively.
                 seen.add(include_line.lower())  # Mark the include as emitted.
@@ -639,6 +656,13 @@ def _emit_device_lines(components: List[Dict[str, object]], net_names: Dict[str,
             instance_name = reference  # Reuse the original instance name.
         instance_name = _unique_ordinary_instance_name(instance_name, prefix, reserved_instance_names, emitted_instance_names)  # Renumber duplicate schematic references deterministically.
         emitted_instance_names.add(instance_name.upper())  # Reserve the final emitted name.
+        if prefix == "X":  # Subcircuit calls carry their original KiCad metadata as comment hints.
+            lines.append(_KICAD_LIB_ID_MARKER + instance_name + " " + str(record["lib_id"]))  # Record the exact KiCad symbol so reverse conversion restores it.
+            sim_pins_text = _record_property(record, "Sim.Pins")  # Read the authored package-to-model-port mapping.
+            if sim_pins_text:  # Preserve the role mapping when the schematic authored one.
+                lines.append(_KICAD_SIM_PINS_MARKER + instance_name + " " + sim_pins_text)  # Record the exact Sim.Pins roles.
+            if value != _model_name(record, value):  # Only the display value differs from the emitted model token.
+                lines.append(_KICAD_VALUE_MARKER + instance_name + " " + value)  # Record the authored display value.
         lines.append(" ".join([instance_name] + node_tokens + payload_tokens))  # Emit the completed device line.
     return True, lines, "", 0  # Return the emitted device lines.
 

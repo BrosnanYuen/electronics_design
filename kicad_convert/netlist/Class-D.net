@@ -30,6 +30,9 @@ R10 Vs N009 10
 R11 0 Fb2 1k
 C5 out 0 680n
 R5 N006 N003 10
+* KICAD_SYMBOL_LIB_ID XU1 AudioDriver:AudioDriver1
+* KICAD_SIM_PINS XU1 3=hi+ 4=hi- 5=lo+ 6=lo- 7=ain
+* KICAD_VALUE XU1 AudioDriver1
 XU1 HO Vs LO B- Ain DAudioDriver freq=317k dtime=50n voutp=12 voutn=0
 C6 out Fb2 4.4n
 Q1 N001 N004 N005 0 NPN

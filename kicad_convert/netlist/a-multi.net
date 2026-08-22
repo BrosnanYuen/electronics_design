@@ -2,6 +2,9 @@
 .include "mult.lib"
 V2 in1 0 SINE(0 1 2k)
 V1 in2 0 SINE(0 1 1k)
+* KICAD_SYMBOL_LIB_ID XA1 XSPICE_BasicAnalog:MULTIPLIER
+* KICAD_SIM_PINS XA1 1=in1 2=in2 3=out
+* KICAD_VALUE XA1 MULTIPLIER
 XA1 in1 in2 out mult
 R1 out 0 1k
 .tran 1u 10m

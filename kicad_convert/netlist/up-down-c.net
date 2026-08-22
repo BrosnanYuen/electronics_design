@@ -4,6 +4,9 @@
 * KICAD_SINGLETON_LABEL q3
 .include "state-machine-3b-count.lib"
 Vupd1 ud 0 PULSE(0 5 1u 1u 1u 500u 1m)
+* KICAD_SYMBOL_LIB_ID XU1 up-down:Up-Down
+* KICAD_SIM_PINS XU1 1=clock 2=updown 3=out_b0 4=out_b1 5=out_b2
+* KICAD_VALUE XU1 up-down
 XU1 clk ud q1 q2 q3 3bcounter
 Vclk1 clk 0 PULSE(0 5 1u 1u 1u 10u 24u)
 .tran 1

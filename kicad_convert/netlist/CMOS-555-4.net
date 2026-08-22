@@ -12,8 +12,14 @@ R2 N002 N003 68k
 R3 intout intin 47k
 V2 Vcc N006 PULSE(0 -1 10u 1u 1u 100u 100)
 V1 N006 0 5
+* KICAD_SYMBOL_LIB_ID XU1 Timer:LM555xN
+* KICAD_SIM_PINS XU1 1=GND0 2=Trigger 3=Output 4=Reset 5=FM 6=Threshold 7=Discharge 8=Vcc
+* KICAD_VALUE XU1 LM555xN
 XU1 0 N003 intout Vcc N001 N003 N002 Vcc CMOS555
 D1 N002 N003 D1N4148
+* KICAD_SYMBOL_LIB_ID XU2 Timer:LM555xN
+* KICAD_SIM_PINS XU2 1=GND0 2=Trigger 3=Output 4=Reset 5=FM 6=Threshold 7=Discharge 8=Vcc
+* KICAD_VALUE XU2 LM555xN
 XU2 0 N005 output Vcc intin N005 N004 Vcc CMOS555
 .tran 1
 .backanno

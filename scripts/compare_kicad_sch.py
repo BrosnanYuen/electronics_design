@@ -266,7 +266,7 @@ def _count_geometry_intersections(schematic: Schematic) -> Tuple[int, int, int]:
 
 
 class SymbolRecord:
-    __slots__ = ("reference", "lib_id", "x", "y", "angle", "mirror", "unit", "body_style", "value", "properties", "pin_numbers", "power", "pins", "body_rect", "text_rects")
+    __slots__ = ("reference", "lib_id", "x", "y", "angle", "mirror", "unit", "body_style", "value", "properties", "pin_numbers", "pin_names", "power", "pins", "body_rect", "text_rects")
 
     def __init__(self) -> None:
         self.reference = ""
@@ -280,6 +280,7 @@ class SymbolRecord:
         self.value = ""
         self.properties: Dict[str, str] = {}
         self.pin_numbers: List[str] = []
+        self.pin_names: Dict[str, str] = {}
         self.power = False
         self.pins: Dict[str, Tuple[float, float]] = {}
         self.body_rect: Optional[Tuple[float, float, float, float]] = None
@@ -471,6 +472,7 @@ class Schematic:
             for pin_number, (local_x, local_y) in pin_geometry.items():
                 absolute_x, absolute_y = _transform_point(local_x, local_y, record.x, record.y, record.angle, record.mirror)
                 record.pins[pin_number] = (absolute_x, absolute_y)
+            record.pin_names = self._collect_symbol_pin_names(symbol_node)
             local_bounds = _symbol_body_bounds(symbol_node)  # Measure the drawn body in local coordinates.
             if local_bounds is not None:  # Transform the body corners into schematic space.
                 corners = [(local_bounds[0], local_bounds[1]), (local_bounds[2], local_bounds[1]), (local_bounds[2], local_bounds[3]), (local_bounds[0], local_bounds[3])]
@@ -479,6 +481,22 @@ class Schematic:
             record.text_rects = _collect_instance_text_rects(instance_node, record)  # Collect visible field boxes.
             records.append(record)
         return records
+
+    @staticmethod
+    def _collect_symbol_pin_names(symbol_node: SExp) -> Dict[str, str]:
+        """Collect every pin number-to-name pair defined by a library symbol."""
+        pin_names: Dict[str, str] = {}
+        for sub_symbol in symbol_node.find_children("symbol"):
+            for pin_node in sub_symbol.find_children("pin"):
+                number_node = pin_node.find_child("number")
+                name_node = pin_node.find_child("name")
+                if number_node is None or name_node is None:
+                    continue
+                number_values = _atom_values(number_node)
+                name_values = _atom_values(name_node)
+                if number_values:
+                    pin_names.setdefault(str(number_values[0]), str(name_values[0]) if name_values else "")
+        return pin_names
 
     @staticmethod
     def _collect_properties(node: SExp) -> Dict[str, str]:
@@ -696,6 +714,8 @@ def _transform_position(x: float, y: float, centroid: Tuple[float, float], angle
 
 
 _PWR_FLAG_LIB = "power:PWR_FLAG"
+
+_SIM_PROPERTY_KEYS = ("Sim.Device", "Sim.Name", "Sim.Library", "Sim.Params", "Sim.Pins", "Sim.Type")  # Simulation metadata that must survive conversion round trips.
 
 
 def _is_graphical_marker(record: SymbolRecord) -> bool:
@@ -930,6 +950,9 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
     lib_mismatch = 0
     value_mismatch = 0
     orientation_mismatch = 0
+    sim_property_mismatch = 0
+    pin_set_mismatch = 0
+    pin_name_mismatch = 0
     for reference in common:
         record_a = symbols_a[reference]
         record_b = symbols_b[reference]
@@ -943,7 +966,30 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
         if not _orientation_equivalent(record_a, record_b):
             orientation_mismatch += 1
             lines.append(f"    orientation differs for {reference}: angle={record_a.angle:g}/{record_a.mirror} vs {record_b.angle:g}/{record_b.mirror}")
+        for sim_key in _SIM_PROPERTY_KEYS:
+            value_a = record_a.properties.get(sim_key, "")
+            value_b = record_b.properties.get(sim_key, "")
+            if value_a != value_b:
+                sim_property_mismatch += 1
+                lines.append(f"    {sim_key} differs for {reference}: '{value_a}' vs '{value_b}'")
+        pins_a = set(record_a.pin_numbers)
+        pins_b = set(record_b.pin_numbers)
+        if pins_a != pins_b:
+            pin_set_mismatch += 1
+            lines.append(f"    pin numbers differ for {reference}: {sorted(pins_a)} vs {sorted(pins_b)}")
+        names_a = sorted((number, record_a.pin_names.get(number, "")) for number in pins_a)
+        names_b = sorted((number, record_b.pin_names.get(number, "")) for number in pins_b)
+        if names_a != names_b:
+            pin_name_mismatch += 1
+            lines.append(f"    pin names differ for {reference}: {names_a} vs {names_b}")
     lines.append(f"  Matched symbol properties: lib_id {len(common) - lib_mismatch}/{len(common)} OK, value {len(common) - value_mismatch}/{len(common)} OK, orientation {len(common) - orientation_mismatch}/{len(common)} OK")
+    lines.append(f"  Matched symbol simulation metadata: Sim.* {len(common) * len(_SIM_PROPERTY_KEYS) - sim_property_mismatch}/{len(common) * len(_SIM_PROPERTY_KEYS)} OK, pins {len(common) - pin_set_mismatch}/{len(common)} OK, pin names {len(common) - pin_name_mismatch}/{len(common)} OK")
+    if sim_property_mismatch:
+        differences.append(f"simulation metadata differs for {sim_property_mismatch} matched symbol(s)")
+    if pin_set_mismatch:
+        differences.append(f"pin number sets differ for {pin_set_mismatch} matched symbol(s)")
+    if pin_name_mismatch:
+        differences.append(f"pin names differ for {pin_name_mismatch} matched symbol(s)")
 
     official_lines, official_differences = _report_official_library_usage(symbols_a, symbols_b, common, kicad_path)
     lines.extend(official_lines)

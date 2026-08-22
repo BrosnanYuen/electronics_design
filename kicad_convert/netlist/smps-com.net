@@ -5,6 +5,9 @@
 .model NMOS NMOS
 L1 N001 sout 10u Rser=1m
 R2 vdiv N004 10k
+* KICAD_SYMBOL_LIB_ID XU1 Simulation_SPICE:OPAMP
+* KICAD_SIM_PINS XU1 1=in+ 2=in- 3=out 4=vcc 5=vee
+* KICAD_VALUE XU1 Generic OpAmp
 XU1 N005 N004 N003 vcc vee genopa1
 V5 0 vee 10
 V3 in 0 PULSE(0 2.5 0 5m 5m 1 2)
@@ -13,6 +16,9 @@ R3 out vdiv 9.1k
 V4 vcc 0 10
 C2 N003 N004 10n
 C3 out 0 4.7u
+* KICAD_SYMBOL_LIB_ID XA1 PWM:PWM
+* KICAD_SIM_PINS XA1 1=out+ 2=out- 3=in+ 4=in-
+* KICAD_VALUE XA1 PWM
 XA1 pw 0 vcont 0 pwm freq=490k vlo=0 vhi=10
 V7 N002 vcont -0.5
 R4 N004 N003 10Meg

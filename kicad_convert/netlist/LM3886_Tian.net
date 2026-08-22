@@ -3,6 +3,9 @@
 .include "GDZ16B.lib"
 .include "Loudspeaker.lib"
 .include "Tian_subckt.lib"
+* KICAD_SYMBOL_LIB_ID XU1 Amplifier_Audio:LM3886
+* KICAD_SIM_PINS XU1 10=1 9=2 1=3 4=4 3=5 8=6
+* KICAD_VALUE XU1 LM3886
 XU1 N002 N003 V+ V- N009 m2 lm3886
 C2 N002 0 680p
 C1 N001 IN 4.7u
@@ -24,6 +27,9 @@ R6 m1 V- 10k
 VP1 V+ 0 30
 VN1 V- 0 -30
 LS1 OUT 0 DC50FA8 Rser=1m
+* KICAD_SYMBOL_LIB_ID X999 tian:Tian2
+* KICAD_SIM_PINS X999 1=a 2=b
+* KICAD_VALUE X999 Tian2
 X999 N009 N010 loopgainprobe
 .ic v(/m1)=0
 .tran 1

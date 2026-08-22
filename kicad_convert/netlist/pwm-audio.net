@@ -5,6 +5,9 @@ L2 dn out- 33u Rser=1m
 V1 in 0 SINE(0 0.95 1.01k) AC 1
 R1 out+ out- 8
 L1 dp out+ 33u Rser=1m
+* KICAD_SYMBOL_LIB_ID XA1 Simulation_SPICE:ESOURCE
+* KICAD_SIM_PINS XA1 1=outp 2=outn 3=in+ 4=in-
+* KICAD_VALUE XA1 APWM
 XA1 dp dn in 0 audiopwm
 C4 0 out- 0.1u
 C3 out+ 0 0.1u
