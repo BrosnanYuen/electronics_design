@@ -25,6 +25,7 @@ import concurrent.futures
 import math
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
@@ -560,6 +561,79 @@ def _signature_lib_id(lib_id: str) -> str:
     return _normalize_lib_id(lib_id)
 
 
+_OFFICIAL_SYMBOL_CACHE: Dict[str, Set[str]] = {}
+_OFFICIAL_SYMBOL_LOCK = threading.Lock()
+
+
+def _official_symbol_names(kicad_path: str) -> Set[str]:
+    """Return the set of 'nickname:symbol' lib_ids present in the official KiCad libraries.
+
+    Symbols resolved through the LTspice .asy fallback converter are not part of
+    any official library, so their lib_ids are absent from the returned set.
+    An empty set also means the official symbol directory is unavailable.
+    """
+    if not kicad_path:
+        return set()
+    with _OFFICIAL_SYMBOL_LOCK:
+        cached = _OFFICIAL_SYMBOL_CACHE.get(kicad_path)
+        if cached is not None:
+            return cached
+    names: Set[str] = set()
+    symbols_directory = Path(kicad_path) / "symbols"
+    if symbols_directory.is_dir():
+        for library_path in sorted(symbols_directory.glob("*.kicad_sym")):
+            try:
+                root = parse_string(library_path.read_text(encoding="utf-8", errors="replace"))
+            except Exception:  # noqa: BLE001 - skip unreadable or malformed official libraries.
+                continue
+            nickname = library_path.stem
+            for symbol_node in root.find_children("symbol"):
+                symbol_name = _first_atom(symbol_node)
+                if symbol_name:
+                    names.add(f"{nickname}:{symbol_name}")
+    with _OFFICIAL_SYMBOL_LOCK:
+        _OFFICIAL_SYMBOL_CACHE[kicad_path] = names
+    return names
+
+
+def _report_official_library_usage(
+    symbols_a: Dict[str, SymbolRecord],
+    symbols_b: Dict[str, SymbolRecord],
+    common: List[str],
+    kicad_path: str,
+) -> Tuple[List[str], List[str]]:
+    """Flag matched symbols where ground truth uses an official KiCad library symbol
+    but the generated schematic resolved the same reference via a non-official
+    (fallback-converted) symbol instead."""
+    lines: List[str] = []
+    differences: List[str] = []
+    if not kicad_path:
+        return lines, differences
+    official_names = _official_symbol_names(kicad_path)
+    if not official_names:
+        return lines, differences
+    fallback_references: List[str] = []
+    for reference in common:
+        record_a = symbols_a[reference]
+        record_b = symbols_b[reference]
+        if record_a.lib_id in official_names and record_b.lib_id not in official_names:
+            fallback_references.append(reference)
+    if fallback_references:
+        lines.append(
+            f"  Official library usage: {len(common) - len(fallback_references)}/{len(common)} generated symbols from official KiCad libraries; "
+            f"fallback-converted: {', '.join(sorted(fallback_references))}"
+        )
+        for reference in sorted(fallback_references):
+            record_a = symbols_a[reference]
+            record_b = symbols_b[reference]
+            differences.append(
+                f"symbol '{reference}' uses official KiCad symbol '{record_a.lib_id}' in A but non-official '{record_b.lib_id}' in B (fallback-converted symbol)"
+            )
+    else:
+        lines.append(f"  Official library usage: {len(common)}/{len(common)} generated symbols from official KiCad libraries")
+    return lines, differences
+
+
 def _best_rigid_transform(gt_positions: List[Tuple[float, float]], gen_positions: List[Tuple[float, float]]) -> Tuple[float, float, float]:
     n = len(gt_positions)
     if n == 0:
@@ -870,6 +944,10 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
             orientation_mismatch += 1
             lines.append(f"    orientation differs for {reference}: angle={record_a.angle:g}/{record_a.mirror} vs {record_b.angle:g}/{record_b.mirror}")
     lines.append(f"  Matched symbol properties: lib_id {len(common) - lib_mismatch}/{len(common)} OK, value {len(common) - value_mismatch}/{len(common)} OK, orientation {len(common) - orientation_mismatch}/{len(common)} OK")
+
+    official_lines, official_differences = _report_official_library_usage(symbols_a, symbols_b, common, kicad_path)
+    lines.extend(official_lines)
+    differences.extend(official_differences)
 
     layout_ok, layout_lines = _report_symbol_layout(first, second, matched)
     lines.extend(layout_lines)
