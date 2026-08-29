@@ -41,6 +41,7 @@ if str(_SOURCE_DIRECTORY) not in sys.path:
 from electronics_design.kicad_sexp_parser import SExp, parse_string
 
 _POINT_TOLERANCE = 1e-4
+_CONTACT_TOLERANCE = 1e-3  # Distances below this count as one contact point for ground-graphics checks.
 
 
 def _first_atom(node: Optional[SExp]) -> str:
@@ -104,6 +105,49 @@ def _point_on_segment(px: float, py: float, segment: Tuple[float, float, float, 
     closest_x = start_x + projection * delta_x
     closest_y = start_y + projection * delta_y
     return abs(px - closest_x) <= _POINT_TOLERANCE and abs(py - closest_y) <= _POINT_TOLERANCE
+
+
+def _segment_contacts(first: Tuple[float, float, float, float], second: Tuple[float, float, float, float]) -> Tuple[List[Tuple[float, float]], bool]:
+    """Return the contact points between two segments plus a collinear-overlap flag."""
+    x1, y1, x2, y2 = first
+    x3, y3, x4, y4 = second
+    delta_r_x = x2 - x1
+    delta_r_y = y2 - y1
+    delta_s_x = x4 - x3
+    delta_s_y = y4 - y3
+    denominator = delta_r_x * delta_s_y - delta_r_y * delta_s_x
+    offset_x = x3 - x1
+    offset_y = y3 - y1
+    if abs(denominator) > 1e-12:
+        t = (offset_x * delta_s_y - offset_y * delta_s_x) / denominator
+        u = (offset_x * delta_r_y - offset_y * delta_r_x) / denominator
+        if -1e-9 <= t <= 1.0 + 1e-9 and -1e-9 <= u <= 1.0 + 1e-9:
+            return [(x1 + t * delta_r_x, y1 + t * delta_r_y)], False
+        return [], False
+    if abs(offset_x * delta_r_y - offset_y * delta_r_x) > 1e-9:
+        return [], False
+    first_length_squared = delta_r_x * delta_r_x + delta_r_y * delta_r_y
+    second_length_squared = delta_s_x * delta_s_x + delta_s_y * delta_s_y
+    if first_length_squared < 1e-24:
+        if _point_on_segment(x1, y1, second):
+            return [(x1, y1)], False
+        return [], False
+    if second_length_squared < 1e-24:
+        if _point_on_segment(x3, y3, first):
+            return [(x3, y3)], False
+        return [], False
+    t3 = (offset_x * delta_r_x + offset_y * delta_r_y) / first_length_squared
+    t4 = ((x4 - x1) * delta_r_x + (y4 - y1) * delta_r_y) / first_length_squared
+    t_low, t_high = sorted((t3, t4))
+    t_low = max(t_low, 0.0)
+    t_high = min(t_high, 1.0)
+    if t_high < t_low - 1e-9:
+        return [], False
+    length = math.sqrt(first_length_squared)
+    overlap = (t_high - t_low) * length > _CONTACT_TOLERANCE
+    parameters = (t_low, (t_low + t_high) / 2.0, t_high)
+    points = [(x1 + t * delta_r_x, y1 + t * delta_r_y) for t in parameters]
+    return points, overlap
 
 
 def _transform_point(local_x: float, local_y: float, origin_x: float, origin_y: float, angle: float, mirror: str) -> Tuple[float, float]:
@@ -265,8 +309,53 @@ def _count_geometry_intersections(schematic: Schematic) -> Tuple[int, int, int]:
     return wire_symbol_intersections, wire_text_intersections, symbol_symbol_intersections
 
 
+def _is_ground_symbol(record: SymbolRecord) -> bool:
+    if not record.power:
+        return False
+    if record.lib_id.rpartition(":")[2].upper() == "GND":
+        return True
+    return record.value.strip().upper() in ("GND", "0")
+
+
+def _find_wire_ground_violations(schematic: Schematic) -> List[str]:
+    """Describe wires that run through ground symbol graphics instead of only touching the ground pin.
+
+    Wires may touch and connect to a ground symbol at its pin contact point, but a wire that
+    crosses, overlaps, or ends on any other part of the drawn symbol graphics is a violation.
+    """
+    violations: List[str] = []
+    grounds = [record for record in schematic.symbols if _is_ground_symbol(record)]
+    for record in grounds:
+        pin_points = list(record.pins.values())
+        if not record.graphics_segments or not pin_points:
+            continue
+
+        def _at_pin(point: Tuple[float, float], pin_points: List[Tuple[float, float]] = pin_points) -> bool:
+            return any(abs(point[0] - pin_x) <= _CONTACT_TOLERANCE and abs(point[1] - pin_y) <= _CONTACT_TOLERANCE for pin_x, pin_y in pin_points)
+
+        for segment in schematic.wires:
+            contact_points: List[Tuple[float, float]] = []
+            overlap = False
+            for graphics_segment in record.graphics_segments:
+                points, collinear_overlap = _segment_contacts(segment, graphics_segment)
+                contact_points.extend(points)
+                overlap = overlap or collinear_overlap
+            if not contact_points and not overlap:
+                continue
+            off_pin = sorted(set(point for point in contact_points if not _at_pin(point)))
+            if not off_pin and not overlap:
+                continue
+            if off_pin:
+                formatted = ", ".join(f"({point[0]:.2f}, {point[1]:.2f})" for point in off_pin[:4])
+                detail = f"contacts the ground symbol graphics away from the pin at {formatted}"
+            else:
+                detail = "runs along the ground symbol outline"
+            violations.append(f"wire ({segment[0]:.2f}, {segment[1]:.2f})-({segment[2]:.2f}, {segment[3]:.2f}) {detail} of ground '{record.reference}'")
+    return violations
+
+
 class SymbolRecord:
-    __slots__ = ("reference", "lib_id", "x", "y", "angle", "mirror", "unit", "body_style", "value", "properties", "pin_numbers", "pin_names", "power", "pins", "body_rect", "text_rects")
+    __slots__ = ("reference", "lib_id", "x", "y", "angle", "mirror", "unit", "body_style", "value", "properties", "pin_numbers", "pin_names", "power", "pins", "body_rect", "text_rects", "graphics_segments")
 
     def __init__(self) -> None:
         self.reference = ""
@@ -285,6 +374,7 @@ class SymbolRecord:
         self.pins: Dict[str, Tuple[float, float]] = {}
         self.body_rect: Optional[Tuple[float, float, float, float]] = None
         self.text_rects: List[Tuple[float, float, float, float]] = []
+        self.graphics_segments: List[Tuple[float, float, float, float]] = []
 
 
 class Schematic:
@@ -479,8 +569,41 @@ class Schematic:
                 world_points = [_transform_point(corner_x, corner_y, record.x, record.y, record.angle, record.mirror) for corner_x, corner_y in corners]
                 record.body_rect = (min(point[0] for point in world_points), min(point[1] for point in world_points), max(point[0] for point in world_points), max(point[1] for point in world_points))
             record.text_rects = _collect_instance_text_rects(instance_node, record)  # Collect visible field boxes.
+            if record.power:  # Ground/power pass-through checks compare wires against the drawn symbol graphics.
+                record.graphics_segments = self._collect_symbol_graphics_segments(symbol_node, record)
             records.append(record)
         return records
+
+    @staticmethod
+    def _collect_symbol_graphics_segments(symbol_node: SExp, record: SymbolRecord) -> List[Tuple[float, float, float, float]]:
+        """Transform a library symbol's drawn polyline and rectangle graphics into world-space segments."""
+        local_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+        for sub_symbol in symbol_node.find_children("symbol"):
+            for polyline_node in sub_symbol.find_children("polyline"):
+                points: List[Tuple[float, float]] = []
+                pts_node = polyline_node.find_child("pts")
+                xy_nodes = pts_node.find_children("xy") if pts_node is not None else polyline_node.find_children("xy")
+                for xy_node in xy_nodes:
+                    values = _atom_values(xy_node)
+                    if len(values) >= 2:
+                        points.append((float(values[0]), float(values[1])))
+                for index in range(len(points) - 1):
+                    local_segments.append((points[index], points[index + 1]))
+            for rectangle_node in sub_symbol.find_children("rectangle"):
+                start_values = _atom_values(rectangle_node.find_child("start"))
+                end_values = _atom_values(rectangle_node.find_child("end"))
+                if len(start_values) >= 2 and len(end_values) >= 2:
+                    start_x, start_y = float(start_values[0]), float(start_values[1])
+                    end_x, end_y = float(end_values[0]), float(end_values[1])
+                    corners = [(start_x, start_y), (end_x, start_y), (end_x, end_y), (start_x, end_y)]
+                    for corner_index in range(4):
+                        local_segments.append((corners[corner_index], corners[(corner_index + 1) % 4]))
+        world_segments: List[Tuple[float, float, float, float]] = []
+        for first_point, second_point in local_segments:
+            first_world = _transform_point(first_point[0], first_point[1], record.x, record.y, record.angle, record.mirror)
+            second_world = _transform_point(second_point[0], second_point[1], record.x, record.y, record.angle, record.mirror)
+            world_segments.append((first_world[0], first_world[1], second_world[0], second_world[1]))
+        return world_segments
 
     @staticmethod
     def _collect_symbol_pin_names(symbol_node: SExp) -> Dict[str, str]:
@@ -1073,6 +1196,15 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
         differences.append(f"wire-text intersections exceed ground truth ({intersections_b[1]} vs {intersections_a[1]})")
     if intersections_b[2] > intersections_a[2]:
         differences.append(f"symbol-symbol intersections exceed ground truth ({intersections_b[2]} vs {intersections_a[2]})")
+    ground_violations_a = _find_wire_ground_violations(first)
+    ground_violations_b = _find_wire_ground_violations(second)
+    lines.append(f"  Ground pass-through: {len(ground_violations_a)} wire(s) through ground symbols in A, {len(ground_violations_b)} in B (wires may only touch the ground pin, never cross the symbol graphics)")
+    for violation in ground_violations_a:
+        lines.append(f"    A: {violation}")
+    for violation in ground_violations_b:
+        lines.append(f"    B: {violation}")
+    if ground_violations_b:
+        hard_problems.append(f"wires intersect ground symbol graphics ({len(ground_violations_b)} violation(s) in B)")
     unconnected_a, free_ends_a = _count_unconnected_wires(first)
     unconnected_b, free_ends_b = _count_unconnected_wires(second)
     lines.append(f"  Unconnected wires: {unconnected_a} in A, {unconnected_b} in B ({free_ends_a}/{free_ends_b} free endpoints that contact no wire, symbol pin, NC marker, or net label)")
