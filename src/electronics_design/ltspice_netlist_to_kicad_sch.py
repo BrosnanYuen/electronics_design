@@ -1005,6 +1005,70 @@ def _make_routing_orders(
     return unique
 
 
+def _pin_cell_escape_count(  # Count the orthogonal neighbor cells one net pin can still escape through.
+    router: GridRouter,  # Accept the partially built routing grid.
+    pin_cell: Tuple[int, int],  # Accept the pin's grid cell.
+    net_id: int,  # Accept the pin's owning net id.
+    all_pin_cells: Mapping[Tuple[int, int], int],  # Accept every pin cell mapped onto its net id, including ground pins.
+) -> int:
+    """Count the free orthogonal neighbors of one pin cell that its net can still reach."""
+
+    cell_x, cell_y = pin_cell  # Read the pin cell.
+    escape_count = 0  # Count the usable neighbor cells.
+    for step_x, step_y in ((1, 0), (-1, 0), (0, 1), (0, -1)):  # Walk the four orthogonal neighbors.
+        neighbor_x, neighbor_y = cell_x + step_x, cell_y + step_y  # Compute the neighbor cell.
+        if not router.cell_in_bounds(neighbor_x, neighbor_y):  # Off-grid neighbors cannot carry copper.
+            continue  # Move to the next neighbor.
+        if router.blocked[neighbor_y, neighbor_x]:  # Bodies and prior reservations already block the neighbor.
+            continue  # Move to the next neighbor.
+        neighbor_owner = all_pin_cells.get((neighbor_x, neighbor_y))  # A future foreign pin cell hard-blocks this net too.
+        if neighbor_owner is not None and neighbor_owner != net_id:  # Foreign pins are hard exclusions in the A* kernel.
+            continue  # Move to the next neighbor.
+        escape_count += 1  # Count the reachable neighbor.
+    return escape_count  # Return the reachable escape count.
+
+
+def _block_shadow_rect_safely(  # Reserve one GND shadow corridor unless it would seal a routable pin cell.
+    router: GridRouter,  # Accept the partially built routing grid.
+    shadow_rect: Tuple[float, float, float, float],  # Accept the shadow rectangle.
+    routable_pin_cells: Mapping[Tuple[int, int], int],  # Accept every non-ground pin cell mapped onto its net id.
+    all_pin_cells: Mapping[Tuple[int, int], int],  # Accept every pin cell including ground pins for foreign-cell exclusion.
+) -> bool:  # Return whether the reservation was applied.
+    """Block one GND shadow rectangle unless doing so would seal any routable pin.
+
+    A pin whose four orthogonal neighbors all end up blocked can never be
+    reached by the A* router; routing then falls back to the emergency trunk
+    engine and produces extra-long detours.  Ground pins are exempt because
+    they are never A*-routed; their stubs are built geometrically later.  The
+    reservation is rolled back in that case because the later ground-stub
+    stage validates its clearance independently.
+    """
+    low_x, low_y = router.world_to_cell(min(shadow_rect[0], shadow_rect[2]), min(shadow_rect[1], shadow_rect[3]))  # Normalize the reservation corners.
+    high_x, high_y = router.world_to_cell(max(shadow_rect[0], shadow_rect[2]), max(shadow_rect[1], shadow_rect[3]))  # Finish the covered cell window.
+    newly_blocked: List[Tuple[int, int]] = []  # Track the cells this reservation actually changes.
+    for cell_y in range(max(0, low_y), min(router.rows - 1, high_y) + 1):  # Walk the covered rows.
+        for cell_x in range(max(0, low_x), min(router.cols - 1, high_x) + 1):  # Walk the covered columns.
+            if not router.blocked[cell_y, cell_x]:  # Body cells inside the corridor stay blocked.
+                newly_blocked.append((cell_x, cell_y))  # Record the newly reserved cell.
+    for cell_x, cell_y in newly_blocked:  # Tentatively reserve the corridor.
+        router.blocked[cell_y, cell_x] = True  # Mark the cell blocked for the seal evaluation.
+    sealed = any(  # Detect any routable pin that lost its last escape cell.
+        _pin_cell_escape_count(router, cell, net_id, all_pin_cells) == 0
+        for cell, net_id in routable_pin_cells.items()
+    )
+    if sealed:  # The corridor would make some routable pin unroutable.
+        for cell_x, cell_y in newly_blocked:  # Roll the tentative reservation back.
+            router.blocked[cell_y, cell_x] = False  # Free the cell again.
+            router.owner_grid[cell_y, cell_x] = 0  # Clear the compiled ownership.
+            router.owner_net.pop((cell_x, cell_y), None)  # Drop any ownership record.
+        return False  # Report that the reservation was skipped.
+    for cell_x, cell_y in newly_blocked:  # Finalize the successful reservation.
+        router.blocked[cell_y, cell_x] = True  # Keep the cell blocked.
+        router.owner_grid[cell_y, cell_x] = -1  # Mark a plain obstacle for the compiled kernel.
+        router.owner_net.pop((cell_x, cell_y), None)  # Shadows never carry net ownership.
+    return True  # Report that the reservation was applied.
+
+
 def _new_routing_grid(
     records: Sequence[Dict[str, Any]],
     nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
@@ -1021,17 +1085,23 @@ def _new_routing_grid(
             continue
         body_rect = _record_body_rect(record, bounds_key="routing_bounds")
         router.block_rectangle(body_rect[0], body_rect[1], body_rect[2], body_rect[3])
-    for shadow_rect in shadow_rects:  # Reserve the GND stub and symbol corridors below ground pins.
-        router.block_rectangle(shadow_rect[0], shadow_rect[1], shadow_rect[2], shadow_rect[3])  # Block the reserved corridor cells.
-    for blocked_x, blocked_y in blocked_points:  # Block exempt NC pin cells so copper never passes through them.
-        cell_x, cell_y = router.world_to_cell(blocked_x, blocked_y)  # Snap the blocked point onto the routing grid.
-        router.block_cell(cell_x, cell_y)  # Reserve the NC pin cell.
+    pin_cells_by_net: Dict[Tuple[int, int], int] = {}  # Collect every pin cell for compiled hard exclusion.
+    routable_pin_cells: Dict[Tuple[int, int], int] = {}  # Collect the non-ground pins the A* router must actually reach.
     for name, pins in nets.items():
         if name not in net_ids:
             continue
         for _record_index, _pin_number, pin_x, pin_y in pins:
             cell_x, cell_y = router.world_to_cell(pin_x, pin_y)
-            router.block_pin_cell(cell_x, cell_y, net_ids[name])
+            pin_cells_by_net.setdefault((cell_x, cell_y), net_ids[name])
+            if name not in _GROUND_NODE_NAMES:  # Ground pins are stubbed geometrically and never A*-routed.
+                routable_pin_cells.setdefault((cell_x, cell_y), net_ids[name])
+    for shadow_rect in shadow_rects:  # Reserve the GND stub and symbol corridors below ground pins.
+        _block_shadow_rect_safely(router, shadow_rect, routable_pin_cells, pin_cells_by_net)  # Corridors that would seal a routable pin are skipped so A* keeps its direct route.
+    for blocked_x, blocked_y in blocked_points:  # Block exempt NC pin cells so copper never passes through them.
+        cell_x, cell_y = router.world_to_cell(blocked_x, blocked_y)  # Snap the blocked point onto the routing grid.
+        router.block_cell(cell_x, cell_y)  # Reserve the NC pin cell.
+    for (cell_x, cell_y), net_id in pin_cells_by_net.items():  # Block every net pin cell for compiled hard exclusion.
+        router.block_pin_cell(cell_x, cell_y, net_id)
     return router
 
 
@@ -1057,6 +1127,7 @@ def _route_trial(
         for pins in nets.values()
         for _record_index, _pin_number, pin_x, pin_y in pins
     }
+    fallback_foreign_points = foreign_points | {(round(point_x, 6), round(point_y, 6)) for point_x, point_y in blocked_points}  # Local trunk lanes must also avoid the no-connect pin markers dropped from routing.
     fallback_bodies = [_record_body_rect(record, "routing_bounds") for record in records if not record["power"]] + [rect for rect in shadow_rects]  # Exit lanes must never cross symbol bodies or reserved GND corridors.
     fallback_count = 0
     for name in routing_order:
@@ -1094,7 +1165,7 @@ def _route_trial(
         if segments is None:
             trunk_y = -grid * (fallback_count + 1)  # Keep emergency trunks on unique adjacent grid lanes near the sheet.
             fallback_count += 1
-            segments = _route_net_trunk_fallback(pins, grid, foreign_points, trunk_y, foreign_segments, fallback_bodies)
+            segments = _route_net_trunk_fallback(pins, grid, fallback_foreign_points, trunk_y, foreign_segments, fallback_bodies, lane_y_bounds=(grid, page_height - grid))  # Prefer short local lanes before the below-page emergency trunk.
             router.mark_cells(_grid_cells_for_segments(router, segments), net_ids[name])  # Reserve in-page fallback copper against later hard routes.
         else:
             route_corners = router.routed_corner_points()
@@ -1971,11 +2042,20 @@ def _fit_parts_on_page(  # Translate the finished drawing and its directive text
         0.0,  # Fall back to the tightest fit when even the smallest margin overflows.
     )
     top_with_directives = min_y - directive_span  # Extend the drawing top by the directive stack.
-    delta_x = round(((page_width - content_width) / 2.0 - min_x) / grid) * grid  # Center the drawing horizontally on the grid.
-    delta_y = round(((page_height - (max_y - top_with_directives)) / 2.0 - top_with_directives) / grid) * grid  # Center the drawing and directives vertically on the grid.
+    band = max(2.0 * grid, 2.0)  # Clearance band used to compare drawing activity near both edges.
+    top_activity = sum(1 for point in points if point[1] <= min_y + band)  # Count drawing points near the top edge.
+    bottom_activity = sum(1 for point in points if point[1] >= max_y - band)  # Count drawing points near the bottom edge.
+    directives_below = directive_count > 0 and bottom_activity < top_activity  # Move the stack below the drawing when the top edge is busier.
+    if directives_below:  # Center the drawing alone and let the directives stack under its bottom edge.
+        delta_x = round(((page_width - content_width) / 2.0 - min_x) / grid) * grid  # Center the drawing horizontally on the grid.
+        delta_y = round(((page_height - content_height) / 2.0 - min_y) / grid) * grid  # Reserve the directive span below the drawing bottom.
+    else:  # Keep the historical placement with the directives stacked above the drawing.
+        delta_x = round(((page_width - content_width) / 2.0 - min_x) / grid) * grid  # Center the drawing horizontally on the grid.
+        delta_y = round(((page_height - (max_y - top_with_directives)) / 2.0 - top_with_directives) / grid) * grid  # Center the drawing and directives vertically on the grid.
     for node in content_nodes:  # Translate every drawing node.
         _shift_sxp_world_coordinates(node, delta_x, delta_y)  # Apply the uniform page-fit translation.
     shifted_top = min_y + delta_y  # Resolve the translated drawing top.
+    shifted_bottom = max_y + delta_y  # Resolve the translated drawing bottom.
     directive_x = min_x + delta_x  # Align the directive stack with the translated left edge.
     for index, text_node in enumerate(text_nodes, start=1):  # Reposition every directive relative to the translated drawing.
         at_node = text_node.find_child("at")  # Locate the directive position token.
@@ -1985,7 +2065,10 @@ def _fit_parts_on_page(  # Translate the finished drawing and its directive text
         if len(atoms) < 2:  # Keep only complete coordinate pairs.
             continue  # Move to the next directive.
         atoms[0].value = directive_x  # Park the directive at the drawing's left edge.
-        atoms[1].value = shifted_top - _PAGE_FIT_TEXT_GAP - _PAGE_FIT_TEXT_STEP * (index - 1)  # Stack the directives above the drawing top.
+        if directives_below:  # Stack the directives below the drawing bottom.
+            atoms[1].value = shifted_bottom + _PAGE_FIT_TEXT_GAP + _PAGE_FIT_TEXT_STEP * (index - 1)
+        else:  # Stack the directives above the drawing top.
+            atoms[1].value = shifted_top - _PAGE_FIT_TEXT_GAP - _PAGE_FIT_TEXT_STEP * (index - 1)
     return paper_name  # Report the fitted paper name.
 
 
@@ -2409,90 +2492,117 @@ def _route_net_trunk_fallback(  # Route one net with the provably safe fallback 
     pins: Sequence[Tuple[int, str, float, float]],  # Accept the net pin list.
     grid: float,  # Accept the routing grid.
     foreign_points: Set[Tuple[float, float]],  # Accept every foreign pin and corner point.
-    trunk_y: float,  # Accept the exclusive trunk Y below the page.
+    trunk_y: float,  # Accept the exclusive emergency trunk Y below the page.
     foreign_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]] = (),  # Accept complete foreign copper for exact junction rejection.
     body_rects: Sequence[Tuple[float, float, float, float]] = (),  # Accept symbol bodies that exit lanes must avoid.
+    lane_y_bounds: Tuple[float, float] = (),  # Accept the page Y bounds that local trunk lanes must respect.
 ) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:  # Return the fallback wire segments.
-    segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []  # Collect the generated segments.
     avoid_xs = sorted({point[0] for point in foreign_points})  # Sorted foreign X coordinates for tolerance-aware lane lookups.
     own_pin_points = {(round(pin_x, 6), round(pin_y, 6)) for _record_index, _pin_number, pin_x, pin_y in pins}  # Exempt this net's own pins from foreign-point audits.
-    used_exit_xs: Set[float] = set()  # Track exit lanes already claimed by this net.
+    pin_ys = [pin_y for _record_index, _pin_number, _pin_x, pin_y in pins]  # Collect the net's pin Y extent for local lane placement.
 
-    def _lane_occupied(candidate: float) -> bool:  # Reject lanes within contact tolerance of any foreign or claimed coordinate.
+    def _lane_occupied(candidate: float, used_exit_xs: Set[float]) -> bool:  # Reject lanes within contact tolerance of any foreign or claimed coordinate.
         left_index = bisect.bisect_left(avoid_xs, candidate - _KI_CAD_CONTACT_TOLERANCE)  # Locate the first foreign lane at or right of the tolerance window.
         if left_index < len(avoid_xs) and avoid_xs[left_index] <= candidate + _KI_CAD_CONTACT_TOLERANCE:  # A foreign coordinate sits inside the window.
             return True  # Report the lane as occupied.
         return any(abs(candidate - used_x) < _KI_CAD_CONTACT_TOLERANCE for used_x in used_exit_xs)  # Scan this net's claimed lanes.
 
-    exit_xs: List[float] = []  # Collect the resolved exit lanes.
-    for pin_index, (_record_index, _pin_number, pin_x, pin_y) in enumerate(pins):  # Walk every net pin.
-        chosen: Optional[float] = None  # Initialize the chosen lane.
+    def _exit_for_pin(  # Resolve one clean side-exit lane from one pin toward one trunk lane.
+        pin_index: int,  # Accept the pin's index for deterministic last-resort lanes.
+        pin_x: float,  # Accept the pin X coordinate.
+        pin_y: float,  # Accept the pin Y coordinate.
+        lane_y: float,  # Accept the trunk lane the exit must reach.
+        used_exit_xs: Set[float],  # Accept the exit lanes already claimed by this net.
+    ) -> Optional[float]:  # Return the chosen exit X or None when every lane is blocked.
         max_steps = max(4, len(avoid_xs) + len(used_exit_xs) + 2)  # Bound each spacing search by the finite occupied-lane count.
         for subdivision in range(17):  # Progressively search between occupied grid lanes when both sides are bracketed.
             spacing = grid / (2**subdivision)  # Refine the candidate spacing without disconnecting the physical wire.
             for step in range(1, max_steps + 1):  # Search outward at this finite resolution.
                 for candidate in (pin_x - step * spacing, pin_x + step * spacing):  # Try both sides at this distance.
-                    if _lane_occupied(candidate):  # Skip lanes occupied by foreign points or prior exits.
+                    if _lane_occupied(candidate, used_exit_xs):  # Skip lanes occupied by foreign points or prior exits.
                         continue  # Move to the next candidate.
                     low, high = min(pin_x, candidate), max(pin_x, candidate)  # Compute the side-exit span.
                     conflict = any(point not in own_pin_points and abs(point[1] - pin_y) < 1e-9 and low < point[0] < high for point in foreign_points)  # Detect foreign points inside the span.
-                    candidate_segments = [((pin_x, pin_y), (candidate, pin_y)), ((candidate, pin_y), (candidate, trunk_y))]  # Build the exact proposed exit geometry.
+                    candidate_segments = [((pin_x, pin_y), (candidate, pin_y)), ((candidate, pin_y), (candidate, lane_y))]  # Build the exact proposed exit geometry.
                     conflict = conflict or any(  # Reject endpoint-on-wire contacts that would electrically merge the nets.
                         _segments_create_junction(candidate_segment, foreign_segment, _KI_CAD_CONTACT_TOLERANCE)
                         for candidate_segment in candidate_segments
                         for foreign_segment in foreign_segments
                     )
                     conflict = conflict or any(  # Reject a vertical drop running within contact tolerance of a foreign pin.
-                        point not in own_pin_points and abs(point[0] - candidate) < _KI_CAD_CONTACT_TOLERANCE and min(pin_y, trunk_y) - _KI_CAD_CONTACT_TOLERANCE < point[1] < max(pin_y, trunk_y) + _KI_CAD_CONTACT_TOLERANCE
+                        point not in own_pin_points and abs(point[0] - candidate) < _KI_CAD_CONTACT_TOLERANCE and min(pin_y, lane_y) - _KI_CAD_CONTACT_TOLERANCE < point[1] < max(pin_y, lane_y) + _KI_CAD_CONTACT_TOLERANCE
                         for point in foreign_points
                     )
                     if not conflict and any(_segment_intersects_rect(segment, body) for segment in candidate_segments for body in body_rects):  # Never drop exit lanes through symbol bodies.
                         conflict = True  # Reject the lane.
                     if not conflict:  # Accept the clean lane.
-                        chosen = candidate  # Store the chosen lane.
-                        break  # Stop searching candidates.
-                if chosen is not None:  # Stop widening after finding a clean lane.
-                    break  # Leave the step loop.
-            if chosen is not None:  # Stop refining after finding a clean lane.
-                break  # Leave the subdivision loop.
-        if chosen is None:  # Retain a deterministic finite fallback for pathologically dense floating-point inputs.
-            candidates = [(pin_index + 1, 1)]  # Prefer the historical microscopic lane first to keep existing safe geometry.
-            candidates.extend((index, sign) for index in range(1, max_steps + 1) for sign in (1, -1))  # Then sweep unique microscopic lanes beside the pin.
-            for offset_index, side in candidates:  # Validate every microscopic lane with the same checks as the primary search.
-                candidate = pin_x + side * offset_index * _MICROSCOPIC_LANE_SPACING  # Build the candidate lane.
-                if _lane_occupied(candidate):  # Skip lanes occupied by foreign points or prior exits.
-                    continue  # Move to the next candidate.
-                low, high = min(pin_x, candidate), max(pin_x, candidate)  # Compute the side-exit span.
-                conflict = any(point not in own_pin_points and abs(point[1] - pin_y) < 1e-9 and low < point[0] < high for point in foreign_points)  # Detect foreign points inside the span.
-                candidate_segments = [((pin_x, pin_y), (candidate, pin_y)), ((candidate, pin_y), (candidate, trunk_y))]  # Build the exact proposed exit geometry.
-                conflict = conflict or any(  # Reject endpoint-on-wire contacts that would electrically merge the nets.
-                    _segments_create_junction(candidate_segment, foreign_segment, _KI_CAD_CONTACT_TOLERANCE)
-                    for candidate_segment in candidate_segments
-                    for foreign_segment in foreign_segments
-                )
-                conflict = conflict or any(  # Reject a vertical drop running within contact tolerance of a foreign pin.
-                    point not in own_pin_points and abs(point[0] - candidate) < _KI_CAD_CONTACT_TOLERANCE and min(pin_y, trunk_y) - _KI_CAD_CONTACT_TOLERANCE < point[1] < max(pin_y, trunk_y) + _KI_CAD_CONTACT_TOLERANCE
-                    for point in foreign_points
-                )
-                if not conflict and any(_segment_intersects_rect(segment, body) for segment in candidate_segments for body in body_rects):  # Never drop exit lanes through symbol bodies.
-                    conflict = True  # Reject the lane.
-                if not conflict:  # Accept the clean lane.
-                    chosen = candidate  # Store the chosen lane.
-                    break  # Stop searching lanes.
-            if chosen is None:  # Keep a deterministic unique lane for truly saturated inputs.
-                last_resort_index = pin_index + 1  # Start at the historical microscopic lane.
-                while _lane_occupied(pin_x + last_resort_index * _MICROSCOPIC_LANE_SPACING):  # Skip lanes already claimed by earlier nets' emergency copper.
-                    last_resort_index += 1  # Advance to the next unique microscopic lane.
-                chosen = pin_x + last_resort_index * _MICROSCOPIC_LANE_SPACING  # Use the first unclaimed microscopic lane.
-        used_exit_xs.add(round(chosen, 6))  # Claim the lane.
-        exit_xs.append(chosen)  # Record the exit lane.
-        if abs(chosen - pin_x) > 1e-9:  # Emit the horizontal side-exit stub.
-            segments.append(((pin_x, pin_y), (chosen, pin_y)))  # Append the side-exit stub.
-        if abs(pin_y - trunk_y) > 1e-9:  # Emit the vertical drop onto the trunk.
-            segments.append(((chosen, pin_y), (chosen, trunk_y)))  # Append the vertical drop.
-    if len(set(exit_xs)) > 1:  # Emit the horizontal trunk when pins span multiple lanes.
-        segments.append(((min(exit_xs), trunk_y), (max(exit_xs), trunk_y)))  # Append the trunk segment.
-    return segments  # Return the fallback segments.
+                        return candidate  # Report the chosen lane.
+        candidates = [(pin_index + 1, 1)]  # Prefer the historical microscopic lane first to keep existing safe geometry.
+        candidates.extend((index, sign) for index in range(1, max_steps + 1) for sign in (1, -1))  # Then sweep unique microscopic lanes beside the pin.
+        for offset_index, side in candidates:  # Validate every microscopic lane with the same checks as the primary search.
+            candidate = pin_x + side * offset_index * _MICROSCOPIC_LANE_SPACING  # Build the candidate lane.
+            if _lane_occupied(candidate, used_exit_xs):  # Skip lanes occupied by foreign points or prior exits.
+                continue  # Move to the next candidate.
+            low, high = min(pin_x, candidate), max(pin_x, candidate)  # Compute the side-exit span.
+            conflict = any(point not in own_pin_points and abs(point[1] - pin_y) < 1e-9 and low < point[0] < high for point in foreign_points)  # Detect foreign points inside the span.
+            candidate_segments = [((pin_x, pin_y), (candidate, pin_y)), ((candidate, pin_y), (candidate, lane_y))]  # Build the exact proposed exit geometry.
+            conflict = conflict or any(  # Reject endpoint-on-wire contacts that would electrically merge the nets.
+                _segments_create_junction(candidate_segment, foreign_segment, _KI_CAD_CONTACT_TOLERANCE)
+                for candidate_segment in candidate_segments
+                for foreign_segment in foreign_segments
+            )
+            conflict = conflict or any(  # Reject a vertical drop running within contact tolerance of a foreign pin.
+                point not in own_pin_points and abs(point[0] - candidate) < _KI_CAD_CONTACT_TOLERANCE and min(pin_y, lane_y) - _KI_CAD_CONTACT_TOLERANCE < point[1] < max(pin_y, lane_y) + _KI_CAD_CONTACT_TOLERANCE
+                for point in foreign_points
+            )
+            if not conflict and any(_segment_intersects_rect(segment, body) for segment in candidate_segments for body in body_rects):  # Never drop exit lanes through symbol bodies.
+                conflict = True  # Reject the lane.
+            if not conflict:  # Accept the clean lane.
+                return candidate  # Report the chosen lane.
+        last_resort_index = pin_index + 1  # Start at the historical microscopic lane.
+        while _lane_occupied(pin_x + last_resort_index * _MICROSCOPIC_LANE_SPACING, used_exit_xs):  # Skip lanes already claimed by earlier nets' emergency copper.
+            last_resort_index += 1  # Advance to the next unique microscopic lane.
+        return pin_x + last_resort_index * _MICROSCOPIC_LANE_SPACING  # Deterministically reuse the saturated-input lane.
+
+    def _segments_for_lane(lane_y: float) -> Optional[List[Tuple[Tuple[float, float], Tuple[float, float]]]]:  # Build the complete exit set for one trunk lane.
+        segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []  # Collect the generated segments.
+        exit_xs: List[float] = []  # Collect the resolved exit lanes.
+        used_exit_xs: Set[float] = set()  # Track exit lanes already claimed by this net on this lane.
+        for pin_index, (_record_index, _pin_number, pin_x, pin_y) in enumerate(pins):  # Walk every net pin.
+            chosen = _exit_for_pin(pin_index, pin_x, pin_y, lane_y, used_exit_xs)  # Resolve the pin's clean side-exit lane.
+            used_exit_xs.add(round(chosen, 6))  # Claim the lane for this net.
+            exit_xs.append(chosen)  # Record the exit lane.
+            if abs(chosen - pin_x) > 1e-9:  # Emit the horizontal side-exit stub.
+                segments.append(((pin_x, pin_y), (chosen, pin_y)))  # Append the side-exit stub.
+            if abs(pin_y - lane_y) > 1e-9:  # Emit the vertical drop onto the trunk.
+                segments.append(((chosen, pin_y), (chosen, lane_y)))  # Append the vertical drop.
+        if len(set(exit_xs)) > 1:  # Emit the horizontal trunk when pins span multiple lanes.
+            lane_segment = ((min(exit_xs), lane_y), (max(exit_xs), lane_y))  # Build the trunk segment.
+            if any(  # Reject a trunk that runs through a foreign pin.
+                point not in own_pin_points and _point_on_segment_local(point[0], point[1], lane_segment, _KI_CAD_CONTACT_TOLERANCE)
+                for point in foreign_points
+            ):
+                return None  # Try the next candidate lane.
+            if any(_segments_create_junction(lane_segment, foreign_segment, _KI_CAD_CONTACT_TOLERANCE) for foreign_segment in foreign_segments):  # Reject endpoint-on-wire contacts that would merge nets.
+                return None  # Try the next candidate lane.
+            if any(_segment_intersects_rect(lane_segment, body) for body in body_rects):  # Never run the trunk through symbol bodies.
+                return None  # Try the next candidate lane.
+            segments.append(lane_segment)  # Append the trunk segment.
+        return segments  # Return the complete fallback geometry for this lane.
+
+    candidate_lanes: List[float] = []  # Collect the trunk lane candidates from nearest to farthest.
+    if lane_y_bounds:  # Local lanes keep the emergency copper close to the net instead of wrapping the whole page.
+        low_y, high_y = lane_y_bounds  # Read the page Y bounds the lanes must respect.
+        for step in range(1, 9):  # Search up to eight grid lanes away from the net's pin extent.
+            for candidate in (min(pin_ys) - step * grid, max(pin_ys) + step * grid):  # Try just above and just below the net.
+                if low_y <= candidate <= high_y and candidate not in candidate_lanes:  # Keep lanes inside the page and unique.
+                    candidate_lanes.append(candidate)  # Append the nearby lane.
+    candidate_lanes.append(trunk_y)  # The historical below-page lane remains the final emergency fallback.
+    for lane_y in candidate_lanes:  # Accept the first lane that produces complete clean copper.
+        segments = _segments_for_lane(lane_y)  # Build the full exit set for this lane.
+        if segments is not None:  # Keep the clean lane's geometry.
+            return segments  # Return the fallback segments.
+    return []  # Deterministically report nothing when even the emergency lane is unusable.
 
 
 def _ensure_net_copper(  # Guarantee that one net carries at least one wire segment.
