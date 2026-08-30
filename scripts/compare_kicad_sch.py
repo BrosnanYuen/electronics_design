@@ -13,7 +13,9 @@ The comparison is translation/rotation/scale tolerant: symbol positions are
 compared only as *relative* geometry after finding the best rigid transform
 (rotation in 90-degree steps, optional mirror, uniform scale) that aligns the
 matched symbol positions.  Symbol orientations, wire geometry, electrical
-connectivity, and header/property metadata are compared directly.
+connectivity, and header/property metadata are compared directly.  Per-net
+long-detour connections (routed wire length far above the direct pin-to-pin
+span, controlled by --long-net-ratio) are reported as well.
 
 Exit status is 0 when every compared pair matches, otherwise 1.
 """
@@ -42,6 +44,7 @@ from electronics_design.kicad_sexp_parser import SExp, parse_string
 
 _POINT_TOLERANCE = 1e-4
 _CONTACT_TOLERANCE = 1e-3  # Distances below this count as one contact point for ground-graphics checks.
+_LONG_NET_FLOOR_MM = 2.54  # Connections with a direct pin span below this are too short to judge detours.
 
 
 def _first_atom(node: Optional[SExp]) -> str:
@@ -947,6 +950,69 @@ def _report_wire_length_scores(first: Schematic, second: Schematic, relative_tol
     return score, lines
 
 
+def _manhattan_mst_length(points: List[Tuple[float, float]]) -> float:
+    """Length of a minimum spanning tree over pin positions measured with Manhattan distance.
+
+    An orthogonal direct route between two pins costs exactly the Manhattan
+    distance, so the Manhattan MST is the 'normal' routed length of a net that
+    connects its pins directly.
+    """
+    count = len(points)
+    if count < 2:
+        return 0.0
+    in_tree = [False] * count
+    in_tree[0] = True
+    best = [abs(point[0] - points[0][0]) + abs(point[1] - points[0][1]) for point in points]
+    total = 0.0
+    for _ in range(count - 1):
+        chosen = -1
+        chosen_cost = float("inf")
+        for index in range(count):
+            if not in_tree[index] and best[index] < chosen_cost:
+                chosen = index
+                chosen_cost = best[index]
+        if chosen < 0:
+            break
+        in_tree[chosen] = True
+        total += chosen_cost
+        for index in range(count):
+            if in_tree[index]:
+                continue
+            candidate = abs(points[index][0] - points[chosen][0]) + abs(points[index][1] - points[chosen][1])
+            if candidate < best[index]:
+                best[index] = candidate
+    return total
+
+
+def _find_long_net_connections(schematic: Schematic, ratio_threshold: float) -> List[str]:
+    """Describe nets whose routed wire length far exceeds the direct pin-to-pin span.
+
+    The 'normal' length of a connection is a minimum spanning tree over its pin
+    positions measured with Manhattan distance.  A routed length more than
+    `ratio_threshold` times that span means the wires wander far away from the
+    components (for example up to the page edge and back) instead of connecting
+    them directly.
+    """
+    pin_positions: Dict[Tuple[str, str], Tuple[float, float]] = {}
+    for record in schematic.symbols:
+        for pin_number, (pin_x, pin_y) in record.pins.items():
+            pin_positions[(record.reference, pin_number)] = (pin_x, pin_y)
+    violations: List[str] = []
+    for net_name, members in schematic.nets.items():
+        points = [pin_positions[member] for member in members if member in pin_positions]
+        if len(points) < 2:
+            continue
+        direct = _manhattan_mst_length(points)
+        if direct <= _LONG_NET_FLOOR_MM:
+            continue
+        routed = schematic.net_wire_length.get(net_name, 0.0)
+        if routed > ratio_threshold * direct:
+            violations.append(
+                f"{_connection_label(set(members))}: routed {routed:.2f}mm vs direct pin span {direct:.2f}mm ({routed / direct:.1f}x direct)"
+            )
+    return sorted(violations)
+
+
 def _count_unconnected_wires(schematic: Schematic) -> Tuple[int, int]:  # Count wire segments with a free endpoint plus the total free endpoints.
     connection_points: List[Tuple[float, float]] = []  # Collect symbol pins, NC markers, and net labels.
     for record in schematic.symbols:  # Walk every symbol instance.
@@ -1072,7 +1138,7 @@ def _orientation_equivalent(first: SymbolRecord, second: SymbolRecord) -> bool:
     return abs(first.angle - second.angle) < 1e-6 and first.mirror == second.mirror
 
 
-def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: float, verbose: bool, kicad_path: str, wire_length_tolerance: float) -> Tuple[bool, List[str], List[str]]:
+def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: float, verbose: bool, kicad_path: str, wire_length_tolerance: float, long_net_ratio: float) -> Tuple[bool, List[str], List[str]]:
     lines: List[str] = []
     hard_problems: List[str] = []
     differences: List[str] = []
@@ -1275,6 +1341,16 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
     if wire_length_score < 50.0:
         differences.append(f"per-connection wire length score {wire_length_score:.1f}%")
 
+    long_nets_a = _find_long_net_connections(first, long_net_ratio)
+    long_nets_b = _find_long_net_connections(second, long_net_ratio)
+    lines.append(f"  Long connections: {len(long_nets_a)} in A, {len(long_nets_b)} in B (routed wire length more than {long_net_ratio:g}x the direct pin-to-pin Manhattan span)")
+    for violation in long_nets_a:
+        lines.append(f"    A: {violation}")
+    for violation in long_nets_b:
+        lines.append(f"    B: {violation}")
+    if len(long_nets_b) > len(long_nets_a):
+        differences.append(f"long detour connections exceed ground truth ({len(long_nets_b)} vs {len(long_nets_a)} net(s) routed more than {long_net_ratio:g}x their direct pin span)")
+
     if verbose:
         lines.append("  Net memberships:")
         for net in sorted(set(nets_a) | set(nets_b)):
@@ -1303,7 +1379,7 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
     return not hard_problems, lines, differences
 
 
-def _compare_files(first_path: Path, second_path: Path, tolerance: float, verbose: bool, kicad_path: str, wire_length_tolerance: float) -> Tuple[bool, List[str]]:
+def _compare_files(first_path: Path, second_path: Path, tolerance: float, verbose: bool, kicad_path: str, wire_length_tolerance: float, long_net_ratio: float) -> Tuple[bool, List[str]]:
     lines: List[str] = []
     lines.append(f"Comparing: {first_path.name}")
     lines.append(f"  A: {first_path}")
@@ -1318,7 +1394,7 @@ def _compare_files(first_path: Path, second_path: Path, tolerance: float, verbos
     except Exception as exc:  # noqa: BLE001 - report any parse failure directly.
         lines.append(f"  ERROR parsing file B: {exc}")
         return False, lines
-    ok, detail, _differences = _compare_schematic_pair(first, second, tolerance, verbose, kicad_path, wire_length_tolerance)
+    ok, detail, _differences = _compare_schematic_pair(first, second, tolerance, verbose, kicad_path, wire_length_tolerance, long_net_ratio)
     lines.extend(detail)
     return ok, lines
 
@@ -1331,6 +1407,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--verbose", action="store_true", help="Print per-net and per-library detail.")
     parser.add_argument("--kicad-path", default="/usr/share/kicad/", help="Root of the KiCad symbol libraries for the electrical equivalence check. Empty disables it.")
     parser.add_argument("--wire-length-tolerance", type=float, default=0.25, help="Maximum relative wire-length difference per connection scored as a match. Default: 0.25 (25%%).")
+    parser.add_argument("--long-net-ratio", type=float, default=5.0, help="Ratio of routed wire length to the direct pin-to-pin Manhattan span above which a connection is reported as a long detour. Default: 5.0.")
     parser.add_argument(
         "--workers",
         type=int,
@@ -1386,6 +1463,7 @@ def main() -> int:
                         arguments.verbose,
                         kicad_path,
                         arguments.wire_length_tolerance,
+                        arguments.long_net_ratio,
                     ): name
                     for name, first_path, second_path in pairs
                 }
@@ -1423,6 +1501,7 @@ def main() -> int:
                     arguments.verbose,
                     kicad_path,
                     arguments.wire_length_tolerance,
+                    arguments.long_net_ratio,
                 )
                 print(f"== {name} ==")
                 print("\n".join(lines))
@@ -1436,7 +1515,7 @@ def main() -> int:
     if not second_path.is_file():
         print(f"{second_path}: not a file", file=sys.stderr)
         return 1
-    ok, lines = _compare_files(first_path, second_path, arguments.tolerance, arguments.verbose, kicad_path, arguments.wire_length_tolerance)
+    ok, lines = _compare_files(first_path, second_path, arguments.tolerance, arguments.verbose, kicad_path, arguments.wire_length_tolerance, arguments.long_net_ratio)
     print("\n".join(lines))
     return 0 if ok else 1
 
