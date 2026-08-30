@@ -170,9 +170,19 @@ def _symbol_body_bounds(symbol_node: SExp) -> Optional[Tuple[float, float, float
 
     def collect(node: SExp) -> None:
         for child in node.children:
-            if child.name in ("polyline", "rectangle", "bezier"):
-                for xy_node in child.find_children("xy"):
+            if child.is_atom:
+                continue
+            if child.name in ("polyline", "bezier"):
+                pts_node = child.find_child("pts")
+                xy_nodes = pts_node.find_children("xy") if pts_node is not None else child.find_children("xy")
+                for xy_node in xy_nodes:
                     values = _atom_values(xy_node)
+                    if len(values) >= 2:
+                        xs.append(float(values[0]))
+                        ys.append(float(values[1]))
+            elif child.name == "rectangle":
+                for key in ("start", "end"):
+                    values = _atom_values(child.find_child(key))
                     if len(values) >= 2:
                         xs.append(float(values[0]))
                         ys.append(float(values[1]))
@@ -351,6 +361,28 @@ def _find_wire_ground_violations(schematic: Schematic) -> List[str]:
             else:
                 detail = "runs along the ground symbol outline"
             violations.append(f"wire ({segment[0]:.2f}, {segment[1]:.2f})-({segment[2]:.2f}, {segment[3]:.2f}) {detail} of ground '{record.reference}'")
+    return violations
+
+
+def _find_power_symbol_overlaps(schematic: Schematic) -> List[str]:
+    """Describe power symbols whose body graphics intersect another symbol's body.
+
+    Power symbols (GND, VDD, PWR_FLAG, ...) must never overlap any other symbol's
+    drawn body; they may only attach to a wire or pin contact point.  Overlap is
+    tested against every other symbol body, including other power symbols.
+    """
+    violations: List[str] = []
+    bodies = [record for record in schematic.symbols if record.body_rect is not None]
+    for first_index, first in enumerate(bodies):
+        if not first.power:
+            continue
+        for second_index, second in enumerate(bodies):
+            if second_index == first_index:
+                continue
+            if _rects_strict_overlap(first.body_rect, second.body_rect):
+                violations.append(
+                    f"power symbol '{first.reference}' ({first.lib_id}) intersects symbol '{second.reference}' ({second.lib_id})"
+                )
     return violations
 
 
@@ -1205,6 +1237,15 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
         lines.append(f"    B: {violation}")
     if ground_violations_b:
         hard_problems.append(f"wires intersect ground symbol graphics ({len(ground_violations_b)} violation(s) in B)")
+    power_overlaps_a = _find_power_symbol_overlaps(first)
+    power_overlaps_b = _find_power_symbol_overlaps(second)
+    lines.append(f"  Power symbol overlaps: {len(power_overlaps_a)} in A, {len(power_overlaps_b)} in B (power symbols must never intersect another symbol's body)")
+    for violation in power_overlaps_a:
+        lines.append(f"    A: {violation}")
+    for violation in power_overlaps_b:
+        lines.append(f"    B: {violation}")
+    if power_overlaps_b:
+        hard_problems.append(f"power symbols intersect other symbol bodies ({len(power_overlaps_b)} violation(s) in B)")
     unconnected_a, free_ends_a = _count_unconnected_wires(first)
     unconnected_b, free_ends_b = _count_unconnected_wires(second)
     lines.append(f"  Unconnected wires: {unconnected_a} in A, {unconnected_b} in B ({free_ends_a}/{free_ends_b} free endpoints that contact no wire, symbol pin, NC marker, or net label)")

@@ -847,6 +847,8 @@ def _build_one_record(  # Build one component record from a resolved device and 
             "pin_map": pin_map,  # Store the node-to-pin mapping.
             "power": True,  # Mark the record as a power symbol.
             "symbol_node": symbol_node,  # Store the resolved symbol node for body geometry.
+            "body_bounds": _symbol_body_bounds(symbol_node, short_name),  # Measure the drawn body so power symbols never intersect other symbols.
+            "text_bounds": _symbol_body_bounds(symbol_node, short_name, include_pins=False, combine_sections=True),  # Measure the graphics-only bounds for strict clearance checks.
             "x": 0.0,  # Initialize the placement X (set during routing).
             "y": 0.0,  # Initialize the placement Y (set during routing).
             "angle": 0.0,  # Initialize the placement angle.
@@ -1386,6 +1388,9 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
             ground_pairs.append((node_name, ordinary_pin[0], ground_stub, ground_record))  # Remember the island for the post-attach clearance repair.
             ground_records.append(ground_record)
     _repair_ground_attachments(ground_pairs, records, segments_by_net, placed_bodies, grid, page_width, page_height, ground_body_bounds, ground_graphics, all_pin_points)  # Relocate crowded GND symbols onto clear stub endpoints.
+    unresolved_power_overlaps = _repair_power_body_overlaps(records, ground_records, ground_pairs, segments_by_net, placed_bodies, grid, page_width, page_height, all_pin_points, ground_body_bounds, ground_graphics)  # Guarantee no power symbol body intersects another symbol body.
+    if unresolved_power_overlaps:  # Fail loudly instead of emitting a defective schematic.
+        return False, None, "WIRING_GENERATION_ERROR: " + "; ".join(unresolved_power_overlaps), 0  # Return the power-overlap failure.
     all_records = records + ground_records  # Combine the component and ground records.
     lead_stubs_by_net = _build_pin_lead_stubs(nets, segments_by_net, all_records, grid)  # Build pin lead stubs so every pin owns a segment start.
     label_layout = _layout_visible_text(all_records, net_order, segments_by_net, lead_stubs_by_net, grid, page_width, page_height, singleton_pins)  # Place visible fields and net labels away from symbols, wires, and other text.
@@ -1523,13 +1528,14 @@ def _ground_stub_shadow_violations(  # Count the clearance problems a GND symbol
     owner_graphics: bool,  # Accept whether the owner body comes from real drawn graphics.
     ordinary_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],  # Accept every existing wire segment including prior ground stubs.
     all_pins: Set[Tuple[float, float]],  # Accept every component pin position.
-    body_rects: Sequence[Tuple[float, float, float, float]],  # Accept every ordinary symbol body rectangle.
+    body_rects: Sequence[Tuple[float, float, float, float]],  # Accept every ordinary symbol body rectangle for the margin check.
     ground_bounds: Optional[Tuple[float, float, float, float]],  # Accept the local GND body bounds used to size the symbol shadow.
     ground_graphics: Sequence[Tuple[float, float, float, float]],  # Accept the GND graphics segments relative to the attachment point.
     grid: float,  # Accept the routing grid.
     page_width: float,  # Accept the page width.
     page_height: float,  # Accept the page height.
-) -> Tuple[int, int]:  # Return the hard (graphics, pin, page) and soft (body margin) violation counts.
+    strict_body_rects: Sequence[Tuple[float, float, float, float]] = (),  # Accept the drawn-graphics rectangles whose strict overlap is forbidden.
+) -> Tuple[int, int]:  # Return the hard (graphics, pin, page, body) and soft (body margin) violation counts.
     if ground_bounds is None:  # Without body bounds the historical stub-only validation applies.
         return 0, 0  # Report no shadow constraints.
     shadow = _body_rect_at(ground_bounds, endpoint[0], endpoint[1])  # Reserve the rectangle the attached GND symbol graphics will occupy.
@@ -1539,11 +1545,19 @@ def _ground_stub_shadow_violations(  # Count the clearance problems a GND symbol
     world_graphics = [(endpoint[0] + rx1, endpoint[1] + ry1, endpoint[0] + rx2, endpoint[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the graphics onto the candidate attachment point.
     hard_violations += _graphics_contact_violations(world_graphics, endpoint, list(ordinary_segments) + [candidate])  # Count wires touching the GND graphics away from the attachment point.
     hard_violations += _rect_contains_foreign_pin(shadow, all_pins)  # Count foreign pins sitting under the GND body.
+    strict_bodies = strict_body_rects if strict_body_rects else body_rects  # Fall back to the pin-inclusive rectangles when no graphics-only list is supplied.
+    for body in strict_bodies:  # Walk the strict clearance rectangles.
+        if body == owner_rect and not owner_graphics:  # Pin-derived owner boxes never block their own shadow.
+            continue  # Skip the owner.
+        if _rects_strictly_overlap(shadow, body):  # A strict body intersection is never allowed for power symbols.
+            hard_violations += 1  # Count the forbidden body overlap.
     soft_violations = 0  # Count the cosmetic body-margin overlaps.
     margin = grid / 2.0  # Match the visual standoff used by the attachment collision checks.
     for body in body_rects:  # Walk every ordinary symbol body.
         if body == owner_rect and not owner_graphics:  # Pin-derived owner boxes never block their own shadow.
             continue  # Skip the owner.
+        if _rects_strictly_overlap(shadow, body):  # Strict overlaps already counted as hard violations.
+            continue  # Skip the softer margin check for this body.
         if shadow[0] - margin < body[2] and shadow[2] + margin > body[0] and shadow[1] - margin < body[3] and shadow[3] + margin > body[1]:  # Detect shadow overlap with the body margin.
             soft_violations += 1  # Count the body overlap.
     return hard_violations, soft_violations  # Return the violation counts.
@@ -1575,6 +1589,7 @@ def _build_disconnected_ground_stubs(
         for pin in node_pins
     }
     body_rects = [_record_body_rect(record) for record in records if not record["power"]]
+    strict_body_rects = [_record_body_rect(record, "text_bounds") for record in records if not record["power"]]  # Measure the drawn bodies for the strict GND shadow clearance.
     graphics_owners = set()  # Index records whose body comes from real drawn graphics.
     for index, record in enumerate(records):  # Walk every component record.
         if record["power"]:  # Power symbols attach after routing.
@@ -1598,7 +1613,9 @@ def _build_disconnected_ground_stubs(
             chosen: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
             owner_graphics = record_index in graphics_owners  # Pin-derived owner boxes never block their own stub.
             best_candidate: Optional[Tuple[Tuple[int, int], Tuple[Tuple[float, float], Tuple[float, float]]]] = None  # Track the hard-safe candidate with the fewest shadow violations.
-            for length in (stub_length,) + tuple(stub_length * factor for factor in (0.75, 0.5, 0.25, 0.125)):  # Walk the full length first, then the shrunken fallbacks.
+            lengths = (stub_length,) + tuple(stub_length * factor for factor in (0.75, 0.5, 0.25, 0.125))  # Walk the full length first, then the shrunken fallbacks.
+            lengths += tuple(stub_length + grid * step for step in range(1, 25))  # Then progressively longer escapes for pins caged by neighbor bodies.
+            for length in lengths:  # Walk every candidate stub length.
                 for _edge_distance, _priority, direction_x, direction_y in directions:  # Walk the directions in the biased order.
                     endpoint = (pin_x + direction_x * length, pin_y + direction_y * length)  # Compute the candidate endpoint.
                     candidate = ((pin_x, pin_y), endpoint)  # Build the candidate stub.
@@ -1610,7 +1627,7 @@ def _build_disconnected_ground_stubs(
                         continue  # Try the next direction.
                     if any(_segment_intersects_rect(candidate, body) for body in body_rects if body != owner_rect or owner_graphics):  # Avoid crossing real symbol bodies including the owner's graphics.
                         continue  # Try the next direction.
-                    hard_violations, soft_violations = _ground_stub_shadow_violations(endpoint, candidate, owner_rect, owner_graphics, ordinary_segments, all_pins, body_rects, ground_bounds, ground_graphics, grid, page_width, page_height)  # Evaluate the GND body clearance.
+                    hard_violations, soft_violations = _ground_stub_shadow_violations(endpoint, candidate, owner_rect, owner_graphics, ordinary_segments, all_pins, body_rects, ground_bounds, ground_graphics, grid, page_width, page_height, strict_body_rects=strict_body_rects)  # Evaluate the GND body clearance.
                     if hard_violations == 0 and soft_violations == 0:  # The stub and its GND shadow are both fully clear.
                         chosen = candidate  # Accept the clean stub.
                         break  # Stop checking directions.
@@ -1659,16 +1676,27 @@ def _repair_ground_attachments(  # Relocate crowded GND symbols onto clear exten
         all_segments = [segment for routed_segments in segments_by_net.values() for segment in routed_segments]  # Snapshot the complete copper.
         world_graphics = [(pin_point[0] + rx1, pin_point[1] + ry1, pin_point[0] + rx2, pin_point[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the own graphics.
         current_violations = _graphics_contact_violations(world_graphics, pin_point, all_segments)  # Measure the wire-through-ground defects of the current placement.
-        if current_violations == 0:  # The current placement already touches nothing.
-            continue  # Keep the attachment.
-        other_grounds = []  # Rebuild the other GND geometry from their current placements.
+        other_power_rects = [  # Index every other power body so repairs never trade one overlap for another.
+            _record_body_rect(other_record) for other_record in records if other_record["power"]
+        ]  # Finish the voltage-power body list.
+        other_grounds: List[Tuple[Tuple[float, float], List[Tuple[float, float, float, float]]]] = []  # Collected fresh per pair so earlier repairs stay visible.
         for other_pair_node, _other_owner, _other_stub, other_record in ground_pairs:  # Walk the GND records.
             if other_record is record:  # Skip the repaired GND itself.
                 continue  # Move to the next GND.
+            other_power_rects.append(_body_rect_at(other_record.get("body_bounds"), other_record["x"], other_record["y"]))  # Store the other GND body rectangle.
             other_pin_number = sorted(other_record["pin_map"].values(), key=_pin_sort_key)[0]  # Read the single pin number.
             other_point = other_record["pin_positions"][other_pin_number]  # Read the current attachment point.
             other_world = [(other_point[0] + rx1, other_point[1] + ry1, other_point[0] + rx2, other_point[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the graphics.
             other_grounds.append((other_point, other_world))  # Store the other GND geometry.
+        strict_other_bodies = [  # Measure every other drawn symbol body for the strict power-body clearance.
+            _record_body_rect(other_record, "text_bounds")
+            for other_record in list(records) + [pair[3] for pair in ground_pairs]
+            if other_record is not record
+        ]  # Finish the strict clearance list.
+        current_body_rect = _record_body_rect(record, "text_bounds")  # Measure the own drawn body rectangle.
+        current_body_overlaps = sum(1 for body in strict_other_bodies if _rects_strictly_overlap(current_body_rect, body))  # Count the strict body overlaps of the current placement.
+        if current_violations == 0 and current_body_overlaps == 0:  # The current placement already touches nothing.
+            continue  # Keep the attachment.
         owner_rect = _record_body_rect(records[owner_index])  # Measure the owning symbol body.
         owner_graphics = owner_index in graphics_owners  # Detect real drawn owner graphics.
         component_pin = old_stub[0]  # The stub always starts at the owning component pin.
@@ -1692,7 +1720,7 @@ def _repair_ground_attachments(  # Relocate crowded GND symbols onto clear exten
         def _evaluate_replacement(endpoint: Tuple[float, float], candidate_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]]) -> Optional[Tuple[int, int]]:  # Score one replacement geometry.
             if not _geometry_is_hard_clear(candidate_segments):  # Hard checks first.
                 return None  # Reject the geometry.
-            shadow_violations, soft_violations = _ground_stub_shadow_violations(endpoint, candidate_segments[0], owner_rect, owner_graphics, others, all_pins, body_rects, ground_bounds, ground_graphics, grid, page_width, page_height)  # Evaluate the GND body clearance against the first piece.
+            shadow_violations, soft_violations = _ground_stub_shadow_violations(endpoint, candidate_segments[0], owner_rect, owner_graphics, others, all_pins, body_rects, ground_bounds, ground_graphics, grid, page_width, page_height, strict_body_rects=strict_other_bodies)  # Evaluate the GND body clearance against the first piece.
             if len(candidate_segments) > 1:  # L-shaped replacements carry a second piece.
                 shadow_violations += _graphics_contact_violations([(endpoint[0] + rx1, endpoint[1] + ry1, endpoint[0] + rx2, endpoint[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics], endpoint, candidate_segments[1:])  # The tail piece must not touch the own graphics.
             other_violations = 0  # Count contacts with the other GND graphics.
@@ -1743,7 +1771,9 @@ def _repair_ground_attachments(  # Relocate crowded GND symbols onto clear exten
             candidate_endpoint, candidate_segments = best_replacement[1]  # Unpack the ranked replacement geometry.
             candidate_world = [(candidate_endpoint[0] + rx1, candidate_endpoint[1] + ry1, candidate_endpoint[0] + rx2, candidate_endpoint[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the own graphics onto the candidate attach point.
             candidate_violations = _graphics_contact_violations(candidate_world, candidate_endpoint, list(others) + list(candidate_segments))  # Measure the direct wire-through-ground defects of the replacement.
-            if candidate_violations < current_violations:  # Apply the replacement only when it strictly reduces the defect count.
+            candidate_body_rect = _body_rect_at(_record_strict_bounds(record), candidate_endpoint[0] - local_x, candidate_endpoint[1] + local_y)  # Measure the replacement drawn body rectangle.
+            candidate_body_overlaps = sum(1 for body in strict_other_bodies if _rects_strictly_overlap(candidate_body_rect, body))  # Count the strict body overlaps of the replacement.
+            if candidate_violations + candidate_body_overlaps < current_violations + current_body_overlaps:  # Apply the replacement only when it strictly reduces the total defect count.
                 chosen = (candidate_endpoint, candidate_segments)  # Promote the ranked replacement to the applied geometry.
         if chosen is None:  # Without a fully clear replacement the least-bad current placement stays.
             continue  # Keep the existing attachment.
@@ -1761,6 +1791,119 @@ def _repair_ground_attachments(  # Relocate crowded GND symbols onto clear exten
         record["pin_positions"] = {pin_number: new_endpoint}  # Store the repaired attachment point.
         placed_bodies.append(_body_rect_at(record.get("body_bounds"), record["x"], record["y"]))  # Index the repaired body.
     return None  # Return nothing.
+
+
+def _other_symbol_body_rects(  # Measure every drawn body rectangle except one record's own.
+    record: Dict[str, Any],  # Accept the excluded record.
+    records: Sequence[Dict[str, Any]],  # Accept every component record including voltage power symbols.
+    ground_records: Sequence[Dict[str, Any]],  # Accept the generated GND records.
+) -> List[Tuple[float, float, float, float]]:  # Return the other drawn body rectangles.
+    rects = [_record_body_rect(other, "text_bounds") for other in records if other is not record]  # Walk the component records.
+    rects.extend(_record_body_rect(other, "text_bounds") for other in ground_records if other is not record)  # Walk the ground records.
+    return rects  # Return the other body rectangles.
+
+
+def _relocate_power_on_net(  # Move one voltage-power symbol onto a body-clear attachment point of its own net copper.
+    record: Dict[str, Any],  # Accept the power record to relocate.
+    segments_by_net: Mapping[str, Sequence[Tuple[Tuple[float, float], Tuple[float, float]]]],  # Accept the routed segment mapping.
+    placed_bodies: List[Tuple[float, float, float, float]],  # Accept and update the placed body rectangles.
+    grid: float,  # Accept the routing grid.
+    page_width: float,  # Accept the page width.
+    page_height: float,  # Accept the page height.
+    all_pin_points: Sequence[Tuple[float, float]],  # Accept every component pin position.
+    other_bodies: Sequence[Tuple[float, float, float, float]],  # Accept every other body rectangle.
+) -> bool:  # Return whether the relocation succeeded.
+    if record["element"] is None or not record["element"].nodes:  # Require a resolvable net.
+        return False  # Report the failure.
+    node_name = str(record["element"].nodes[0])  # Read the power net name.
+    segments = segments_by_net.get(node_name, [])  # Read the net copper.
+    if not segments:  # Without copper there is nothing to attach to.
+        return False  # Report the failure.
+    pin_number = sorted(record["pin_map"].values(), key=_pin_sort_key)[0]  # Read the single pin number.
+    local_x, local_y, _pin_name = record["pins"][pin_number]  # Read the pin local offset.
+    pin_relative_graphics = [  # Express the drawn graphics relative to the attachment point.
+        (lx - local_x, local_y - ly, lx2 - local_x, local_y - ly2)
+        for lx, ly, lx2, ly2 in _symbol_local_graphics_segments(record["symbol_node"])
+    ]  # Finish the graphics list.
+    foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]  # Collect other-net copper.
+    occupied_pins = {(round(point[0], 6), round(point[1], 6)) for point in all_pin_points}  # Index every settled pin position.
+    all_segments = [segment for routed_segments in segments_by_net.values() for segment in routed_segments]  # Snapshot the complete copper.
+    old_pin_x, old_pin_y = record["pin_positions"][pin_number]  # Read the current attachment point.
+    best: Optional[Tuple[Tuple[int, int, float], Tuple[float, float]]] = None  # Track the cleanest candidate.
+    for point in _segment_attachment_candidates(segments, grid):  # Walk every attachment candidate.
+        if (round(point[0], 6), round(point[1], 6)) in occupied_pins:  # Never cover another symbol pin.
+            continue  # Try the next candidate.
+        if any(_point_on_segment_local(point[0], point[1], foreign_segment) for foreign_segment in foreign_segments):  # Never junction onto foreign copper.
+            continue  # Try the next candidate.
+        origin_x = point[0] - local_x  # Compute the symbol origin X.
+        origin_y = point[1] + local_y  # Compute the symbol origin Y.
+        rect = _body_rect_at(_record_strict_bounds(record), origin_x, origin_y)  # Measure the candidate drawn body.
+        if rect[0] < grid or rect[1] < grid or rect[2] > page_width - grid or rect[3] > page_height - grid:  # Keep the body on the page.
+            continue  # Try the next candidate.
+        world_graphics = [(point[0] + rx1, point[1] + ry1, point[0] + rx2, point[1] + ry2) for rx1, ry1, rx2, ry2 in pin_relative_graphics]  # Translate the graphics onto the candidate point.
+        wire_contacts = _graphics_contact_violations(world_graphics, point, all_segments)  # Count wires touching the graphics away from the pin.
+        body_overlaps = sum(1 for body in other_bodies if _rects_strictly_overlap(rect, body))  # Count strict body overlaps.
+        distance = abs(point[0] - old_pin_x) + abs(point[1] - old_pin_y)  # Prefer relocations near the current attachment.
+        score = (body_overlaps, wire_contacts, distance)  # Rank clearance first, then locality.
+        if best is None or score < best[0]:  # Keep the cleanest candidate.
+            best = (score, point)  # Store the candidate.
+        if best[0][:2] == (0, 0):  # A fully clear placement needs no further search.
+            break  # Stop scanning.
+    if best is None or best[0][0] > 0:  # Without a body-clear candidate the relocation fails.
+        return False  # Report the failure.
+    point = best[1]  # Read the chosen attachment point.
+    old_rect = _record_body_rect(record)  # Measure the current body rectangle.
+    if old_rect in placed_bodies:  # Remove the stale collision entry.
+        placed_bodies.remove(old_rect)  # Drop the first matching entry.
+    record["x"] = point[0] - local_x  # Store the relocated origin X.
+    record["y"] = point[1] + local_y  # Store the relocated origin Y.
+    record["angle"] = 0.0  # Keep the upright angle.
+    record["pin_positions"] = {pin_number: point}  # Store the relocated attachment point.
+    placed_bodies.append(_body_rect_at(record.get("body_bounds"), record["x"], record["y"]))  # Index the relocated body.
+    return True  # Report the relocation.
+
+
+def _repair_power_body_overlaps(  # Guarantee no power symbol body intersects another symbol body.
+    records: Sequence[Dict[str, Any]],  # Accept every component record including voltage power symbols.
+    ground_records: Sequence[Dict[str, Any]],  # Accept the generated GND records.
+    ground_pairs: Sequence[Tuple[str, int, Tuple[Tuple[float, float], Tuple[float, float]], Dict[str, Any]]],  # Accept the ground attachment pairs for the GND repair.
+    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]],  # Accept the routed segment mapping for voltage-power relocation.
+    placed_bodies: List[Tuple[float, float, float, float]],  # Accept and update the placed body rectangles.
+    grid: float,  # Accept the routing grid.
+    page_width: float,  # Accept the page width.
+    page_height: float,  # Accept the page height.
+    all_pin_points: Sequence[Tuple[float, float]],  # Accept every component pin position.
+    ground_bounds: Optional[Tuple[float, float, float, float]],  # Accept the local GND body bounds.
+    ground_graphics: Sequence[Tuple[float, float, float, float]],  # Accept the GND graphics segments relative to the attachment point.
+) -> List[str]:  # Return the unresolved power-body overlap descriptions.
+    for _repair_pass in range(4):  # Iterate the repairs so sequential relocations settle against each other.
+        unresolved: List[str] = []  # Collect the remaining overlap descriptions.
+        ground_overlaps = False  # Track whether any GND record still overlaps a body.
+        for record in list(records) + list(ground_records):  # Walk every power record.
+            if not record["power"]:  # Skip ordinary components.
+                continue  # Move to the next record.
+            rect = _record_body_rect(record, "text_bounds")  # Measure the current drawn body.
+            others = _other_symbol_body_rects(record, records, ground_records)  # Collect every other body rectangle.
+            if not any(_rects_strictly_overlap(rect, body) for body in others):  # Clear placements need no repair.
+                continue  # Move to the next record.
+            if record["element"] is None:  # Ground records repair through the stub-extension engine.
+                ground_overlaps = True  # Request another GND repair pass.
+                continue  # Move to the next record.
+            if not _relocate_power_on_net(record, segments_by_net, placed_bodies, grid, page_width, page_height, all_pin_points, others):  # Relocate onto clear net copper.
+                unresolved.append(f"power symbol '{record['reference']}' intersects a symbol body")  # Report the unfixable overlap.
+        if not ground_overlaps and not unresolved:  # Everything is clear.
+            return []  # Report full clearance.
+        if ground_overlaps:  # Repair the GND attachments once more against the updated placements.
+            _repair_ground_attachments(ground_pairs, records, segments_by_net, placed_bodies, grid, page_width, page_height, ground_bounds, ground_graphics, all_pin_points)  # Relocate crowded GND symbols.
+    remaining: List[str] = []  # Collect the final unresolved overlaps.
+    for record in list(records) + list(ground_records):  # Walk every power record one last time.
+        if not record["power"]:  # Skip ordinary components.
+            continue  # Move to the next record.
+        rect = _record_body_rect(record, "text_bounds")  # Measure the current drawn body.
+        others = _other_symbol_body_rects(record, records, ground_records)  # Collect every other body rectangle.
+        if any(_rects_strictly_overlap(rect, body) for body in others):  # Detect leftover overlaps.
+            remaining.append(f"power symbol '{record['reference']}' intersects a symbol body")  # Report the overlap.
+    return remaining  # Return the unresolved overlaps.
 
 
 def _page_size_for_symbol_count(settings: Dict[str, Any], symbol_count: int) -> Tuple[str, float, float]:  # Resolve the drawing paper for the schematic.
@@ -2603,8 +2746,7 @@ def _attach_symbol_on_net(  # Attach one power or ground symbol onto its net cop
         record["y"] = origin_y  # Store the symbol Y position.
         record["angle"] = 0.0  # Store the upright angle.
         record["pin_positions"] = {pin_number: point}  # Store the attached pin position.
-        if best_score == (0, 0):  # Only fully clear placements join the collision index.
-            placed_bodies.append(_body_rect_at(record.get("body_bounds"), origin_x, origin_y))  # Index the placed body.
+        placed_bodies.append(_body_rect_at(record.get("body_bounds"), origin_x, origin_y))  # Index every placed body so later power symbols never stack onto it.
         return  # Finish the attachment.
     fallback_point = safe_candidates[0] if safe_candidates else candidates[0]  # Prefer electrical isolation over body clearance in the fallback.
     record["x"] = fallback_point[0] - local_x  # Store the fallback X position.
@@ -2661,6 +2803,22 @@ def _rect_overlaps_any(rect: Tuple[float, float, float, float], placed_bodies: S
         if rect[0] - margin < body[2] and rect[2] + margin > body[0] and rect[1] - margin < body[3] and rect[3] + margin > body[1]:  # Detect rectangle overlap with margin.
             return True  # Report the overlap.
     return False  # Report a clear placement.
+
+
+def _rects_strictly_overlap(first: Tuple[float, float, float, float], second: Tuple[float, float, float, float], epsilon: float = 1e-3) -> bool:  # Detect a strict interior overlap between two rectangles.
+    return (  # Require real overlap depth on both axes beyond the epsilon.
+        first[0] < second[2] - epsilon  # The first rectangle starts left of the second's right edge.
+        and second[0] < first[2] - epsilon  # The second rectangle starts left of the first's right edge.
+        and first[1] < second[3] - epsilon  # The first rectangle starts above the second's bottom edge.
+        and second[1] < first[3] - epsilon  # The second rectangle starts above the first's bottom edge.
+    )  # Return the overlap decision.
+
+
+def _record_strict_bounds(record: Dict[str, Any]) -> Optional[Tuple[float, float, float, float]]:  # Return the local drawn-graphics bounds used for strict power-body clearance.
+    bounds = record.get("text_bounds")  # Prefer the graphics-only measurement.
+    if bounds is None:  # Graphics-less records fall back to their ordinary body bounds.
+        bounds = record.get("body_bounds")  # Reuse the pin-inclusive measurement.
+    return bounds  # Return the strict bounds.
 
 
 def _resolve_ground_symbol(settings: Dict[str, Any]) -> BuildResult:  # Resolve the power:GND symbol from kicad_path or the ASY fallback.
@@ -2950,12 +3108,17 @@ def _symbol_body_bounds(symbol_node: SExp, short_name: str, include_pins: bool =
                 if len(values) >= 2:  # Keep complete points.
                     include_point(float(values[0]), float(values[1]))  # Grow the bounds.
     if include_pins:  # Pin positions are included only when requested.
-        for pin in graphics_node.find_children("pin"):  # Walk every pin definition.
-            at_node = pin.find_child("at")  # Locate the pin position section.
-            if at_node is not None:  # Read present pin positions.
-                values = [child.value for child in at_node.children if child.is_atom]  # Collect position atoms.
-                if len(values) >= 2:  # Keep complete positions.
-                    include_point(float(values[0]), float(values[1]))  # Grow the bounds.
+        pin_sections = [graphics_node]  # The flattened body sections carry the ordinary pins.
+        for sub_symbol in symbol_node.find_children("symbol"):  # Walk every nested section.
+            if all(sub_symbol is not section for section in pin_sections):  # Skip sections already measured.
+                pin_sections.append(sub_symbol)  # Multi-unit power pins may live in sibling unit sections.
+        for section in pin_sections:  # Walk every section that may carry pins.
+            for pin in section.find_children("pin"):  # Walk every pin definition.
+                at_node = pin.find_child("at")  # Locate the pin position section.
+                if at_node is not None:  # Read present pin positions.
+                    values = [child.value for child in at_node.children if child.is_atom]  # Collect position atoms.
+                    if len(values) >= 2:  # Keep complete positions.
+                        include_point(float(values[0]), float(values[1]))  # Grow the bounds.
     if min_x is None:  # Report graphics-less symbols.
         return None  # Return None when no bounds could be measured.
     return min_x, min_y, max_x, max_y  # Return the measured bounds.
