@@ -1049,7 +1049,7 @@ def _compare_schematic_pair(first: Schematic, second: Schematic, tolerance: floa
     if first.generator != second.generator:
         differences.append(f"generator differs ({first.generator} vs {second.generator})")
     if first.paper != second.paper:
-        hard_problems.append(f"paper differs ({first.paper} vs {second.paper})")
+        differences.append(f"paper differs ({first.paper} vs {second.paper})")
     lines.append(f"  Header: version={first.version} vs {second.version} generator={first.generator} vs {second.generator} paper={first.paper} vs {second.paper}")
 
     symbols_a = {record.reference: record for record in first.symbols}

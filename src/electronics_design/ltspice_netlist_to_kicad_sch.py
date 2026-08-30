@@ -14,6 +14,7 @@
 
 from __future__ import annotations  # Postpone annotation evaluation for forward references.
 
+import bisect  # Run tolerance-aware fallback lane lookups over sorted foreign coordinates.
 import datetime  # Build the default schematic format version.
 import math  # Compute pin lead stub geometry.
 import os  # Resolve library search roots and write the output file.
@@ -99,6 +100,16 @@ _PIN_EXIT_STEP_X = 1.27  # Candidate horizontal side-exit spacing for fallback t
 _POWER_STUB_LENGTH = 3.81  # Default stub length in mm for power-only nets.
 _KI_CAD_CONTACT_TOLERANCE = 1e-4  # KiCad treats features this close as electrically touching.
 _MICROSCOPIC_LANE_SPACING = _KI_CAD_CONTACT_TOLERANCE * 4  # Unique fallback lane pitch; exceeds the junction tolerance so adjacent lanes never short.
+_PAGE_LADDER = (  # Landscape paper sizes searched in order when the routed drawing needs more room.
+    ("A4", _KICAD_SCH_PAGE_WIDTH, _KICAD_SCH_PAGE_HEIGHT),
+    ("A3", _KICAD_SCH_PAGE_A3_WIDTH, _KICAD_SCH_PAGE_A3_HEIGHT),
+    ("A2", 594.0, 420.0),
+    ("A1", 841.0, 594.0),
+    ("A0", 1189.0, 841.0),
+)
+_PAGE_FIT_MARGINS = (15.0, 10.0, 5.0, 2.0, 0.0)  # Page-edge clearances tried from the most generous down.
+_PAGE_FIT_TEXT_GAP = 3.0  # Clearance between the routed drawing and the directive text stack.
+_PAGE_FIT_TEXT_STEP = 5.0  # Vertical spacing between stacked simulation directive text records.
 
 _PROPERTY_STEP = 2.54  # Vertical offset between stacked instance properties.
 _TEXT_FONT_SIZE = 1.27  # Visible schematic text height in mm.
@@ -1000,6 +1011,7 @@ def _new_routing_grid(
     page_width: float,
     page_height: float,
     blocked_points: Sequence[Tuple[float, float]] = (),
+    shadow_rects: Sequence[Tuple[float, float, float, float]] = (),
 ) -> GridRouter:
     router = GridRouter(grid, 0.0, 0.0, page_width, page_height)
     for record in records:
@@ -1007,6 +1019,8 @@ def _new_routing_grid(
             continue
         body_rect = _record_body_rect(record, bounds_key="routing_bounds")
         router.block_rectangle(body_rect[0], body_rect[1], body_rect[2], body_rect[3])
+    for shadow_rect in shadow_rects:  # Reserve the GND stub and symbol corridors below ground pins.
+        router.block_rectangle(shadow_rect[0], shadow_rect[1], shadow_rect[2], shadow_rect[3])  # Block the reserved corridor cells.
     for blocked_x, blocked_y in blocked_points:  # Block exempt NC pin cells so copper never passes through them.
         cell_x, cell_y = router.world_to_cell(blocked_x, blocked_y)  # Snap the blocked point onto the routing grid.
         router.block_cell(cell_x, cell_y)  # Reserve the NC pin cell.
@@ -1029,10 +1043,11 @@ def _route_trial(
     page_height: float,
     central_seed: bool = False,
     blocked_points: Sequence[Tuple[float, float]] = (),
+    shadow_rects: Sequence[Tuple[float, float, float, float]] = (),
 ) -> Tuple[GridRouter, Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]], Set[Tuple[float, float]], int]:
     """Route every net physically for one order and return the complete trial."""
 
-    router = _new_routing_grid(records, nets, net_ids, grid, page_width, page_height, blocked_points)
+    router = _new_routing_grid(records, nets, net_ids, grid, page_width, page_height, blocked_points, shadow_rects)
     segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]] = {}
     polyline_keys_by_net: Dict[str, Set[Tuple[float, float]]] = {}
     foreign_points = {
@@ -1040,7 +1055,7 @@ def _route_trial(
         for pins in nets.values()
         for _record_index, _pin_number, pin_x, pin_y in pins
     }
-    fallback_bodies = [_record_body_rect(record, "routing_bounds") for record in records if not record["power"]]  # Exit lanes must never cross symbol bodies.
+    fallback_bodies = [_record_body_rect(record, "routing_bounds") for record in records if not record["power"]] + [rect for rect in shadow_rects]  # Exit lanes must never cross symbol bodies or reserved GND corridors.
     fallback_count = 0
     for name in routing_order:
         pins = nets[name]
@@ -1250,53 +1265,85 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
     trial_limit = min(len(routing_orders), int(settings.get("kicad_routing_trials", _ROUTING_TRIALS)))
     stable_names = [name for name in net_order if nets[name]]
     net_ids = {name: index + 1 for index, name in enumerate(stable_names)}
-    trials = [
-        _route_trial(records, nets, order, net_ids, grid, page_width, page_height, central_seed, no_connect_positions)
-        for order in routing_orders[:trial_limit]
-        for central_seed in (False, True)
-    ]  # Evaluate both source-order and central-seed trees for each bounded net ordering.
-    router, segments_by_net, foreign_points, fallback_count = min(
-        trials,
-        key=lambda trial: trace_cost(trial[1], trial[3]),
-    )
-    routed_segments = segments_by_net  # Preserve the complete negotiated routes in case cleanup exposes an unsafe junction.
-    optimized_segments = optimize_routed_traces(
-        segments_by_net,
-        passes=int(settings.get("kicad_trace_optimization_passes", _TRACE_OPTIMIZATION_PASSES)),
-        protected_points_by_net={name: [(pin[2], pin[3]) for pin in pins] for name, pins in nets.items()},
-    )
-    if _routed_nets_are_isolated(optimized_segments, nets):  # Accept cleanup only when it retains complete, isolated physical copper.
-        segments_by_net = optimized_segments
-    elif _routed_nets_are_isolated(routed_segments, nets):  # Roll back cleanup locally instead of replacing every net with an all-net fallback.
-        segments_by_net = routed_segments
-    else:  # The per-net A* router and physical fallback are required to produce a complete isolated result.
+    embedded_result = _resolve_ground_symbol(settings)  # Resolve the power:GND symbol definition for embedding.
+    if not embedded_result[0]:  # Stop when the ground symbol cannot be resolved.
+        return embedded_result  # Return the ground symbol error.
+    ground_lib_id, ground_symbol_node = embedded_result[1]  # Read the resolved ground symbol.
+    ground_pins = _extract_symbol_pins(ground_symbol_node, 1, 1, "GND")[1]  # Extract the ground pin geometry.
+    ground_body_bounds = _symbol_body_bounds(ground_symbol_node, "GND")  # Measure the GND body so stubs reserve clearance for the symbol graphics.
+    ground_pin_local = ground_pins[sorted(ground_pins, key=_pin_sort_key)[0]][:2]  # Read the ground pin local offset.
+    ground_graphics = [  # Express the drawn GND graphics relative to the attachment point so clearance checks are graphics-exact.
+        (lx - ground_pin_local[0], ground_pin_local[1] - ly, lx2 - ground_pin_local[0], ground_pin_local[1] - ly2)
+        for lx, ly, lx2, ly2 in _symbol_local_graphics_segments(ground_symbol_node)
+    ]
+    ground_shadow_rects: List[Tuple[float, float, float, float]] = []  # Reserve the GND symbol zone below every ground pin for its default downward stub.
+    if ground_body_bounds is not None:  # Graphics-less GND symbols carry no reservation.
+        shadow_half_width = (ground_body_bounds[2] - ground_body_bounds[0]) / 2.0 + grid / 4.0  # Half the body width plus a slim margin.
+        stub_length = max(_POWER_STUB_LENGTH, 2.0 * grid)  # The default downward stub length.
+        shadow_top = grid / 4.0  # The reserved zone starts just past the pin contact so the stub corridor stays wire-free.
+        shadow_depth = stub_length + (ground_body_bounds[3] - ground_body_bounds[1]) + grid / 4.0  # Cover the stub corridor plus the symbol body plus a slim margin.
+        for ground_name in nets:  # Walk every net to find ground terminals.
+            if ground_name not in _GROUND_NODE_NAMES:  # Only ground pins reserve a shadow corridor.
+                continue  # Move to the next net.
+            for _record_index, _pin_number, shadow_x, shadow_y in nets[ground_name]:  # Walk the ground pins.
+                ground_shadow_rects.append((shadow_x - shadow_half_width, shadow_y + shadow_top, shadow_x + shadow_half_width, shadow_y + shadow_top + shadow_depth))  # Reserve the symbol zone.
+    router = None  # Track the chosen trial router for the later stub phases.
+    foreign_points: Set[Tuple[float, float]] = set()  # Track the chosen trial foreign points.
+    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]] = {}  # Track the chosen trial copper.
+    winning_rects: List[Tuple[float, float, float, float]] = []  # Track the reservation mode that produced the chosen trial.
+    routing_isolated = False  # Track whether a trial mode produced complete isolated copper.
+    for shadow_mode_rects in (ground_shadow_rects, []):  # Try the reserved-corridor routing first, then fall back to unconstrained routing.
+        trials = [
+            _route_trial(records, nets, order, net_ids, grid, page_width, page_height, central_seed, no_connect_positions, shadow_mode_rects)
+            for order in routing_orders[:trial_limit]
+            for central_seed in (False, True)
+        ]  # Evaluate both source-order and central-seed trees for each bounded net ordering.
+        mode_router, mode_segments, mode_foreign_points, _fallback_count = min(
+            trials,
+            key=lambda trial: trace_cost(trial[1], trial[3]),
+        )
+        routed_segments = mode_segments  # Preserve the complete negotiated routes in case cleanup exposes an unsafe junction.
+        optimized_segments = optimize_routed_traces(
+            mode_segments,
+            passes=int(settings.get("kicad_trace_optimization_passes", _TRACE_OPTIMIZATION_PASSES)),
+            protected_points_by_net={name: [(pin[2], pin[3]) for pin in pins] for name, pins in nets.items()},
+        )
+        if _routed_nets_are_isolated(optimized_segments, nets):  # Accept cleanup only when it retains complete, isolated physical copper.
+            router, segments_by_net, foreign_points = mode_router, optimized_segments, mode_foreign_points  # Store the chosen trial.
+            winning_rects = shadow_mode_rects  # Remember the winning reservation mode.
+            routing_isolated = True  # Report success.
+            break  # Keep the optimized copper.
+        if _routed_nets_are_isolated(routed_segments, nets):  # Roll back cleanup locally instead of replacing every net with an all-net fallback.
+            router, segments_by_net, foreign_points = mode_router, routed_segments, mode_foreign_points  # Store the chosen trial.
+            winning_rects = shadow_mode_rects  # Remember the winning reservation mode.
+            routing_isolated = True  # Report success.
+            break  # Keep the routed copper.
+        if not shadow_mode_rects:  # The unconstrained retry also failed.
+            break  # Leave the loop with the failure state.
+    if not routing_isolated:  # The per-net A* router and physical fallback are required to produce a complete isolated result.
         return False, None, "WIRING_GENERATION_ERROR: routed nets are not complete and electrically isolated", 0
-    straightened_segments = _straighten_aligned_nets(segments_by_net, nets, records, grid, page_width, page_height)  # Replace collinear multi-hop nets with single straight rails.
+    active_shadow_rects = winning_rects  # Protect corridors only when the reserved routing mode won.
+    straightened_segments = _straighten_aligned_nets(segments_by_net, nets, records, grid, page_width, page_height, active_shadow_rects)  # Replace collinear multi-hop nets with single straight rails.
     if straightened_segments is not None and _routed_nets_are_isolated(straightened_segments, nets):  # Accept rails only when every net stays complete and isolated.
         segments_by_net = straightened_segments
-    ground_attachments = _build_disconnected_ground_stubs(nets, records, segments_by_net, grid, page_width, page_height, _KI_CAD_CONTACT_TOLERANCE)  # Give every ground terminal a short local physical connection.
+    ordinary_body_rects = [_record_body_rect(record) for record in records if not record["power"]] + active_shadow_rects  # Block stub directions that would cross symbol bodies or reserved GND corridors.
+    for node_name in net_order:  # Give singleton and otherwise empty ordinary nets real copper before ground stubs reserve their GND body clearance.
+        if node_name in _GROUND_NODE_NAMES or _is_nc_net(node_name) or node_name in singleton_label_nets:  # Ground uses local stubs, NC pins carry no-connect markers, and singleton labels sit directly on their pin.
+            continue
+        _ensure_net_copper(node_name, nets, segments_by_net, router, foreign_points, grid, page_width, page_height, ordinary_body_rects)
+    ground_attachments = _build_disconnected_ground_stubs(nets, records, segments_by_net, grid, page_width, page_height, _KI_CAD_CONTACT_TOLERANCE, ground_body_bounds, ground_graphics)  # Give every ground terminal a short local physical connection.
     for ground_name, attachments in ground_attachments.items():  # Store the disconnected ground stubs under their semantic ground net.
         segments_by_net[ground_name] = [segment for _pin, segment in attachments]  # GND symbols unify these intentionally disconnected copper islands.
     if not _routed_nets_are_isolated(segments_by_net, nets):  # Verify the local ground stubs remain isolated from ordinary nets.
         if placement_strategy == "flow" and forced_strategy is None:  # Flow's dense trunk lanes can saturate ground-pin surroundings.
             return _route_and_build(root_uuid, records, settings, forced_strategy="hybrid")  # Retry deterministically with the hybrid engine.
-        ground_attachments = _build_disconnected_ground_stubs(nets, records, segments_by_net, grid, page_width, page_height)  # Relax to the fine tolerance when no coarse-clean stub exists.
+        ground_attachments = _build_disconnected_ground_stubs(nets, records, segments_by_net, grid, page_width, page_height, ground_bounds=ground_body_bounds, ground_graphics=ground_graphics)  # Relax to the fine tolerance when no coarse-clean stub exists.
         for ground_name, attachments in ground_attachments.items():  # Replace the failed coarse stubs.
             segments_by_net[ground_name] = [segment for _pin, segment in attachments]  # Store the relaxed stubs.
         if not _routed_nets_are_isolated(segments_by_net, nets):  # Require at least fine isolation from the relaxed stubs.
             return False, None, "WIRING_GENERATION_ERROR: ground stubs are not electrically isolated", 0
     if placement_strategy == "flow" and forced_strategy is None and not _routed_nets_are_isolated(segments_by_net, nets, _KI_CAD_CONTACT_TOLERANCE):  # Flow's dense trunk lanes may leave near-touching copper that KiCad reads as shorted.
         return _route_and_build(root_uuid, records, settings, forced_strategy="hybrid")  # Retry deterministically with the hybrid engine.
-    ordinary_body_rects = [_record_body_rect(record) for record in records if not record["power"]]  # Block stub directions that would cross symbol bodies.
-    for node_name in net_order:  # Give singleton and otherwise empty ordinary nets real copper before labels and power symbols are attached.
-        if node_name in _GROUND_NODE_NAMES or _is_nc_net(node_name) or node_name in singleton_label_nets:  # Ground uses local stubs, NC pins carry no-connect markers, and singleton labels sit directly on their pin.
-            continue
-        _ensure_net_copper(node_name, nets, segments_by_net, router, foreign_points, grid, page_width, page_height, ordinary_body_rects)
-    embedded_result = _resolve_ground_symbol(settings)  # Resolve the power:GND symbol definition for embedding.
-    if not embedded_result[0]:  # Stop when the ground symbol cannot be resolved.
-        return embedded_result  # Return the ground symbol error.
-    ground_lib_id, ground_symbol_node = embedded_result[1]  # Read the resolved ground symbol.
-    ground_pins = _extract_symbol_pins(ground_symbol_node, 1, 1, "GND")[1]  # Extract the ground pin geometry.
     placed_bodies: List[Tuple[float, float, float, float]] = [  # Index placed bodies for power attachment collision checks.
         _record_body_rect(record) for record in records if not record["power"]  # Start with every ordinary body.
     ]  # Finish the initial placed-body list.
@@ -1311,15 +1358,17 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
         foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]  # Collect other-net copper that must not become a power-pin junction.
         _attach_symbol_on_net(record, segments_by_net.get(node_name, []), placed_bodies, grid, foreign_segments, all_pin_points)  # Attach the power pin only to electrically exclusive copper.
     ground_records: List[Dict[str, Any]] = []  # Collect the generated GND power symbols.
+    ground_pairs: List[Tuple[str, int, Tuple[Tuple[float, float], Tuple[float, float]], Dict[str, Any]]] = []  # Track (net, owner record index, stub, record) for the clearance repair.
     ground_counter = 0  # Count generated GND symbols for deterministic references.
     used_references = {str(record["reference"]) for record in records}  # Avoid colliding with recovered power-symbol references.
+    blocking_segments = [segment for routed_segments in segments_by_net.values() for segment in routed_segments]  # Every wire segment must stay clear of GND body graphics.
     for node_name in net_order:  # Walk every net to attach GND symbols to ground-net stubs.
         if node_name not in _GROUND_NODE_NAMES:  # Skip non-ground nets.
             continue  # Move to the next net.
         attachments = ground_attachments.get(node_name, [])  # Read the independently stubbed ground terminals.
         if not attachments:  # Skip empty ground nets defensively.
             continue  # Move to the next net.
-        for _ordinary_pin, ground_stub in attachments:  # Attach one power symbol to each disconnected ground island.
+        for ordinary_pin, ground_stub in attachments:  # Attach one power symbol to each disconnected ground island.
             ground_counter += 1  # Advance the GND counter.
             while f"#PWR{ground_counter:02d}" in used_references:  # Skip references already restored from V_PWR cards.
                 ground_counter += 1  # Advance to the next free power reference.
@@ -1333,8 +1382,10 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
             ground_record["body_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND")
             ground_record["text_bounds"] = _symbol_body_bounds(ground_symbol_node, "GND", include_pins=False, combine_sections=True)
             foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]
-            _attach_symbol_on_net(ground_record, [ground_stub], placed_bodies, grid, foreign_segments, all_pin_points)
+            _attach_symbol_on_net(ground_record, [ground_stub], placed_bodies, grid, foreign_segments, all_pin_points, blocking_segments, True, ground_graphics)
+            ground_pairs.append((node_name, ordinary_pin[0], ground_stub, ground_record))  # Remember the island for the post-attach clearance repair.
             ground_records.append(ground_record)
+    _repair_ground_attachments(ground_pairs, records, segments_by_net, placed_bodies, grid, page_width, page_height, ground_body_bounds, ground_graphics, all_pin_points)  # Relocate crowded GND symbols onto clear stub endpoints.
     all_records = records + ground_records  # Combine the component and ground records.
     lead_stubs_by_net = _build_pin_lead_stubs(nets, segments_by_net, all_records, grid)  # Build pin lead stubs so every pin owns a segment start.
     label_layout = _layout_visible_text(all_records, net_order, segments_by_net, lead_stubs_by_net, grid, page_width, page_height, singleton_pins)  # Place visible fields and net labels away from symbols, wires, and other text.
@@ -1380,6 +1431,7 @@ def _straighten_aligned_nets(  # Replace collinear multi-hop nets with single st
     grid: float,  # Accept the routing grid.
     page_width: float,  # Accept the page width.
     page_height: float,  # Accept the page height.
+    protected_rects: Sequence[Tuple[float, float, float, float]] = (),  # Accept the reserved GND corridors that rails must not cross.
 ) -> Optional[Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]]]:  # Return the straightened mapping or None when nothing changed.
     rail_points: Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]] = {}  # Collect the candidate rail per net.
     for node_name, pins in nets.items():  # Walk every routed net.
@@ -1451,8 +1503,50 @@ def _straighten_aligned_nets(  # Replace collinear multi-hop nets with single st
                 break  # Stop checking.
         if not clear:  # The rail crosses a foreign symbol body.
             continue  # Keep the routed copper.
+        for shadow_rect in protected_rects:  # Check every reserved GND corridor against the rail.
+            if horizontal and shadow_rect[1] < low_y < shadow_rect[3] and shadow_rect[0] < (low_x + high_x) / 2.0 < shadow_rect[2]:  # Detect the rail crossing the corridor.
+                clear = False  # Reject the rail.
+                break  # Stop checking.
+            if not horizontal and shadow_rect[0] < low_x < shadow_rect[2] and shadow_rect[1] < (low_y + high_y) / 2.0 < shadow_rect[3]:  # Detect the rail crossing the corridor.
+                clear = False  # Reject the rail.
+                break  # Stop checking.
+        if not clear:  # The rail crosses a reserved corridor.
+            continue  # Keep the routed copper.
         straightened[node_name] = [rail]  # Replace the multi-hop copper with the straight rail.
     return straightened  # Return the straightened mapping.
+
+
+def _ground_stub_shadow_violations(  # Count the clearance problems a GND symbol attached at one stub endpoint would suffer.
+    endpoint: Tuple[float, float],  # Accept the stub endpoint where the GND symbol would attach.
+    candidate: Tuple[Tuple[float, float], Tuple[float, float]],  # Accept the proposed stub segment.
+    owner_rect: Tuple[float, float, float, float],  # Accept the owning symbol body rectangle.
+    owner_graphics: bool,  # Accept whether the owner body comes from real drawn graphics.
+    ordinary_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],  # Accept every existing wire segment including prior ground stubs.
+    all_pins: Set[Tuple[float, float]],  # Accept every component pin position.
+    body_rects: Sequence[Tuple[float, float, float, float]],  # Accept every ordinary symbol body rectangle.
+    ground_bounds: Optional[Tuple[float, float, float, float]],  # Accept the local GND body bounds used to size the symbol shadow.
+    ground_graphics: Sequence[Tuple[float, float, float, float]],  # Accept the GND graphics segments relative to the attachment point.
+    grid: float,  # Accept the routing grid.
+    page_width: float,  # Accept the page width.
+    page_height: float,  # Accept the page height.
+) -> Tuple[int, int]:  # Return the hard (graphics, pin, page) and soft (body margin) violation counts.
+    if ground_bounds is None:  # Without body bounds the historical stub-only validation applies.
+        return 0, 0  # Report no shadow constraints.
+    shadow = _body_rect_at(ground_bounds, endpoint[0], endpoint[1])  # Reserve the rectangle the attached GND symbol graphics will occupy.
+    hard_violations = 0  # Count the clearance problems that create real wire-through-ground defects.
+    if shadow[0] < grid or shadow[2] > page_width - grid or shadow[3] > page_height - grid:  # The symbol body must fit on the page.
+        hard_violations += 1  # Count the off-page shadow.
+    world_graphics = [(endpoint[0] + rx1, endpoint[1] + ry1, endpoint[0] + rx2, endpoint[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the graphics onto the candidate attachment point.
+    hard_violations += _graphics_contact_violations(world_graphics, endpoint, list(ordinary_segments) + [candidate])  # Count wires touching the GND graphics away from the attachment point.
+    hard_violations += _rect_contains_foreign_pin(shadow, all_pins)  # Count foreign pins sitting under the GND body.
+    soft_violations = 0  # Count the cosmetic body-margin overlaps.
+    margin = grid / 2.0  # Match the visual standoff used by the attachment collision checks.
+    for body in body_rects:  # Walk every ordinary symbol body.
+        if body == owner_rect and not owner_graphics:  # Pin-derived owner boxes never block their own shadow.
+            continue  # Skip the owner.
+        if shadow[0] - margin < body[2] and shadow[2] + margin > body[0] and shadow[1] - margin < body[3] and shadow[3] + margin > body[1]:  # Detect shadow overlap with the body margin.
+            soft_violations += 1  # Count the body overlap.
+    return hard_violations, soft_violations  # Return the violation counts.
 
 
 def _build_disconnected_ground_stubs(
@@ -1463,6 +1557,8 @@ def _build_disconnected_ground_stubs(
     page_width: float,
     page_height: float,
     tolerance: float = 1e-6,
+    ground_bounds: Optional[Tuple[float, float, float, float]] = None,
+    ground_graphics: Sequence[Tuple[float, float, float, float]] = (),
 ) -> Dict[str, List[Tuple[Tuple[int, str, float, float], Tuple[Tuple[float, float], Tuple[float, float]]]]]:
     """Build one short physical stub per ground pin for local GND symbols."""
 
@@ -1489,7 +1585,6 @@ def _build_disconnected_ground_stubs(
     stub_length = max(_POWER_STUB_LENGTH, 2.0 * grid)
 
     for node_name in (name for name in nets if name in _GROUND_NODE_NAMES):
-        used_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
         for pin in nets[node_name]:
             record_index, _pin_number, pin_x, pin_y = pin
             owner_rect = _record_body_rect(records[record_index])
@@ -1502,47 +1597,170 @@ def _build_disconnected_ground_stubs(
             directions.sort(key=lambda entry: (0 if entry[2:] == (0.0, 1.0) else 1, entry[0], entry[1]))  # Prefer the downward reading direction while keeping the safety search.
             chosen: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
             owner_graphics = record_index in graphics_owners  # Pin-derived owner boxes never block their own stub.
-            for _edge_distance, _priority, direction_x, direction_y in directions:
-                endpoint = (pin_x + direction_x * stub_length, pin_y + direction_y * stub_length)
-                candidate = ((pin_x, pin_y), endpoint)
-                if endpoint[0] < grid or endpoint[1] < grid or endpoint[0] > page_width - grid or endpoint[1] > page_height - grid:
-                    continue
-                if any(
-                    point != (round(pin_x, 6), round(pin_y, 6)) and _point_on_segment_local(point[0], point[1], candidate, _KI_CAD_CONTACT_TOLERANCE)
-                    for point in all_pins
-                ):
-                    continue
-                if any(_segments_create_junction(candidate, foreign, _KI_CAD_CONTACT_TOLERANCE) for foreign in ordinary_segments):
-                    continue
-                if any(_segment_intersects_rect(candidate, body) for body in body_rects if body != owner_rect or owner_graphics):
-                    continue
-                chosen = candidate
-                break
-            if chosen is None:  # Harden the fallback with a shrinking multi-direction search before the unconditional downward stub.
-                for length_factor in (0.75, 0.5, 0.25, 0.125):  # Shrink the stub length until one direction clears.
-                    length = stub_length * length_factor  # Compute the shrunken length.
-                    for _edge_distance, _priority, direction_x, direction_y in directions:  # Walk the directions in the biased order.
-                        endpoint = (pin_x + direction_x * length, pin_y + direction_y * length)  # Compute the shrunken endpoint.
-                        candidate = ((pin_x, pin_y), endpoint)  # Build the shrunken candidate.
-                        if endpoint[0] < grid or endpoint[1] < grid or endpoint[0] > page_width - grid or endpoint[1] > page_height - grid:  # Keep stubs inside the page.
-                            continue  # Try the next direction.
-                        if any(point != (round(pin_x, 6), round(pin_y, 6)) and _point_on_segment_local(point[0], point[1], candidate, _KI_CAD_CONTACT_TOLERANCE) for point in all_pins):  # Avoid running through foreign pins.
-                            continue  # Try the next direction.
-                        if any(_segments_create_junction(candidate, foreign, _KI_CAD_CONTACT_TOLERANCE) for foreign in ordinary_segments):  # Avoid touching foreign copper.
-                            continue  # Try the next direction.
-                        if any(_segment_intersects_rect(candidate, body) for body in body_rects if body != owner_rect or owner_graphics):  # Avoid crossing real symbol bodies including the owner's graphics.
-                            continue  # Try the next direction.
-                        chosen = candidate  # Accept the shrunken safe stub.
+            best_candidate: Optional[Tuple[Tuple[int, int], Tuple[Tuple[float, float], Tuple[float, float]]]] = None  # Track the hard-safe candidate with the fewest shadow violations.
+            for length in (stub_length,) + tuple(stub_length * factor for factor in (0.75, 0.5, 0.25, 0.125)):  # Walk the full length first, then the shrunken fallbacks.
+                for _edge_distance, _priority, direction_x, direction_y in directions:  # Walk the directions in the biased order.
+                    endpoint = (pin_x + direction_x * length, pin_y + direction_y * length)  # Compute the candidate endpoint.
+                    candidate = ((pin_x, pin_y), endpoint)  # Build the candidate stub.
+                    if endpoint[0] < grid or endpoint[1] < grid or endpoint[0] > page_width - grid or endpoint[1] > page_height - grid:  # Keep stubs inside the page.
+                        continue  # Try the next direction.
+                    if any(point != (round(pin_x, 6), round(pin_y, 6)) and _point_on_segment_local(point[0], point[1], candidate, _KI_CAD_CONTACT_TOLERANCE) for point in all_pins):  # Avoid running through foreign pins.
+                        continue  # Try the next direction.
+                    if any(_segments_create_junction(candidate, foreign, _KI_CAD_CONTACT_TOLERANCE) for foreign in ordinary_segments):  # Avoid touching foreign copper.
+                        continue  # Try the next direction.
+                    if any(_segment_intersects_rect(candidate, body) for body in body_rects if body != owner_rect or owner_graphics):  # Avoid crossing real symbol bodies including the owner's graphics.
+                        continue  # Try the next direction.
+                    hard_violations, soft_violations = _ground_stub_shadow_violations(endpoint, candidate, owner_rect, owner_graphics, ordinary_segments, all_pins, body_rects, ground_bounds, ground_graphics, grid, page_width, page_height)  # Evaluate the GND body clearance.
+                    if hard_violations == 0 and soft_violations == 0:  # The stub and its GND shadow are both fully clear.
+                        chosen = candidate  # Accept the clean stub.
                         break  # Stop checking directions.
-                    if chosen is not None:  # Stop shrinking after finding a safe stub.
-                        break  # Leave the length loop.
+                    if best_candidate is None or (hard_violations, soft_violations) < best_candidate[0]:  # Rank the imperfect candidate.
+                        best_candidate = ((hard_violations, soft_violations), candidate)  # Remember the fewest-violation candidate.
+                if chosen is not None:  # Stop after finding a clean stub.
+                    break  # Leave the length loop.
+            if chosen is None and best_candidate is not None:  # Best effort: keep the hard-safe candidate whose GND shadow violates the least.
+                chosen = best_candidate[1]  # Deterministically pick the ranked minimum.
             if chosen is None:  # Last resort: keep the historical unconditional downward stub.
                 endpoint_y = min(max(grid, pin_y + stub_length), page_height - grid)
                 chosen = ((pin_x, pin_y), (pin_x, endpoint_y))
-            used_segments.append(chosen)
+            ordinary_segments.append(chosen)  # Publish the stub immediately so later stubs and shadows avoid it.
             attachments.setdefault(node_name, []).append((pin, chosen))
-        ordinary_segments.extend(used_segments)
     return attachments
+
+
+def _repair_ground_attachments(  # Relocate crowded GND symbols onto clear extended stub endpoints after attachment.
+    ground_pairs: Sequence[Tuple[str, int, Tuple[Tuple[float, float], Tuple[float, float]], Dict[str, Any]]],  # Accept (net, owner record index, stub, record) pairs.
+    records: Sequence[Dict[str, Any]],  # Accept every component record for body lookup.
+    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]],  # Accept and update the routed segment mapping.
+    placed_bodies: List[Tuple[float, float, float, float]],  # Accept and update the placed body rectangles.
+    grid: float,  # Accept the routing grid.
+    page_width: float,  # Accept the page width.
+    page_height: float,  # Accept the page height.
+    ground_bounds: Optional[Tuple[float, float, float, float]],  # Accept the local GND body bounds.
+    ground_graphics: Sequence[Tuple[float, float, float, float]],  # Accept the GND graphics segments relative to the attachment point.
+    all_pin_points: Sequence[Tuple[float, float]],  # Accept every component pin position.
+) -> None:  # Return nothing.
+    if ground_bounds is None or not ground_graphics:  # Without GND geometry the repair cannot evaluate clearance.
+        return  # Leave every attachment unchanged.
+    all_pins = {(round(point[0], 6), round(point[1], 6)) for point in all_pin_points}  # Index every component pin position.
+    body_rects = [_record_body_rect(record) for record in records if not record["power"]]  # Measure every ordinary symbol body.
+    graphics_owners = set()  # Index records whose body comes from real drawn graphics.
+    for index, record in enumerate(records):  # Walk every component record.
+        if record["power"]:  # Power symbols own no routing body here.
+            continue  # Move to the next record.
+        short_name = _split_lib_id(record["lib_id"])[1]  # Read the short symbol name.
+        if _symbol_body_bounds(record["symbol_node"], short_name, include_pins=False) is not None:  # Detect real drawn bodies.
+            graphics_owners.add(index)  # Record the graphics owner.
+    other_grounds: List[Tuple[Tuple[float, float], List[Tuple[float, float, float, float]]]] = []  # Collected fresh per pair so earlier repairs stay visible.
+    for node_name, owner_index, old_stub, record in ground_pairs:  # Repair every GND attachment in deterministic order.
+        pin_number = sorted(record["pin_map"].values(), key=_pin_sort_key)[0]  # Read the single pin number.
+        local_x, local_y, _pin_name = record["pins"][pin_number]  # Read the pin local offset.
+        pin_point = record["pin_positions"][pin_number]  # Read the current attachment point.
+        all_segments = [segment for routed_segments in segments_by_net.values() for segment in routed_segments]  # Snapshot the complete copper.
+        world_graphics = [(pin_point[0] + rx1, pin_point[1] + ry1, pin_point[0] + rx2, pin_point[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the own graphics.
+        current_violations = _graphics_contact_violations(world_graphics, pin_point, all_segments)  # Measure the wire-through-ground defects of the current placement.
+        if current_violations == 0:  # The current placement already touches nothing.
+            continue  # Keep the attachment.
+        other_grounds = []  # Rebuild the other GND geometry from their current placements.
+        for other_pair_node, _other_owner, _other_stub, other_record in ground_pairs:  # Walk the GND records.
+            if other_record is record:  # Skip the repaired GND itself.
+                continue  # Move to the next GND.
+            other_pin_number = sorted(other_record["pin_map"].values(), key=_pin_sort_key)[0]  # Read the single pin number.
+            other_point = other_record["pin_positions"][other_pin_number]  # Read the current attachment point.
+            other_world = [(other_point[0] + rx1, other_point[1] + ry1, other_point[0] + rx2, other_point[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the graphics.
+            other_grounds.append((other_point, other_world))  # Store the other GND geometry.
+        owner_rect = _record_body_rect(records[owner_index])  # Measure the owning symbol body.
+        owner_graphics = owner_index in graphics_owners  # Detect real drawn owner graphics.
+        component_pin = old_stub[0]  # The stub always starts at the owning component pin.
+        others = [segment for routed_segments in segments_by_net.values() for segment in routed_segments if segment is not old_stub]  # Copper without the replaced stub.
+        chosen: Optional[Tuple[Tuple[float, float], List[Tuple[Tuple[float, float], Tuple[float, float]]]]] = None  # Track the first fully clear replacement geometry.
+        best_replacement: Optional[Tuple[Tuple[int, int], Tuple[Tuple[float, float], List[Tuple[Tuple[float, float], Tuple[float, float]]]]]] = None  # Rank imperfect replacements as a fallback.
+
+        def _geometry_is_hard_clear(candidate_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]]) -> bool:  # Apply the page, pin, junction, and body checks to every replacement piece.
+            for segment in candidate_segments:  # Walk the replacement pieces.
+                for point in segment:  # Walk the piece endpoints.
+                    if point[0] < grid or point[1] < grid or point[0] > page_width - grid or point[1] > page_height - grid:  # Keep every piece on the page.
+                        return False  # Reject off-page geometry.
+                if any(point != (round(component_pin[0], 6), round(component_pin[1], 6)) and _point_on_segment_local(point[0], point[1], segment, _KI_CAD_CONTACT_TOLERANCE) for segment in candidate_segments for point in all_pins):  # Avoid running through component pins.
+                    return False  # Reject pin-crossing geometry.
+                if any(_segments_create_junction(segment, foreign, _KI_CAD_CONTACT_TOLERANCE) for segment in candidate_segments for foreign in others):  # Avoid junctions with foreign copper.
+                    return False  # Reject junction-creating geometry.
+                if any(_segment_intersects_rect(segment, body) for segment in candidate_segments for body in body_rects if body != owner_rect or owner_graphics):  # Avoid crossing symbol bodies.
+                    return False  # Reject body-crossing geometry.
+            return True  # Accept the geometry.
+
+        def _evaluate_replacement(endpoint: Tuple[float, float], candidate_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]]) -> Optional[Tuple[int, int]]:  # Score one replacement geometry.
+            if not _geometry_is_hard_clear(candidate_segments):  # Hard checks first.
+                return None  # Reject the geometry.
+            shadow_violations, soft_violations = _ground_stub_shadow_violations(endpoint, candidate_segments[0], owner_rect, owner_graphics, others, all_pins, body_rects, ground_bounds, ground_graphics, grid, page_width, page_height)  # Evaluate the GND body clearance against the first piece.
+            if len(candidate_segments) > 1:  # L-shaped replacements carry a second piece.
+                shadow_violations += _graphics_contact_violations([(endpoint[0] + rx1, endpoint[1] + ry1, endpoint[0] + rx2, endpoint[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics], endpoint, candidate_segments[1:])  # The tail piece must not touch the own graphics.
+            other_violations = 0  # Count contacts with the other GND graphics.
+            for other_point, other_world in other_grounds:  # Walk the other GND attachments.
+                if other_point == pin_point:  # Skip the repaired GND itself.
+                    continue  # Move to the next GND.
+                other_violations += _graphics_contact_violations(other_world, other_point, candidate_segments)  # The new stub must not touch other GND graphics.
+            return shadow_violations + other_violations, soft_violations  # Return the ranked violation counts.
+
+        candidate_directions = ((0.0, 1.0), (-1.0, 0.0), (1.0, 0.0), (0.0, -1.0))  # Walk the four stub directions, downward first.
+        for direction_x, direction_y in candidate_directions:  # Straight replacements first.
+            for step in range(1, 25):  # Extend up to twenty-four grid steps.
+                endpoint = (component_pin[0] + direction_x * grid * step, component_pin[1] + direction_y * grid * step)  # Compute the candidate endpoint.
+                candidate_segments = [(component_pin, endpoint)]  # Build the straight replacement.
+                ranked = _evaluate_replacement(endpoint, candidate_segments)  # Score the replacement.
+                if ranked is None:  # Hard-rejected geometry.
+                    continue  # Try the next length.
+                if ranked[0] == 0:  # The replacement is fully clear.
+                    chosen = (endpoint, candidate_segments)  # Remember the clean replacement.
+                    break  # Stop growing this direction.
+                if best_replacement is None or ranked < best_replacement[0]:  # Rank the imperfect replacement.
+                    best_replacement = (ranked, (endpoint, candidate_segments))  # Remember the fewest-violation replacement.
+            if chosen is not None:  # Stop searching directions after finding a clear replacement.
+                break  # Leave the direction loop.
+        if chosen is None:  # L-shaped replacements bend around rail and pin cages.
+            for bend_grids in (1, 2, 3, 4):  # Walk the first-piece lengths.
+                for first_x, first_y in candidate_directions:  # Walk the first-piece directions.
+                    corner = (component_pin[0] + first_x * grid * bend_grids, component_pin[1] + first_y * grid * bend_grids)  # Compute the bend corner.
+                    for second_x, second_y in ((-first_y, first_x), (first_y, -first_x)):  # Walk both perpendicular tails.
+                        for step in range(1, 25):  # Extend the tail up to twenty-four grid steps.
+                            endpoint = (corner[0] + second_x * grid * step, corner[1] + second_y * grid * step)  # Compute the candidate endpoint.
+                            candidate_segments = [(component_pin, corner), (corner, endpoint)]  # Build the L-shaped replacement.
+                            ranked = _evaluate_replacement(endpoint, candidate_segments)  # Score the replacement.
+                            if ranked is None:  # Hard-rejected geometry.
+                                continue  # Try the next tail length.
+                            if ranked[0] == 0:  # The replacement is fully clear.
+                                chosen = (endpoint, candidate_segments)  # Remember the clean replacement.
+                                break  # Stop growing this tail.
+                            if best_replacement is None or ranked < best_replacement[0]:  # Rank the imperfect replacement.
+                                best_replacement = (ranked, (endpoint, candidate_segments))  # Remember the fewest-violation replacement.
+                        if chosen is not None:  # Stop after finding a clear replacement.
+                            break  # Leave the tail direction loop.
+                    if chosen is not None:  # Stop after finding a clear replacement.
+                        break  # Leave the first-direction loop.
+                if chosen is not None:  # Stop after finding a clear replacement.
+                    break  # Leave the bend loop.
+        if chosen is None and best_replacement is not None:  # Without a fully clear replacement, keep the least-violating geometry.
+            candidate_endpoint, candidate_segments = best_replacement[1]  # Unpack the ranked replacement geometry.
+            candidate_world = [(candidate_endpoint[0] + rx1, candidate_endpoint[1] + ry1, candidate_endpoint[0] + rx2, candidate_endpoint[1] + ry2) for rx1, ry1, rx2, ry2 in ground_graphics]  # Translate the own graphics onto the candidate attach point.
+            candidate_violations = _graphics_contact_violations(candidate_world, candidate_endpoint, list(others) + list(candidate_segments))  # Measure the direct wire-through-ground defects of the replacement.
+            if candidate_violations < current_violations:  # Apply the replacement only when it strictly reduces the defect count.
+                chosen = (candidate_endpoint, candidate_segments)  # Promote the ranked replacement to the applied geometry.
+        if chosen is None:  # Without a fully clear replacement the least-bad current placement stays.
+            continue  # Keep the existing attachment.
+        new_endpoint, new_segments = chosen  # Unpack the replacement.
+        segments_for_net = segments_by_net.setdefault(node_name, [])  # Locate the ground net copper.
+        for index, segment in enumerate(segments_for_net):  # Walk the ground net segments.
+            if segment is old_stub:  # Replace the owned stub by identity.
+                segments_for_net[index:index + 1] = new_segments  # Store the replacement pieces.
+                break  # Stop searching.
+        old_rect = _body_rect_at(record.get("body_bounds"), record["x"], record["y"])  # Compute the old body rectangle.
+        if old_rect in placed_bodies:  # Remove the stale collision entry.
+            placed_bodies.remove(old_rect)  # Drop the first matching entry.
+        record["x"] = new_endpoint[0] - local_x  # Store the repaired symbol origin X.
+        record["y"] = new_endpoint[1] + local_y  # Store the repaired symbol origin Y.
+        record["pin_positions"] = {pin_number: new_endpoint}  # Store the repaired attachment point.
+        placed_bodies.append(_body_rect_at(record.get("body_bounds"), record["x"], record["y"]))  # Index the repaired body.
+    return None  # Return nothing.
 
 
 def _page_size_for_symbol_count(settings: Dict[str, Any], symbol_count: int) -> Tuple[str, float, float]:  # Resolve the drawing paper for the schematic.
@@ -1551,6 +1769,81 @@ def _page_size_for_symbol_count(settings: Dict[str, Any], symbol_count: int) -> 
     if not explicit_width and not explicit_height and symbol_count > _KICAD_SCH_A3_SYMBOL_THRESHOLD:  # Oversized designs switch to A3 automatically.
         return "A3", _KICAD_SCH_PAGE_A3_WIDTH, _KICAD_SCH_PAGE_A3_HEIGHT  # Use the larger landscape page.
     return "A4", _KICAD_SCH_PAGE_WIDTH, _KICAD_SCH_PAGE_HEIGHT  # Keep the default landscape page.
+
+
+def _shift_sxp_world_coordinates(node: SExp, delta_x: float, delta_y: float, collected: Optional[List[Tuple[float, float]]] = None) -> None:  # Shift (or collect) every world at/xy coordinate in one node tree.
+    if node.name in ("at", "xy"):  # World positions use the at token; wire geometry uses pts/xy pairs.
+        atoms = [child for child in node.children if child.is_atom]  # Collect the leading coordinate atoms.
+        if len(atoms) >= 2:  # Keep only complete coordinate pairs.
+            if collected is not None:  # Measurement mode records the world point.
+                collected.append((float(atoms[0].value) + delta_x, float(atoms[1].value) + delta_y))  # Store the coordinate pair.
+            else:  # Translation mode moves the world point in place.
+                atoms[0].value = float(atoms[0].value) + delta_x  # Shift the X coordinate.
+                atoms[1].value = float(atoms[1].value) + delta_y  # Shift the Y coordinate.
+    for child in node.children:  # Walk the child nodes recursively.
+        if not child.is_atom:  # Only compound nodes carry coordinates.
+            _shift_sxp_world_coordinates(child, delta_x, delta_y, collected)  # Continue the traversal.
+
+
+def _fit_parts_on_page(  # Translate the finished drawing and its directive text fully inside one page.
+    body_parts: Tuple[List[SExp], List[SExp], List[SExp], List[SExp], Dict[str, SExp]],  # Accept the assembled body nodes.
+    text_nodes: Sequence[SExp],  # Accept the simulation directive text records.
+    settings: Dict[str, Any],  # Accept the validated conversion settings.
+    symbol_count: int,  # Accept the placed symbol count for the base paper choice.
+) -> str:  # Return the paper name written into the schematic header.
+    wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, _embedded_extra = body_parts  # Unpack the assembled body nodes.
+    content_nodes = [*wire_nodes, *no_connect_nodes, *label_nodes, *symbol_nodes]  # Every node carrying world coordinates.
+    points: List[Tuple[float, float]] = []  # Collect the world coordinate pairs.
+    for node in content_nodes:  # Walk the drawing nodes.
+        _shift_sxp_world_coordinates(node, 0.0, 0.0, points)  # Measure without translating.
+    base_name, base_width, base_height = _page_size_for_symbol_count(settings, symbol_count)  # Resolve the threshold-based paper choice.
+    if not points:  # Empty drawings keep the base paper untouched.
+        return base_name  # Report the base paper name.
+    grid = float(settings.get("kicad_sch_grid", _KICAD_SCH_GRID))  # Read the placement grid used for deterministic snapping.
+    min_x = min(point[0] for point in points)  # Measure the drawing width.
+    max_x = max(point[0] for point in points)
+    min_y = min(point[1] for point in points)  # Measure the drawing height.
+    max_y = max(point[1] for point in points)
+    directive_count = len(text_nodes)  # Count the stacked directive records parked above the drawing.
+    directive_span = (_PAGE_FIT_TEXT_GAP + _PAGE_FIT_TEXT_STEP * (directive_count - 1)) if directive_count else 0.0  # Measure the directive stack height.
+    content_width = max_x - min_x  # Measure the routed drawing extent.
+    content_height = (max_y - min_y) + directive_span  # The directives stack above the drawing top.
+    explicit_width = settings.get("kicad_sch_page_width") is not None  # Detect an explicit page width override.
+    explicit_height = settings.get("kicad_sch_page_height") is not None  # Detect an explicit page height override.
+    ladder_names = [entry[0] for entry in _PAGE_LADDER]  # Index the paper ladder names.
+    start_index = ladder_names.index(base_name) if base_name in ladder_names else 0  # Begin the search at the threshold-based paper.
+    paper_name, page_width, page_height = base_name, float(settings.get("kicad_sch_page_width", base_width)), float(settings.get("kicad_sch_page_height", base_height))  # Keep the base paper unless the drawing overflows.
+    if not (explicit_width and explicit_height):  # Explicit page sizes are honored exactly without growth.
+        for name, ladder_width, ladder_height in _PAGE_LADDER[start_index:]:  # Walk the paper ladder upward.
+            trial_width = float(settings.get("kicad_sch_page_width", ladder_width))  # Honor one-sided width overrides.
+            trial_height = float(settings.get("kicad_sch_page_height", ladder_height))  # Honor one-sided height overrides.
+            if any(  # Accept the first paper that fits the drawing at any margin with grid-snapping slack.
+                content_width + 2.0 * margin + grid <= trial_width and content_height + 2.0 * margin + grid <= trial_height
+                for margin in _PAGE_FIT_MARGINS
+            ):  # The drawing fits this paper.
+                paper_name, page_width, page_height = name, trial_width, trial_height  # Select the fitting paper.
+                break  # Stop growing the page.
+    margin = next(  # Choose the most generous page-edge clearance that fits.
+        (candidate for candidate in _PAGE_FIT_MARGINS if content_width + 2.0 * candidate + grid <= page_width and content_height + 2.0 * candidate + grid <= page_height),
+        0.0,  # Fall back to the tightest fit when even the smallest margin overflows.
+    )
+    top_with_directives = min_y - directive_span  # Extend the drawing top by the directive stack.
+    delta_x = round(((page_width - content_width) / 2.0 - min_x) / grid) * grid  # Center the drawing horizontally on the grid.
+    delta_y = round(((page_height - (max_y - top_with_directives)) / 2.0 - top_with_directives) / grid) * grid  # Center the drawing and directives vertically on the grid.
+    for node in content_nodes:  # Translate every drawing node.
+        _shift_sxp_world_coordinates(node, delta_x, delta_y)  # Apply the uniform page-fit translation.
+    shifted_top = min_y + delta_y  # Resolve the translated drawing top.
+    directive_x = min_x + delta_x  # Align the directive stack with the translated left edge.
+    for index, text_node in enumerate(text_nodes, start=1):  # Reposition every directive relative to the translated drawing.
+        at_node = text_node.find_child("at")  # Locate the directive position token.
+        if at_node is None:  # Skip malformed directive records defensively.
+            continue  # Move to the next directive.
+        atoms = [child for child in at_node.children if child.is_atom]  # Collect the coordinate atoms.
+        if len(atoms) < 2:  # Keep only complete coordinate pairs.
+            continue  # Move to the next directive.
+        atoms[0].value = directive_x  # Park the directive at the drawing's left edge.
+        atoms[1].value = shifted_top - _PAGE_FIT_TEXT_GAP - _PAGE_FIT_TEXT_STEP * (index - 1)  # Stack the directives above the drawing top.
+    return paper_name  # Report the fitted paper name.
 
 
 def _layout_parameters(settings: Dict[str, Any], symbol_count: int) -> Tuple[float, int, float, float]:  # Resolve the validated layout parameters.
@@ -1978,9 +2271,16 @@ def _route_net_trunk_fallback(  # Route one net with the provably safe fallback 
     body_rects: Sequence[Tuple[float, float, float, float]] = (),  # Accept symbol bodies that exit lanes must avoid.
 ) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:  # Return the fallback wire segments.
     segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []  # Collect the generated segments.
-    avoid_xs = {point[0] for point in foreign_points}  # Index the X coordinates occupied by foreign points.
+    avoid_xs = sorted({point[0] for point in foreign_points})  # Sorted foreign X coordinates for tolerance-aware lane lookups.
     own_pin_points = {(round(pin_x, 6), round(pin_y, 6)) for _record_index, _pin_number, pin_x, pin_y in pins}  # Exempt this net's own pins from foreign-point audits.
     used_exit_xs: Set[float] = set()  # Track exit lanes already claimed by this net.
+
+    def _lane_occupied(candidate: float) -> bool:  # Reject lanes within contact tolerance of any foreign or claimed coordinate.
+        left_index = bisect.bisect_left(avoid_xs, candidate - _KI_CAD_CONTACT_TOLERANCE)  # Locate the first foreign lane at or right of the tolerance window.
+        if left_index < len(avoid_xs) and avoid_xs[left_index] <= candidate + _KI_CAD_CONTACT_TOLERANCE:  # A foreign coordinate sits inside the window.
+            return True  # Report the lane as occupied.
+        return any(abs(candidate - used_x) < _KI_CAD_CONTACT_TOLERANCE for used_x in used_exit_xs)  # Scan this net's claimed lanes.
+
     exit_xs: List[float] = []  # Collect the resolved exit lanes.
     for pin_index, (_record_index, _pin_number, pin_x, pin_y) in enumerate(pins):  # Walk every net pin.
         chosen: Optional[float] = None  # Initialize the chosen lane.
@@ -1989,8 +2289,7 @@ def _route_net_trunk_fallback(  # Route one net with the provably safe fallback 
             spacing = grid / (2**subdivision)  # Refine the candidate spacing without disconnecting the physical wire.
             for step in range(1, max_steps + 1):  # Search outward at this finite resolution.
                 for candidate in (pin_x - step * spacing, pin_x + step * spacing):  # Try both sides at this distance.
-                    key = round(candidate, 6)  # Round the candidate X.
-                    if key in avoid_xs or key in used_exit_xs:  # Skip lanes occupied by foreign points or prior exits.
+                    if _lane_occupied(candidate):  # Skip lanes occupied by foreign points or prior exits.
                         continue  # Move to the next candidate.
                     low, high = min(pin_x, candidate), max(pin_x, candidate)  # Compute the side-exit span.
                     conflict = any(point not in own_pin_points and abs(point[1] - pin_y) < 1e-9 and low < point[0] < high for point in foreign_points)  # Detect foreign points inside the span.
@@ -2018,8 +2317,7 @@ def _route_net_trunk_fallback(  # Route one net with the provably safe fallback 
             candidates.extend((index, sign) for index in range(1, max_steps + 1) for sign in (1, -1))  # Then sweep unique microscopic lanes beside the pin.
             for offset_index, side in candidates:  # Validate every microscopic lane with the same checks as the primary search.
                 candidate = pin_x + side * offset_index * _MICROSCOPIC_LANE_SPACING  # Build the candidate lane.
-                key = round(candidate, 6)  # Round the lane key.
-                if key in avoid_xs or key in used_exit_xs:  # Skip lanes occupied by foreign points or prior exits.
+                if _lane_occupied(candidate):  # Skip lanes occupied by foreign points or prior exits.
                     continue  # Move to the next candidate.
                 low, high = min(pin_x, candidate), max(pin_x, candidate)  # Compute the side-exit span.
                 conflict = any(point not in own_pin_points and abs(point[1] - pin_y) < 1e-9 and low < point[0] < high for point in foreign_points)  # Detect foreign points inside the span.
@@ -2039,7 +2337,10 @@ def _route_net_trunk_fallback(  # Route one net with the provably safe fallback 
                     chosen = candidate  # Store the chosen lane.
                     break  # Stop searching lanes.
             if chosen is None:  # Keep a deterministic unique lane for truly saturated inputs.
-                chosen = pin_x + (pin_index + 1) * _MICROSCOPIC_LANE_SPACING  # Use the unique historical microscopic lane.
+                last_resort_index = pin_index + 1  # Start at the historical microscopic lane.
+                while _lane_occupied(pin_x + last_resort_index * _MICROSCOPIC_LANE_SPACING):  # Skip lanes already claimed by earlier nets' emergency copper.
+                    last_resort_index += 1  # Advance to the next unique microscopic lane.
+                chosen = pin_x + last_resort_index * _MICROSCOPIC_LANE_SPACING  # Use the first unclaimed microscopic lane.
         used_exit_xs.add(round(chosen, 6))  # Claim the lane.
         exit_xs.append(chosen)  # Record the exit lane.
         if abs(chosen - pin_x) > 1e-9:  # Emit the horizontal side-exit stub.
@@ -2150,6 +2451,102 @@ def _find_free_stub_spot(  # Find a spot whose three-cell horizontal stub avoids
     return 25.4, -20.0  # Return a deterministic far-away fallback spot.
 
 
+def _segments_contact_points(  # Compute the contact points of two segments plus a collinear-overlap flag.
+    first: Tuple[float, float, float, float],  # Accept the first segment as x1, y1, x2, y2.
+    second: Tuple[float, float, float, float],  # Accept the second segment as x1, y1, x2, y2.
+) -> Tuple[List[Tuple[float, float]], bool]:  # Return the contact points and whether the segments overlap collinearly.
+    x1, y1, x2, y2 = first  # Unpack the first segment.
+    x3, y3, x4, y4 = second  # Unpack the second segment.
+    delta_r_x, delta_r_y = x2 - x1, y2 - y1  # First segment direction.
+    delta_s_x, delta_s_y = x4 - x3, y4 - y3  # Second segment direction.
+    denominator = delta_r_x * delta_s_y - delta_r_y * delta_s_x  # Cross product of the directions.
+    offset_x, offset_y = x3 - x1, y3 - y1  # Offset between the segment starts.
+    if abs(denominator) > 1e-12:  # Non-parallel segments meet in at most one point.
+        t = (offset_x * delta_s_y - offset_y * delta_s_x) / denominator  # Parameter along the first segment.
+        u = (offset_x * delta_r_y - offset_y * delta_r_x) / denominator  # Parameter along the second segment.
+        if -1e-9 <= t <= 1.0 + 1e-9 and -1e-9 <= u <= 1.0 + 1e-9:  # Both parameters inside the segments.
+            return [(x1 + t * delta_r_x, y1 + t * delta_r_y)], False  # Return the single crossing point.
+        return [], False  # The segments do not touch.
+    if abs(offset_x * delta_r_y - offset_y * delta_r_x) > 1e-9:  # Parallel but not collinear.
+        return [], False  # The segments never touch.
+    first_length_squared = delta_r_x * delta_r_x + delta_r_y * delta_r_y  # Squared length of the first segment.
+    second_length_squared = delta_s_x * delta_s_x + delta_s_y * delta_s_y  # Squared length of the second segment.
+    if first_length_squared < 1e-24:  # The first segment degenerates to a point.
+        return ([(x1, y1)], False) if _point_on_segment_local(x1, y1, ((x3, y3), (x4, y4))) else ([], False)  # Point-on-segment contact.
+    if second_length_squared < 1e-24:  # The second segment degenerates to a point.
+        return ([(x3, y3)], False) if _point_on_segment_local(x3, y3, ((x1, y1), (x2, y2))) else ([], False)  # Point-on-segment contact.
+    t3 = (offset_x * delta_r_x + offset_y * delta_r_y) / first_length_squared  # Projection of the second start.
+    t4 = ((x4 - x1) * delta_r_x + (y4 - y1) * delta_r_y) / first_length_squared  # Projection of the second end.
+    t_low, t_high = sorted((t3, t4))  # Order the projection interval.
+    t_low = max(t_low, 0.0)  # Clamp to the first segment.
+    t_high = min(t_high, 1.0)  # Clamp to the first segment.
+    if t_high < t_low - 1e-9:  # The collinear spans do not overlap.
+        return [], False  # The segments never touch.
+    length = math.sqrt(first_length_squared)  # Length of the first segment.
+    overlap = (t_high - t_low) * length > 1e-6  # A shared span longer than the tolerance is a collinear overlap.
+    parameters = (t_low, (t_low + t_high) / 2.0, t_high)  # Sample the shared span.
+    points = [(x1 + t * delta_r_x, y1 + t * delta_r_y) for t in parameters]  # Build the contact sample points.
+    return points, overlap  # Return the contacts and the overlap flag.
+
+
+def _graphics_contact_violations(  # Count wires that touch symbol graphics anywhere except the pin contact point.
+    world_graphics: Sequence[Tuple[float, float, float, float]],  # Accept the symbol graphics segments in world coordinates.
+    allow_point: Tuple[float, float],  # Accept the pin attachment point where wire contact stays legal.
+    segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],  # Accept the wire segments to test.
+) -> int:  # Return the number of violating wire segments.
+    violations = 0  # Count the violating segments.
+    for segment in segments:  # Walk every wire segment.
+        for graphics_segment in world_graphics:  # Walk every drawn graphics segment.
+            points, overlap = _segments_contact_points((segment[0][0], segment[0][1], segment[1][0], segment[1][1]), graphics_segment)  # Compute the contacts.
+            if overlap:  # A wire running along the symbol outline always violates the clearance rule.
+                violations += 1  # Count the overlap.
+                break  # One count per wire segment is enough.
+            for point in points:  # Walk the contact points.
+                if abs(point[0] - allow_point[0]) > 1e-6 or abs(point[1] - allow_point[1]) > 1e-6:  # Any contact away from the pin is a pass-through.
+                    violations += 1  # Count the illegal contact.
+                    break  # One count per graphics segment is enough.
+            else:  # Every contact of this graphics segment sat on the pin.
+                continue  # Check the next graphics segment.
+            break  # The wire segment already violates, so stop scanning graphics.
+    return violations  # Return the violation count.
+
+
+def _symbol_local_graphics_segments(symbol_node: SExp) -> List[Tuple[float, float, float, float]]:  # Collect one library symbol's drawn graphics as local segments.
+    segments: List[Tuple[float, float, float, float]] = []  # Collect the local graphics segments.
+    for sub_symbol in symbol_node.find_children("symbol"):  # Walk the nested sub-symbols.
+        for polyline_node in sub_symbol.find_children("polyline"):  # Walk every polyline graphic.
+            points: List[Tuple[float, float]] = []  # Collect the polyline vertices.
+            pts_node = polyline_node.find_child("pts")  # Locate the point list.
+            for xy_node in (pts_node.find_children("xy") if pts_node is not None else []):  # Walk the coordinate pairs.
+                values = [child.value for child in xy_node.children if child.is_atom]  # Collect the coordinate atoms.
+                if len(values) >= 2:  # Keep complete coordinate pairs.
+                    points.append((float(values[0]), float(values[1])))  # Store the vertex.
+            for index in range(len(points) - 1):  # Walk the vertex pairs.
+                segments.append((points[index][0], points[index][1], points[index + 1][0], points[index + 1][1]))  # Store the graphics segment.
+        for rectangle_node in sub_symbol.find_children("rectangle"):  # Walk every rectangle graphic.
+            start_values = [child.value for child in rectangle_node.find_child("start").children if child.is_atom] if rectangle_node.find_child("start") is not None else []  # Collect the start corner.
+            end_values = [child.value for child in rectangle_node.find_child("end").children if child.is_atom] if rectangle_node.find_child("end") is not None else []  # Collect the end corner.
+            if len(start_values) >= 2 and len(end_values) >= 2:  # Keep complete rectangles.
+                start_x, start_y = float(start_values[0]), float(start_values[1])  # Read the start corner.
+                end_x, end_y = float(end_values[0]), float(end_values[1])  # Read the end corner.
+                corners = [(start_x, start_y), (end_x, start_y), (end_x, end_y), (start_x, end_y)]  # Build the corner loop.
+                for index in range(4):  # Walk the corner pairs.
+                    segments.append((corners[index][0], corners[index][1], corners[(index + 1) % 4][0], corners[(index + 1) % 4][1]))  # Store each rectangle edge.
+    return segments  # Return the local graphics segments.
+
+
+def _rect_contains_foreign_pin(  # Count pins that a candidate body would cover.
+    rect: Tuple[float, float, float, float],  # Accept the world body rectangle of the candidate placement.
+    pin_points: Sequence[Tuple[float, float]],  # Accept every settled symbol pin position.
+) -> int:  # Return the number of strictly covered pins.
+    epsilon = 1e-6  # Boundary contacts are legal pin-lead adjacency, not coverage.
+    return sum(  # Count every pin strictly inside the rectangle.
+        1
+        for pin_x, pin_y in pin_points
+        if rect[0] + epsilon < pin_x < rect[2] - epsilon and rect[1] + epsilon < pin_y < rect[3] - epsilon
+    )  # Finish the count.
+
+
 def _attach_symbol_on_net(  # Attach one power or ground symbol onto its net copper.
     record: Dict[str, Any],  # Accept the power or ground record.
     segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],  # Accept the net wire segments.
@@ -2157,6 +2554,9 @@ def _attach_symbol_on_net(  # Attach one power or ground symbol onto its net cop
     grid: float,  # Accept the routing grid.
     foreign_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]] = (),  # Accept other-net copper whose crossings must not become junctions.
     pin_points: Sequence[Tuple[float, float]] = (),  # Accept every symbol pin so attachments never land on another device's pin.
+    blocking_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]] = (),  # Accept every wire segment that must not run through the placed body.
+    strict_clearance: bool = False,  # Reject bodies touched by any wire or covering a foreign pin when enabled.
+    graphics_segments: Sequence[Tuple[float, float, float, float]] = (),  # Accept the symbol graphics segments relative to the attachment point.
 ) -> None:  # Return nothing.
     pin_number = sorted(record["pin_map"].values(), key=_pin_sort_key)[0]  # Read the single pin number.
     local_x, local_y, _pin_name = record["pins"][pin_number]  # Read the pin local coordinates.
@@ -2173,17 +2573,39 @@ def _attach_symbol_on_net(  # Attach one power or ground symbol onto its net cop
         ]  # Finish the safe candidate list.
 
     safe_candidates = _safe_candidates()  # Precompute the electrically safe candidate points.
-    for point in safe_candidates:  # Walk the candidate attachment points.
+
+    def _placement_score(point: Tuple[float, float]) -> Tuple[int, int]:  # Score one candidate by its geometry violations.
         origin_x = point[0] - local_x  # Compute the symbol origin X.
         origin_y = point[1] + local_y  # Compute the symbol origin Y.
         rect = _body_rect_at(record.get("body_bounds"), origin_x, origin_y)  # Compute the placed body rectangle.
-        if not _rect_overlaps_any(rect, placed_bodies):  # Accept collision-free attachment points.
-            record["x"] = origin_x  # Store the symbol X position.
-            record["y"] = origin_y  # Store the symbol Y position.
-            record["angle"] = 0.0  # Store the upright angle.
-            record["pin_positions"] = {pin_number: point}  # Store the attached pin position.
-            placed_bodies.append(rect)  # Index the placed body.
-            return  # Finish the attachment.
+        soft_violations = 1 if _rect_overlaps_any(rect, placed_bodies) else 0  # Count placed-body collisions, including the visual standoff margin.
+        hard_violations = 0  # Count the violations that create real wire-through-ground defects.
+        if strict_clearance:  # Ground symbols must never sit under wire copper or cover a foreign pin.
+            world_graphics = [(point[0] + rx1, point[1] + ry1, point[0] + rx2, point[1] + ry2) for rx1, ry1, rx2, ry2 in graphics_segments]  # Translate the graphics onto the candidate attachment point.
+            hard_violations += _graphics_contact_violations(world_graphics, point, blocking_segments)  # Count wires touching the symbol graphics away from the pin.
+            hard_violations += _rect_contains_foreign_pin(rect, pin_points)  # Count covered foreign pins whose leads would cross the body.
+        return hard_violations, soft_violations  # Return the violation counts.
+
+    best_point: Optional[Tuple[float, float]] = None  # Track the cleanest candidate.
+    best_score: Tuple[int, int] = (0, 0)  # Zero means a fully clear placement.
+    for point in safe_candidates:  # Walk the candidate attachment points.
+        score = _placement_score(point)  # Score the candidate placement.
+        if best_point is None or score < best_score:  # Keep the first candidate with the fewest violations.
+            best_point = point  # Store the candidate.
+            best_score = score  # Store its score.
+        if best_score == (0, 0):  # A fully clear placement needs no further search.
+            break  # Stop scanning candidates.
+    if best_point is not None:  # Place the symbol at the cleanest candidate.
+        point = best_point  # Read the chosen attachment point.
+        origin_x = point[0] - local_x  # Compute the symbol origin X.
+        origin_y = point[1] + local_y  # Compute the symbol origin Y.
+        record["x"] = origin_x  # Store the symbol X position.
+        record["y"] = origin_y  # Store the symbol Y position.
+        record["angle"] = 0.0  # Store the upright angle.
+        record["pin_positions"] = {pin_number: point}  # Store the attached pin position.
+        if best_score == (0, 0):  # Only fully clear placements join the collision index.
+            placed_bodies.append(_body_rect_at(record.get("body_bounds"), origin_x, origin_y))  # Index the placed body.
+        return  # Finish the attachment.
     fallback_point = safe_candidates[0] if safe_candidates else candidates[0]  # Prefer electrical isolation over body clearance in the fallback.
     record["x"] = fallback_point[0] - local_x  # Store the fallback X position.
     record["y"] = fallback_point[1] + local_y  # Store the fallback Y position.
@@ -2573,8 +2995,11 @@ def _build_pin_lead_stubs(  # Build short lead stubs so every pin is the start o
             continue  # Move to the next record.
         segments = segments_by_net.get(node_name, [])  # Read the net wire segments.
         foreign_segments = [segment for foreign_name, routed_segments in segments_by_net.items() if foreign_name != node_name for segment in routed_segments]  # Collect geometry owned by other nets.
+        avoid_rects: Tuple[Tuple[float, float, float, float], ...] = ()  # Power leads must not cross their own symbol body.
+        if record.get("body_bounds") is not None:  # Graphics-less power records keep the historical single-direction lead.
+            avoid_rects = (_record_body_rect(record),)  # Block the lead directions that would run through the placed body graphics.
         for pin_number, (pin_x, pin_y) in record.get("pin_positions", {}).items():  # Walk the attached power pins.
-            stub = _pin_lead_stub(pin_x, pin_y, segments, grid, foreign_segments)  # Build a pin lead whose endpoint avoids foreign wires.
+            stub = _pin_lead_stub(pin_x, pin_y, segments, grid, foreign_segments, avoid_rects)  # Build a pin lead whose endpoint avoids foreign wires.
             if stub is not None:  # Keep generated stubs.
                 stubs_by_net.setdefault(node_name, []).append(stub)  # Append the stub.
     return stubs_by_net  # Return the lead stubs.
@@ -2586,25 +3011,32 @@ def _pin_lead_stub(  # Build a short lead stub starting exactly at one pin when 
     segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],  # Accept the net wire segments.
     grid: float,  # Accept the routing grid.
     foreign_segments: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]] = (),  # Accept other-net geometry that the stub endpoint must avoid.
+    avoid_rects: Sequence[Tuple[float, float, float, float]] = (),  # Accept the pin's own body rectangles that the stub must not run through.
 ) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:  # Return the stub segment or None.
     for segment in segments:  # Walk the net segments.
         if abs(segment[0][0] - pin_x) < 1e-9 and abs(segment[0][1] - pin_y) < 1e-9:  # A segment already starts at the pin.
             return None  # No stub is required.
     for segment in segments:  # Walk the net segments again to find the carrying segment.
         if _point_on_segment_local(pin_x, pin_y, segment):  # Find the segment carrying the pin.
-            other_x, other_y = segment[1]  # Read the far endpoint.
-            delta_x, delta_y = other_x - pin_x, other_y - pin_y  # Compute the direction vector.
-            length = math.hypot(delta_x, delta_y)  # Compute the segment length.
-            if length < 1e-9:  # Skip degenerate segments.
-                continue  # Move to the next segment.
-            step = min(grid, length)  # Start one grid unit along the wire without overshooting.
-            for _attempt in range(32):  # Shorten until the new endpoint is not a foreign-wire junction.
-                neighbor = (pin_x + delta_x / length * step, pin_y + delta_y / length * step)  # Compute the candidate endpoint on the wire.
-                if not any(_point_on_segment_local(neighbor[0], neighbor[1], foreign_segment) for foreign_segment in foreign_segments):  # Require a foreign-clear endpoint.
-                    if abs(neighbor[0] - pin_x) < 1e-9 and abs(neighbor[1] - pin_y) < 1e-9:  # Reject a numerically zero-length stub.
-                        break  # Stop refining this carrier.
-                    return (pin_x, pin_y), neighbor  # Return the safe pin lead stub.
-                step *= 0.5  # Move the endpoint closer to the pin before retrying.
+            directions: Tuple[Tuple[float, float], ...] = (segment[1],)  # Default to the single historical direction.
+            if avoid_rects:  # Power pins own body graphics that the lead must not cross.
+                directions = (segment[1], segment[0])  # Try both carrier directions so the lead can exit away from the body.
+            for other_point in directions:  # Walk the candidate lead directions.
+                other_x, other_y = other_point  # Read the candidate far endpoint.
+                delta_x, delta_y = other_x - pin_x, other_y - pin_y  # Compute the direction vector.
+                length = math.hypot(delta_x, delta_y)  # Compute the segment length.
+                if length < 1e-9:  # Skip degenerate segments.
+                    continue  # Move to the next direction.
+                step = min(grid, length)  # Start one grid unit along the wire without overshooting.
+                for _attempt in range(32):  # Shorten until the new endpoint is not a foreign-wire junction.
+                    neighbor = (pin_x + delta_x / length * step, pin_y + delta_y / length * step)  # Compute the candidate endpoint on the wire.
+                    if not any(_point_on_segment_local(neighbor[0], neighbor[1], foreign_segment) for foreign_segment in foreign_segments):  # Require a foreign-clear endpoint.
+                        if any(_segment_intersects_rect(((pin_x, pin_y), neighbor), avoid_rect) for avoid_rect in avoid_rects):  # Never draw the lead through the pin's own body graphics.
+                            break  # This direction always crosses the body, so try the opposite direction.
+                        if abs(neighbor[0] - pin_x) < 1e-9 and abs(neighbor[1] - pin_y) < 1e-9:  # Reject a numerically zero-length stub.
+                            break  # Stop refining this carrier.
+                        return (pin_x, pin_y), neighbor  # Return the safe pin lead stub.
+                    step *= 0.5  # Move the endpoint closer to the pin before retrying.
     return None  # Return None when no carrying segment exists.
 
 
@@ -3050,6 +3482,11 @@ def _build_instance_properties(record: Dict[str, Any]) -> List[SExp]:  # Build t
     properties.append(  # Append the Description property.
         _property_node(record["reference"], "Description", description_value, record, visible=False)  # Description property hidden.
     )  # Append the Description property to the list.
+    symbol_sim_device = str(record.get("symbol_props", {}).get("Sim.Device", "") or "").strip().upper()  # Read the resolved symbol's simulation device class.
+    if record.get("prefix") == "X" and symbol_sim_device != "SUBCKT":  # Subcircuits must re-emit as X calls even when the resolved symbol is a source primitive.
+        properties.append(  # Append the explicit device-class override.
+            _property_node(record["reference"], "Sim.Device", "SUBCKT", record, visible=False)  # Instance metadata outranks the graphical base symbol class on reverse conversion.
+        )  # Append the Sim.Device override to the list.
     if record.get("instance_sim_name"):  # Preserve an explicit model or subcircuit name independently of the display value.
         properties.append(_property_node(record["reference"], "Sim.Name", str(record["instance_sim_name"]), record, visible=False))
     if record.get("instance_sim_library"):  # Restore the recovered model library as a hidden simulation property.
@@ -3099,6 +3536,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
     version = settings.get("kicad_sch_version") or datetime.date.today().strftime("%Y%m%d")  # Resolve the format version.
     generator = settings.get("kicad_sch_generator") or "electronics_design"  # Resolve the generator name.
     wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, embedded_extra = body_parts  # Unpack the assembled body nodes.
+    paper_name = _fit_parts_on_page(body_parts, simulation_text_nodes, settings, symbol_count)  # Translate the finished drawing fully inside the page.
     all_embedded = dict(embedded_symbols)  # Copy the device symbol definitions.
     all_embedded.update(embedded_extra)  # Merge the ground power symbol definition.
     hinted_set = set(hinted_lib_ids)  # Index the hinted library identifiers for annotation preservation.
@@ -3110,7 +3548,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
         SExp(name="version", children=[SExp(value=version)]),  # Format version.
         SExp(name="generator", children=[SExp(value=generator)]),  # Generator name.
         SExp(name="uuid", children=[SExp(value=root_uuid)]),  # Schematic identifier.
-        SExp(name="paper", children=[SExp(value=_page_size_for_symbol_count(settings, symbol_count)[0])]),  # Drawing page size.
+        SExp(name="paper", children=[SExp(value=paper_name)]),  # Drawing page size.
         SExp(name="lib_symbols", children=lib_symbol_nodes),  # Embedded symbol definitions.
     ]  # Finish the header children.
     root_children.extend(wire_nodes)  # Append the routed wires.
