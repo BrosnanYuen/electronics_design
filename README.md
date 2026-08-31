@@ -134,6 +134,53 @@ Optional `convert_settings` keys: `kicad_symbol_version` (YYYYMMDD, default toda
 
 Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_ASY_FILE`, `ASY_PARSE_ERROR`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SYMBOL`.
 
+### KiCad Schematic to KiCad PCB Conversion
+
+| Function | Returns |
+|---|---|
+| `kicad_sch_to_kicad_pcb(kicad_sch_filepath, kicad_pcb_filepath_out, convert_settings)` | `(bool, str, int)` |
+
+Converts one KiCad schematic (`.kicad_sch`) into one KiCad board (`.kicad_pcb`) file, using the MIT-licensed `kicad-tools` project (https://github.com/rjwalters/kicad-tools) for the PCB data model, footprint generation, and grid A* autorouting.  The kicad-tools distribution is imported normally when installed; otherwise the conversion places the configurable `convert_settings["kicad_tools_path"]` checkout (repository root or `src/` directory) on the import path.
+
+Conversion stages:
+
+1. **Parse** — the schematic is validated with `is_valid_kicad_sch_file()` and parsed with the package's vendored S-expression parser.
+2. **Trace connectivity** — wires, junctions, labels, no-connect markers, and power symbols are merged with the same union-find tracing used by `kicad_sch_to_ltspice_netlist`; every placed pin resolves to one named net (labels and power values first, then KiCad-style `Net-(REF-PadN)` names).
+3. **Resolve footprints** — every non-power component resolves to one footprint: the `kicad_pcb_footprint_map` override (matched by `lib_id`, reference, or reference prefix), the instance or library `Footprint` property, the prefix default table (`kicad_pcb_default_footprints` on top of built-in defaults), or a dynamically generated parametric fallback footprint (chip 2-pin, SOT-23 3-pin, SOIC even 8-32, pin-header otherwise).  Footprint files resolve under `kicad_path/footprints/<Lib>.pretty/<Name>.kicad_mod` and any configured `kicad_pcb_footprint_search_paths`.
+4. **Place** — `kicad_pcb_placement_strategy` selects `schematic` (default; scales the schematic signal-flow layout onto the board) or `rows` (deterministic row packing); overlapping bodies are pushed apart, positions snap to a 0.1 mm grid, and the outline grows (or the drawing scales) to fit.
+5. **Assemble** — nets are declared, footprints are placed from their `.kicad_mod` files, and every traced net is assigned to its matching pad (direct pin-number match first, positional fallback when the pad and pin counts match).
+6. **Route** — every ordinary net is autorouted by the kicad-tools grid A* router with the configured track width, clearance, grid resolution, and via sizes; routed segments and vias are written back through the PCB model.  Because the generated boards carry no copper pours, power nets such as `GND` are routed as ordinary signals; pass `kicad_pcb_skip_route_nets` to exclude plane nets instead.
+7. **Validate** — the finished board is reloaded, the placed references are checked, and every routed net's copper connectivity is audited with the kicad-tools connectivity checker.
+
+Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_OUTPUT_PATH`, `KICAD_TOOLS_UNAVAILABLE`, `INVALID_KICAD_SCH_FILE`, `KICAD_SCH_READ_ERROR`, `KICAD_SCH_PARSE_ERROR`, `UNKNOWN_KICAD_SYMBOL`, `FOOTPRINT_NOT_FOUND`, `PCB_BUILD_FAILED`, `WRITE_ERROR`, `ROUTING_FAILED`, and `INVALID_GENERATED_KICAD_PCB`.  Conversion succeeds even when the autorouter leaves dense nets unrouted; set `kicad_pcb_require_complete_routing` to `True` to turn partial routing into a `ROUTING_FAILED` result.
+
+Optional `convert_settings` keys (all validated by `INVALID_CONVERT_SETTINGS` when malformed):
+
+```python
+convert_settings.update({
+    "kicad_tools_path": "/path/to/kicad-tools/src",  # Used only when kicad_tools is not installed.
+    "kicad_pcb_layers": 2,               # 2 or 4 copper layers.
+    "kicad_pcb_paper": "A4",             # Drawing-sheet size for the board file.
+    "kicad_pcb_width": None,             # Explicit outline width in mm (default: auto-sized).
+    "kicad_pcb_height": None,            # Explicit outline height in mm (default: auto-sized).
+    "kicad_pcb_margin": 5.0,             # Content-to-edge margin in mm.
+    "kicad_pcb_title": "",               # Title-block title (default: input file stem).
+    "kicad_pcb_placement_strategy": "schematic",  # "schematic" or "rows".
+    "kicad_pcb_footprint_map": {},       # {"pattern": "Lib:Footprint"} overrides (lib_id, reference, or prefix).
+    "kicad_pcb_default_footprints": {},  # {"prefix": "Lib:Footprint"} overriding built-in defaults.
+    "kicad_pcb_footprint_search_paths": [],  # Extra roots scanned for .pretty libraries and .kicad_mod files.
+    "kicad_pcb_route_traces": True,      # Set False to emit the placed board without copper.
+    "kicad_pcb_track_width": 0.25,       # Routed trace width in mm.
+    "kicad_pcb_clearance": 0.2,          # Trace clearance in mm.
+    "kicad_pcb_grid_resolution": 0.1,    # Routing grid resolution in mm.
+    "kicad_pcb_via_diameter": 0.7,       # Routed via diameter in mm.
+    "kicad_pcb_via_drill": 0.35,         # Routed via drill in mm.
+    "kicad_pcb_routing_timeout": 300.0,  # Wall-clock routing budget in seconds.
+    "kicad_pcb_skip_route_nets": [],     # Net names to leave unrouted (e.g. ["GND"]).
+    "kicad_pcb_require_complete_routing": False,  # Fail with ROUTING_FAILED on any unrouted net.
+})
+```
+
 ### Schematic Plotting
 
 | Function | Returns |
@@ -283,6 +330,9 @@ PYTHONPATH=src .venv/bin/python scripts/run_all_tests.py
 ## CLI Usage
 
 ```bash
+# Convert a KiCad schematic to a KiCad PCB (requires kicad-tools; see --kicad-tools-path)
+PYTHONPATH=src .venv/bin/python scripts/kicad_sch_to_kicad_pcb.py input.kicad_sch --out output.kicad_pcb
+
 # Render a netlist to a network graph
 PYTHONPATH=src .venv/bin/python scripts/ltspice_net_to_networkxpng.py input.net output.svg --width 1600 --height 900
 
@@ -337,6 +387,7 @@ from electronics_design import ltspice_symbol_estimate
 from electronics_design import rectangle_points_to_lines
 from electronics_design import ltspice_asy_to_kicad_symbol
 from electronics_design import kicad_sch_to_ltspice_netlist
+from electronics_design import kicad_sch_to_kicad_pcb
 from electronics_design import ltspice_netlist_to_kicad_sch
 from electronics_design.pathtracing import are_wires_connected
 from electronics_design.pathtracing import are_wires_horizontal_or_vertical
@@ -359,6 +410,11 @@ convert_settings = {
     "kicad_sch_version": "20260306",
     "kicad_sch_generator": "electronics_design",
 }
+
+# KiCad schematic to KiCad PCB conversion (uses the kicad-tools project)
+pcb_settings = dict(convert_settings)
+pcb_settings["kicad_tools_path"] = "/path/to/kicad-tools/src"  # Only needed when kicad-tools is not installed
+pcb_ok, _, _ = kicad_sch_to_kicad_pcb("example.kicad_sch", "example.kicad_pcb", pcb_settings)
 
 # ASC validation
 header_ok, _ = is_valid_ltspice_asc_header("example.asc")
@@ -450,6 +506,7 @@ src/electronics_design/
     force_directed_placement.py
     kicad_sch.py
     kicad_sexp_parser.py
+    kicad_sch_to_kicad_pcb.py
     kicad_symbol.py
     ltspice.py
     ltspice_asc.py

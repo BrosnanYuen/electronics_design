@@ -55,6 +55,19 @@ Some lower-level helpers return a conversion result together with an empty paylo
 | `KICAD_SCH_PARSE_ERROR` | A schematic symbol instance record is malformed (missing `lib_id`, `at` position, or similar) and could not be parsed. | Inspect the reported schematic line and verify the instance's `lib_id`, `at`, `unit`, and pin sections. |
 | `UNKNOWN_KICAD_SYMBOL` | A schematic instance's `lib_id` cannot be resolved in the `kicad_path` symbol libraries or the schematic's embedded `lib_symbols` definitions. | Verify the library identifier, add the missing library file under `convert_settings['kicad_path']`, or embed the symbol definition in the schematic. |
 
+## KiCad PCB conversion errors
+
+These codes are returned by `kicad_sch_to_kicad_pcb()`.
+
+| Code | Meaning | Recommended advice |
+|---|---|---|
+| `KICAD_TOOLS_UNAVAILABLE: ...` | The `kicad-tools` project could not be imported and no usable checkout was configured. | Install `kicad-tools` into the environment, or set `convert_settings['kicad_tools_path']` to a kicad-tools repository root or `src/` directory. |
+| `FOOTPRINT_NOT_FOUND: ...` | A component's footprint cannot be resolved: an explicit identifier was not found, a footprint file failed to parse, or no generator can represent the pin count. | Check the `Footprint` property, add the missing library under `kicad_path` or `kicad_pcb_footprint_search_paths`, supply a `kicad_pcb_footprint_map` override, or raise the pin count coverage with `kicad_pcb_default_footprints`. |
+| `PCB_BUILD_FAILED: ...` | Board assembly failed while creating the board, declaring nets, or placing a footprint. | Check the `kicad_pcb_layers`, `kicad_pcb_paper`, width/height, and margin settings; verify the resolved footprint files. |
+| `PCB_PLACEMENT_FAILED` | The schematic carries no placeable component (only power symbols or graphical markers). | Verify the schematic contains real components with pins. |
+| `ROUTING_FAILED: ...` | The kicad-tools autorouter crashed, exceeded its budget, or (with `kicad_pcb_require_complete_routing`) left nets unrouted or partially connected. | Increase `kicad_pcb_routing_timeout`, enlarge the board, reduce the grid resolution, skip plane nets with `kicad_pcb_skip_route_nets`, or inspect the appended exception detail. |
+| `INVALID_GENERATED_KICAD_PCB` | The finished board failed the final reload-and-reference validation. | Retry the conversion and report the failure if it persists; the message names the mismatch. |
+
 ## Symbol and symbol-pose errors
 
 | Code | Meaning | Recommended advice |

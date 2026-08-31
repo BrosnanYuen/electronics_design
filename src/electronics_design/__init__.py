@@ -6,6 +6,7 @@ from .kicad_sch import is_valid_kicad_sch_footer  # Re-export the KiCad schemati
 from .kicad_sch import is_valid_kicad_sch_header  # Re-export the KiCad schematic header validator.
 from .kicad_sch import is_valid_kicad_sch_spacing  # Re-export the KiCad schematic spacing validator.
 from .kicad_sch_to_ltspice_netlist import kicad_sch_to_ltspice_netlist  # Re-export the KiCad schematic to LTspice netlist conversion helper.
+from .kicad_sch_to_kicad_pcb import kicad_sch_to_kicad_pcb  # Re-export the KiCad schematic to KiCad PCB conversion helper.
 from .kicad_symbol import is_valid_kicad_symbol_file  # Re-export the KiCad symbol library whole-file validator.
 from .ltspice_asy_to_kicad_symbol import ltspice_asy_to_kicad_symbol  # Re-export the LTspice ASY to KiCad symbol conversion helper.
 from .ltspice import get_wire_pos  # Re-export the wire-position extraction helper.
@@ -55,6 +56,7 @@ __all__ = [  # Define the supported public API surface.
     "is_valid_kicad_sch_footer",  # Export the KiCad schematic footer validator name.
     "is_valid_kicad_sch_file",  # Export the KiCad schematic whole-file validator name.
     "kicad_sch_to_ltspice_netlist",  # Export the KiCad schematic to LTspice netlist conversion helper name.
+    "kicad_sch_to_kicad_pcb",  # Export the KiCad schematic to KiCad PCB conversion helper name.
     "is_valid_kicad_symbol_file",  # Export the KiCad symbol library whole-file validator name.
     "ltspice_asy_to_kicad_symbol",  # Export the LTspice ASY to KiCad symbol conversion helper name.
     "is_valid_ltspice_asy",  # Export the ASY validator name.
