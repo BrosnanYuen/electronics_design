@@ -14,10 +14,8 @@
 from __future__ import annotations  # Postpone annotation evaluation for forward references.
 
 import dataclasses  # Clone and modify kicad-tools net-class routing records.
-import importlib  # Import the kicad-tools submodules after sys.path setup.
 import math  # Compute placement scaling and overlap legalization geometry.
 import os  # Resolve search roots, create parents, and probe filesystem entries.
-import sys  # Insert the configured kicad-tools checkout into the import path.
 import tempfile  # Host dynamically generated fallback footprint files.
 from typing import Any  # Type generic record payloads.
 from typing import Dict  # Type settings, net, and pad mappings.
@@ -51,6 +49,26 @@ from .kicad_sch_to_ltspice_netlist import _point_on_segment  # Reuse the shared 
 from .kicad_sch_to_ltspice_netlist import _split_lib_id  # Reuse the shared library-identifier splitter.
 from .kicad_sch_to_ltspice_netlist import _symbol_has_any_pins  # Reuse the shared pin-presence detector.
 from .kicad_sch_to_ltspice_netlist import _transform_point  # Reuse the shared pin-position transform.
+
+# kicad-tools is a declared package dependency (pyproject.toml) and is
+# imported directly; the guarded import only preserves the public
+# KICAD_TOOLS_UNAVAILABLE error contract when the dependency is absent.
+try:  # Import every kicad-tools symbol the conversion stages use.
+    from kicad_tools.core.sexp_file import load_footprint  # The footprint file loader.
+    from kicad_tools.library.generators.chip import create_chip  # The chip footprint generator.
+    from kicad_tools.library.generators.soic import create_soic  # The SOIC footprint generator.
+    from kicad_tools.library.generators.sot import create_sot  # The SOT footprint generator.
+    from kicad_tools.library.generators.through_hole import create_pin_header  # The pin-header generator.
+    from kicad_tools.router import Autorouter  # The high-level autorouter class.
+    from kicad_tools.router import DesignRules  # The routing design-rules dataclass.
+    from kicad_tools.router import Layer  # The copper-layer enum.
+    from kicad_tools.router.connectivity_invariant import build_multi_pad_net_pads  # The router pad census helper.
+    from kicad_tools.router.observability import validate_net_connectivity  # The routed-copper connectivity validator.
+    from kicad_tools.router.rules import DEFAULT_NET_CLASS_MAP  # The default net-class routing table.
+    from kicad_tools.schema.pcb import PCB  # The PCB schema class.
+    _KICAD_TOOLS_IMPORT_ERROR = ""  # Clear the dependency error marker.
+except ImportError as kicad_tools_import_error:  # Preserve the missing-dependency detail.
+    _KICAD_TOOLS_IMPORT_ERROR = str(kicad_tools_import_error)  # Store the import failure detail.
 
 ConversionResult = Tuple[bool, str, int]  # Represent the public conversion return shape.
 
@@ -105,13 +123,14 @@ def kicad_sch_to_kicad_pcb(  # Convert one KiCad schematic into one KiCad PCB fi
     and power symbols, resolves one footprint per placed component, mirrors the
     schematic placement onto the board (or packs rows), assigns every pad to
     its traced net, and autoroutes every ordinary net with the kicad-tools grid
-    A* router. The kicad-tools project is imported normally when installed;
-    otherwise the configurable ``convert_settings["kicad_tools_path"]`` checkout
-    is placed on the import path.
+    A* router. The kicad-tools project is a declared package dependency and is
+    imported directly.
 
     Returns ``(True, "OK", 0)`` on success or ``(False, "<error code>", <line>)``
     on failure.
     """
+    if _KICAD_TOOLS_IMPORT_ERROR:  # Stop when the kicad-tools dependency is absent.
+        return False, f"KICAD_TOOLS_UNAVAILABLE: {_KICAD_TOOLS_IMPORT_ERROR}", 0  # Return the dependency error with its detail.
     settings_result = _normalize_pcb_settings(convert_settings)  # Validate the conversion settings first.
     if not settings_result[0]:  # Stop when the settings are unusable.
         return False, settings_result[2], 0  # Return the settings error code with its detail.
@@ -121,10 +140,6 @@ def kicad_sch_to_kicad_pcb(  # Convert one KiCad schematic into one KiCad PCB fi
     if not output_result[0]:  # Stop when the output path is not path-like.
         return False, "INVALID_OUTPUT_PATH", 0  # Return the required output path error code.
     output_path = output_result[1]  # Read the coerced output path string.
-    tools_result = _load_kicad_tools_module(settings)  # Import the kicad-tools project modules.
-    if not tools_result[0]:  # Stop when the kicad-tools dependency is unusable.
-        return False, tools_result[1], 0  # Return the dependency error code with its detail.
-    tool_modules = tools_result[1]  # Read the loaded kicad-tools module bundle.
     input_result = _coerce_input_path(kicad_sch_filepath)  # Coerce and check the input path.
     if not input_result[0]:  # Stop when the input path is unusable.
         return False, "INVALID_KICAD_SCH_FILE", 0  # Return the required schematic file error code.
@@ -147,7 +162,7 @@ def kicad_sch_to_kicad_pcb(  # Convert one KiCad schematic into one KiCad PCB fi
     if not nets_result[0]:  # Stop when connectivity tracing fails.
         return False, nets_result[2], nets_result[3]  # Return the tracing error code and line.
     net_names = nets_result[1]  # Read the pin-root to net-name mapping.
-    footprints_result = _resolve_footprints(components, settings, tool_modules)  # Resolve one footprint per component.
+    footprints_result = _resolve_footprints(components, settings)  # Resolve one footprint per component.
     if not footprints_result[0]:  # Stop when a footprint cannot be resolved.
         return False, footprints_result[2], footprints_result[3]  # Return the footprint error code and line.
     placement_result = _place_components(components, settings)  # Compute board-relative component origins.
@@ -162,7 +177,6 @@ def kicad_sch_to_kicad_pcb(  # Convert one KiCad schematic into one KiCad PCB fi
         input_path,  # Pass the input path for the title block.
         output_path,  # Pass the intermediate output path.
         settings,  # Pass the validated settings.
-        tool_modules,  # Pass the loaded kicad-tools modules.
     )  # Finish the assembly call.
     if not build_result[0]:  # Stop when the board assembly fails.
         return False, build_result[2], build_result[3]  # Return the assembly error code and line.
@@ -172,11 +186,10 @@ def kicad_sch_to_kicad_pcb(  # Convert one KiCad schematic into one KiCad PCB fi
             components,  # Pass the placed component records for the pad-net table.
             output_path,  # Rewrite the same board file with routed copper.
             settings,  # Pass the validated settings.
-            tool_modules,  # Pass the loaded kicad-tools modules.
         )  # Finish the routing call.
         if not route_result[0]:  # Stop when routing reports a failure.
             return False, route_result[1], 0  # Return the routing error code with its detail.
-    final_result = _validate_generated_pcb(output_path, components, tool_modules)  # Validate the finished board.
+    final_result = _validate_generated_pcb(output_path, components)  # Validate the finished board.
     if not final_result[0]:  # Stop when the generated board fails validation.
         return False, "INVALID_GENERATED_KICAD_PCB", 0  # Return the generated-board error code.
     return True, "OK", 0  # Return success when the conversion completed.
@@ -229,12 +242,6 @@ def _normalize_pcb_settings(convert_settings: Mapping) -> Tuple[bool, Optional[D
     if not isinstance(search_paths_value, Sequence) or isinstance(search_paths_value, str):  # Require a sequence of paths.
         return False, None, "INVALID_CONVERT_SETTINGS: kicad_pcb_footprint_search_paths must be a sequence of strings", ""  # Return the paths error.
     settings["footprint_search_paths"] = [str(entry) for entry in search_paths_value]  # Store the validated search roots.
-    tools_path = convert_settings.get("kicad_tools_path", None)  # Read the optional kicad-tools checkout path.
-    if tools_path is not None and not isinstance(tools_path, (str, bytes)):  # Require a path-like kicad-tools path.
-        return False, None, "INVALID_CONVERT_SETTINGS: kicad_tools_path must be a path-like string", ""  # Return the tools-path error.
-    if isinstance(tools_path, bytes):  # Decode bytes paths through the filesystem encoding.
-        tools_path = os.fsdecode(tools_path)  # Convert the bytes path to text.
-    settings["kicad_tools_path"] = os.path.expanduser(str(tools_path)) if tools_path else ""  # Store the expanded tools path.
     route_value = convert_settings.get("kicad_pcb_route_traces", True)  # Read the routing toggle.
     if not isinstance(route_value, bool):  # Require a boolean routing toggle.
         return False, None, "INVALID_CONVERT_SETTINGS: kicad_pcb_route_traces must be a boolean", ""  # Return the toggle error.
@@ -283,59 +290,6 @@ def _string_mapping(value: Any, setting_name: str) -> Tuple[bool, Any]:  # Valid
             return False, f"INVALID_CONVERT_SETTINGS: {setting_name} keys and values must be strings"  # Return the mapping error.
         normalized[key] = entry  # Store the validated pair.
     return True, normalized  # Return the validated mapping.
-
-
-def _load_kicad_tools_module(settings: Dict[str, Any]) -> Tuple[bool, Any]:  # Import the kicad-tools project modules.
-    module = None  # Track the imported top-level module.
-    try:  # Prefer an already installed kicad-tools distribution.
-        module = importlib.import_module("kicad_tools")  # Attempt the normal import first.
-    except ImportError:  # Fall back to the configured checkout path.
-        module = None  # Clear the failed import result.
-        tools_path = settings.get("kicad_tools_path", "")  # Read the configured checkout path.
-        if not tools_path:  # Require a configured path when the import fails.
-            return False, "KICAD_TOOLS_UNAVAILABLE: install kicad-tools or set convert_settings['kicad_tools_path']"  # Return the dependency error.
-        candidates = [tools_path]  # Probe the configured path directly.
-        source_candidate = os.path.join(tools_path, "src")  # Build the conventional src-layout candidate.
-        if os.path.isdir(source_candidate):  # Detect the repository checkout layout.
-            candidates = [source_candidate, tools_path]  # Prefer the src directory.
-        else:  # Handle direct package parents.
-            candidates = [tools_path]  # Search only the configured path.
-        for candidate in candidates:  # Probe every candidate root.
-            expanded = os.path.expanduser(candidate)  # Expand user-relative prefixes.
-            if expanded not in sys.path:  # Avoid duplicate import-path entries.
-                sys.path.insert(0, expanded)  # Add the candidate to the import path.
-        try:  # Retry the import after path setup.
-            module = importlib.import_module("kicad_tools")  # Import from the configured checkout.
-        except ImportError:  # Report the unusable dependency.
-            return False, f"KICAD_TOOLS_UNAVAILABLE: unable to import kicad_tools from '{settings.get('kicad_tools_path', '')}'"  # Return the dependency error.
-    try:  # Load every submodule the conversion needs.
-        schema_pcb = importlib.import_module("kicad_tools.schema.pcb")  # Import the PCB schema module.
-        router_package = importlib.import_module("kicad_tools.router")  # Import the router package.
-        router_rules = importlib.import_module("kicad_tools.router.rules")  # Import the default net-class map.
-        connectivity_invariant = importlib.import_module("kicad_tools.router.connectivity_invariant")  # Import the pad census helper.
-        router_observability = importlib.import_module("kicad_tools.router.observability")  # Import the connectivity validator.
-        sexp_file = importlib.import_module("kicad_tools.core.sexp_file")  # Import the footprint file loader.
-        generator_chip = importlib.import_module("kicad_tools.library.generators.chip")  # Import the chip generator.
-        generator_sot = importlib.import_module("kicad_tools.library.generators.sot")  # Import the SOT generator.
-        generator_soic = importlib.import_module("kicad_tools.library.generators.soic")  # Import the SOIC generator.
-        generator_header = importlib.import_module("kicad_tools.library.generators.through_hole")  # Import the through-hole generators.
-    except Exception as import_error:  # Catch any submodule import failure.
-        return False, f"KICAD_TOOLS_UNAVAILABLE: {import_error}"  # Return the dependency error with detail.
-    bundle = {  # Assemble the module bundle used by the conversion stages.
-        "PCB": schema_pcb.PCB,  # The PCB schema class.
-        "Autorouter": router_package.Autorouter,  # The high-level autorouter class.
-        "DesignRules": router_package.DesignRules,  # The routing design-rules dataclass.
-        "Layer": router_package.Layer,  # The copper-layer enum.
-        "default_net_class_map": router_rules.DEFAULT_NET_CLASS_MAP,  # The default net-class routing table.
-        "build_multi_pad_net_pads": connectivity_invariant.build_multi_pad_net_pads,  # The router pad census helper.
-        "validate_net_connectivity": router_observability.validate_net_connectivity,  # The routed-copper connectivity validator.
-        "load_footprint": sexp_file.load_footprint,  # The footprint file loader.
-        "create_chip": generator_chip.create_chip,  # The chip footprint generator.
-        "create_sot": generator_sot.create_sot,  # The SOT footprint generator.
-        "create_soic": generator_soic.create_soic,  # The SOIC footprint generator.
-        "create_pin_header": generator_header.create_pin_header,  # The pin-header generator.
-    }  # Finish the module bundle.
-    return True, bundle  # Return the loaded bundle.
 
 
 def _collect_components(root: Any, kicad_path: str) -> Tuple[bool, List[Dict[str, Any]], str, int]:  # Parse instances and resolve every symbol definition.
@@ -489,7 +443,7 @@ def _trace_nets(root: Any, components: List[Dict[str, Any]]) -> Tuple[bool, Dict
     return True, net_names, "", 0  # Return the completed net-name mapping.
 
 
-def _resolve_footprints(components: List[Dict[str, Any]], settings: Dict[str, Any], tool_modules: Dict[str, Any]) -> Tuple[bool, List[Dict[str, Any]], str, int]:  # Resolve one footprint per placed component.
+def _resolve_footprints(components: List[Dict[str, Any]], settings: Dict[str, Any]) -> Tuple[bool, List[Dict[str, Any]], str, int]:  # Resolve one footprint per placed component.
     scratch_directory = tempfile.mkdtemp(prefix="electronics_design_pcb_footprints_")  # Host dynamically generated fallback footprints.
     override_map = settings["footprint_map"]  # Read the caller's explicit footprint overrides.
     default_map = dict(_DEFAULT_FOOTPRINT_BY_PREFIX)  # Start from the built-in prefix defaults.
@@ -506,19 +460,19 @@ def _resolve_footprints(components: List[Dict[str, Any]], settings: Dict[str, An
             if footprint_path is None:  # Fail loudly for explicit identifiers that cannot be found.
                 message = f"FOOTPRINT_NOT_FOUND: Unable to locate footprint '{identifier}' for component '{record['reference']}' under the configured footprint search paths"  # Explain the failed lookup.
                 return False, [], message, record["line"]  # Return the footprint error with the instance line.
-            parse_result = _parse_footprint_file(footprint_path, tool_modules)  # Parse the footprint pads and extents.
+            parse_result = _parse_footprint_file(footprint_path)  # Parse the footprint pads and extents.
             if not parse_result[0]:  # Stop when the footprint file cannot be parsed.
                 message = f"FOOTPRINT_NOT_FOUND: Unable to parse footprint file '{footprint_path}' for component '{record['reference']}': {parse_result[1]}"  # Explain the parse failure.
                 return False, [], message, record["line"]  # Return the footprint error with the instance line.
             if from_defaults and len(parse_result[2]) != pin_count:  # Regenerate mismatched prefix-default footprints.
                 footprint_path = None  # Clear the mismatched footprint for the fallback path.
         if footprint_path is None:  # Generate a fallback footprint matched to the pin count.
-            generated = _generate_fallback_footprint(record, pin_count, tool_modules)  # Build the parametric fallback footprint.
+            generated = _generate_fallback_footprint(record, pin_count)  # Build the parametric fallback footprint.
             if generated is None:  # Stop when no generator can represent the pin count.
                 message = f"FOOTPRINT_NOT_FOUND: No footprint property, prefix default, or generated fallback is available for component '{record['reference']}' with {pin_count} pins"  # Explain the failed resolution.
                 return False, [], message, record["line"]  # Return the footprint error with the instance line.
             footprint_path = generated  # Use the generated footprint path.
-        parse_result = _parse_footprint_file(footprint_path, tool_modules)  # Parse the footprint pads and extents.
+        parse_result = _parse_footprint_file(footprint_path)  # Parse the footprint pads and extents.
         if not parse_result[0]:  # Stop when the footprint file cannot be parsed.
             message = f"FOOTPRINT_NOT_FOUND: Unable to parse footprint file '{footprint_path}' for component '{record['reference']}': {parse_result[1]}"  # Explain the parse failure.
             return False, [], message, record["line"]  # Return the footprint error with the instance line.
@@ -604,24 +558,24 @@ def _find_footprint_file(identifier: str, search_roots: Sequence[str]) -> Option
     return None  # Report the failed lookup.
 
 
-def _generate_fallback_footprint(record: Dict[str, Any], pin_count: int, tool_modules: Dict[str, Any]) -> Optional[str]:  # Build a parametric fallback footprint for one component.
+def _generate_fallback_footprint(record: Dict[str, Any], pin_count: int) -> Optional[str]:  # Build a parametric fallback footprint for one component.
     if pin_count < min(_ROUTABLE_CHIP_PIN_RANGE):  # Reject components with too few pins to represent.
         return None  # Report the unrepresentable component.
     reference = str(record["reference"])  # Read the component reference.
     prefix = _reference_prefix(reference) or "U"  # Resolve a naming prefix for the generated footprint.
     try:  # Guard every generator behind one failure path.
         if pin_count in _ROUTABLE_CHIP_PIN_RANGE:  # Two-pin passives use the chip generator.
-            footprint = tool_modules["create_chip"](_GENERATED_FOOTPRINT_SIZE, prefix=prefix)  # Generate the chip footprint.
+            footprint = create_chip(_GENERATED_FOOTPRINT_SIZE, prefix=prefix)  # Generate the chip footprint.
         elif pin_count == 3:  # Three-pin parts map onto the standard SOT-23.
-            footprint = tool_modules["create_sot"]("SOT-23")  # Generate the SOT-23 footprint.
+            footprint = create_sot("SOT-23")  # Generate the SOT-23 footprint.
         elif pin_count == 5:  # Five-pin parts map onto the standard SOT-23-5.
-            footprint = tool_modules["create_sot"]("SOT-23-5")  # Generate the SOT-23-5 footprint.
+            footprint = create_sot("SOT-23-5")  # Generate the SOT-23-5 footprint.
         elif pin_count == 6:  # Six-pin parts map onto the standard SOT-23-6.
-            footprint = tool_modules["create_sot"]("SOT-23-6")  # Generate the SOT-23-6 footprint.
+            footprint = create_sot("SOT-23-6")  # Generate the SOT-23-6 footprint.
         elif _ROUTABLE_SOIC_PIN_RANGE[0] <= pin_count <= _ROUTABLE_SOIC_PIN_RANGE[1] and pin_count % 2 == 0:  # Even wide parts use the SOIC generator.
-            footprint = tool_modules["create_soic"](pins=pin_count)  # Generate the SOIC footprint.
+            footprint = create_soic(pins=pin_count)  # Generate the SOIC footprint.
         else:  # Every other pin count uses the through-hole header generator.
-            footprint = tool_modules["create_pin_header"](pins=pin_count, rows=1)  # Generate the header footprint.
+            footprint = create_pin_header(pins=pin_count, rows=1)  # Generate the header footprint.
         scratch_directory = os.path.join(tempfile.gettempdir(), "electronics_design_generated_footprints")  # Resolve the shared scratch directory.
         os.makedirs(scratch_directory, exist_ok=True)  # Create the scratch directory once.
         footprint_path = os.path.join(scratch_directory, f"{prefix}_{pin_count}pin_{abs(hash(reference)) % 100000}.kicad_mod")  # Build a deterministic scratch file name.
@@ -709,9 +663,9 @@ def _parse_kicad_mod_extents(footprint_root: Any, pads: Sequence[Dict[str, Any]]
     return (float(min_x), float(min_y), float(max_x), float(max_y))  # Return the local bounding box.
 
 
-def _parse_footprint_file(footprint_path: str, tool_modules: Dict[str, Any]) -> Tuple[bool, Any, List[Dict[str, Any]], Tuple[float, float, float, float]]:  # Load and parse one footprint file.
+def _parse_footprint_file(footprint_path: str) -> Tuple[bool, Any, List[Dict[str, Any]], Tuple[float, float, float, float]]:  # Load and parse one footprint file.
     try:  # Guard the kicad-tools loader call.
-        footprint_root = tool_modules["load_footprint"](footprint_path)  # Parse the footprint S-expression.
+        footprint_root = load_footprint(footprint_path)  # Parse the footprint S-expression.
     except Exception as load_error:  # Report the loader failure with detail.
         return False, str(load_error), [], (0.0, 0.0, 0.0, 0.0)  # Return the parse failure.
     pads = _parse_kicad_mod_pads(footprint_root)  # Parse the pad table.
@@ -871,9 +825,8 @@ def _build_pcb_file(  # Assemble nets, footprints, and net assignments into one 
     input_path: str,  # Pass the input path for the title block.
     output_path: str,  # Pass the intermediate output path.
     settings: Dict[str, Any],  # Pass the validated settings.
-    tool_modules: Dict[str, Any],  # Pass the loaded kicad-tools modules.
 ) -> Tuple[bool, Any, str, int]:  # Return the assembly result tuple.
-    pcb_class = tool_modules["PCB"]  # Read the PCB schema class.
+    pcb_class = PCB  # Read the PCB schema class.
     title = settings["title"] or os.path.splitext(os.path.basename(input_path))[0]  # Resolve the title-block title.
     try:  # Guard the board construction calls.
         pcb = pcb_class.create(  # Create the blank board with the resolved outline.
@@ -974,12 +927,11 @@ def _route_board(  # Route the saved board with the kicad-tools autorouter.
     components: List[Dict[str, Any]],  # Pass the placed component records.
     output_path: str,  # Pass the final board output path.
     settings: Dict[str, Any],  # Pass the validated settings.
-    tool_modules: Dict[str, Any],  # Pass the loaded kicad-tools modules.
 ) -> Tuple[bool, str]:  # Return the routing result tuple.
-    pcb_class = tool_modules["PCB"]  # Read the PCB schema class.
-    autorouter_class = tool_modules["Autorouter"]  # Read the autorouter class.
-    design_rules_class = tool_modules["DesignRules"]  # Read the design-rules dataclass.
-    layer_enum = tool_modules["Layer"]  # Read the copper-layer enum.
+    pcb_class = PCB  # Read the PCB schema class.
+    autorouter_class = Autorouter  # Read the autorouter class.
+    design_rules_class = DesignRules  # Read the design-rules dataclass.
+    layer_enum = Layer  # Read the copper-layer enum.
     try:  # Guard the board reload used for geometry and net tables.
         pcb = pcb_class.load(pcb_path)  # Reload the saved intermediate board.
     except Exception as load_error:  # Report the reload failure.
@@ -992,7 +944,7 @@ def _route_board(  # Route the saved board with the kicad-tools autorouter.
             if net_name and net_name not in net_numbers:  # Register each named net once.
                 net_numbers[net_name] = len(net_numbers) + 1  # Assign the next routing net number.
     net_class_map = {}  # Build a routing net-class map without copper-pour exclusions.
-    for class_name, class_rules in dict(tool_modules["default_net_class_map"]).items():  # Clone every default net class.
+    for class_name, class_rules in dict(DEFAULT_NET_CLASS_MAP).items():  # Clone every default net class.
         net_class_map[class_name] = dataclasses.replace(class_rules, is_pour_net=False)  # Route every net as a signal because the generated board carries no pours.
     try:  # Guard the router construction.
         rules = design_rules_class(  # Build the routing design rules.
@@ -1049,8 +1001,8 @@ def _route_board(  # Route the saved board with the kicad-tools autorouter.
     if routeable_nets and not (routeable_nets & routed_nets):  # Detect a completely failed routing pass.
         return False, "ROUTING_FAILED: no routeable net received copper"  # Return the routing failure.
     try:  # Guard the connectivity audit.
-        net_pads = tool_modules["build_multi_pad_net_pads"](router)  # Build the router's own pad census.
-        connectivity_report = tool_modules["validate_net_connectivity"](routes, net_pads)  # Validate every routed net's copper connectivity.
+        net_pads = build_multi_pad_net_pads(router)  # Build the router's own pad census.
+        connectivity_report = validate_net_connectivity(routes, net_pads)  # Validate every routed net's copper connectivity.
         unconnected_nets = sorted(  # Collect the nets whose copper misses at least one pad.
             router.net_names.get(net_id, f"Net {net_id}")  # Resolve the net name.
             for net_id, report in connectivity_report.items()  # Walk the per-net connectivity reports.
@@ -1091,8 +1043,8 @@ def _route_board(  # Route the saved board with the kicad-tools autorouter.
     return True, ""  # Return the routing success.
 
 
-def _validate_generated_pcb(output_path: str, components: List[Dict[str, Any]], tool_modules: Dict[str, Any]) -> Tuple[bool, str]:  # Validate the finished board file.
-    pcb_class = tool_modules["PCB"]  # Read the PCB schema class.
+def _validate_generated_pcb(output_path: str, components: List[Dict[str, Any]]) -> Tuple[bool, str]:  # Validate the finished board file.
+    pcb_class = PCB  # Read the PCB schema class.
     try:  # Guard the reload parse.
         pcb = pcb_class.load(output_path)  # Parse the finished board.
     except Exception as load_error:  # Report the reload failure.

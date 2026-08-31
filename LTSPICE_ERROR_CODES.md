@@ -61,7 +61,7 @@ These codes are returned by `kicad_sch_to_kicad_pcb()`.
 
 | Code | Meaning | Recommended advice |
 |---|---|---|
-| `KICAD_TOOLS_UNAVAILABLE: ...` | The `kicad-tools` project could not be imported and no usable checkout was configured. | Install `kicad-tools` into the environment, or set `convert_settings['kicad_tools_path']` to a kicad-tools repository root or `src/` directory. |
+| `KICAD_TOOLS_UNAVAILABLE: ...` | The declared `kicad-tools` dependency could not be imported. | Install the package with `pip install "kicad-tools[all]"` and verify the environment. |
 | `FOOTPRINT_NOT_FOUND: ...` | A component's footprint cannot be resolved: an explicit identifier was not found, a footprint file failed to parse, or no generator can represent the pin count. | Check the `Footprint` property, add the missing library under `kicad_path` or `kicad_pcb_footprint_search_paths`, supply a `kicad_pcb_footprint_map` override, or raise the pin count coverage with `kicad_pcb_default_footprints`. |
 | `PCB_BUILD_FAILED: ...` | Board assembly failed while creating the board, declaring nets, or placing a footprint. | Check the `kicad_pcb_layers`, `kicad_pcb_paper`, width/height, and margin settings; verify the resolved footprint files. |
 | `PCB_PLACEMENT_FAILED` | The schematic carries no placeable component (only power symbols or graphical markers). | Verify the schematic contains real components with pins. |

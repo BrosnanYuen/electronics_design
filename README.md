@@ -140,7 +140,7 @@ Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_ASY_FILE`, `ASY_PARSE_E
 |---|---|
 | `kicad_sch_to_kicad_pcb(kicad_sch_filepath, kicad_pcb_filepath_out, convert_settings)` | `(bool, str, int)` |
 
-Converts one KiCad schematic (`.kicad_sch`) into one KiCad board (`.kicad_pcb`) file, using the MIT-licensed `kicad-tools` project (https://github.com/rjwalters/kicad-tools) for the PCB data model, footprint generation, and grid A* autorouting.  The kicad-tools distribution is imported normally when installed; otherwise the conversion places the configurable `convert_settings["kicad_tools_path"]` checkout (repository root or `src/` directory) on the import path.
+Converts one KiCad schematic (`.kicad_sch`) into one KiCad board (`.kicad_pcb`) file, using the MIT-licensed `kicad-tools` project (https://github.com/rjwalters/kicad-tools, a declared package dependency in `pyproject.toml`) for the PCB data model, footprint generation, and grid A* autorouting.
 
 Conversion stages:
 
@@ -158,7 +158,6 @@ Optional `convert_settings` keys (all validated by `INVALID_CONVERT_SETTINGS` wh
 
 ```python
 convert_settings.update({
-    "kicad_tools_path": "/path/to/kicad-tools/src",  # Used only when kicad_tools is not installed.
     "kicad_pcb_layers": 2,               # 2 or 4 copper layers.
     "kicad_pcb_paper": "A4",             # Drawing-sheet size for the board file.
     "kicad_pcb_width": None,             # Explicit outline width in mm (default: auto-sized).
@@ -312,7 +311,7 @@ Set `voltage_must_have_dc` to `True` to normalize AC-only independent voltage so
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install "numba>=0.63.0" "networkx>=3.6.1" "numpy<2.5" "Pillow>=10.0.0"
+.venv/bin/python -m pip install "kicad-tools[all]>=0.20.0" "numba>=0.63.0" "networkx>=3.6.1" "numpy<2.5" "Pillow>=10.0.0"
 ```
 
 Run tests:
@@ -329,8 +328,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_all_tests.py
 
 ## CLI Usage
 
-```bash
-# Convert a KiCad schematic to a KiCad PCB (requires kicad-tools; see --kicad-tools-path)
+# Convert a KiCad schematic to a KiCad PCB
 PYTHONPATH=src .venv/bin/python scripts/kicad_sch_to_kicad_pcb.py input.kicad_sch --out output.kicad_pcb
 
 # Render a netlist to a network graph
@@ -411,10 +409,8 @@ convert_settings = {
     "kicad_sch_generator": "electronics_design",
 }
 
-# KiCad schematic to KiCad PCB conversion (uses the kicad-tools project)
-pcb_settings = dict(convert_settings)
-pcb_settings["kicad_tools_path"] = "/path/to/kicad-tools/src"  # Only needed when kicad-tools is not installed
-pcb_ok, _, _ = kicad_sch_to_kicad_pcb("example.kicad_sch", "example.kicad_pcb", pcb_settings)
+# KiCad schematic to KiCad PCB conversion (uses the kicad-tools dependency)
+pcb_ok, _, _ = kicad_sch_to_kicad_pcb("example.kicad_sch", "example.kicad_pcb", convert_settings)
 
 # ASC validation
 header_ok, _ = is_valid_ltspice_asc_header("example.asc")

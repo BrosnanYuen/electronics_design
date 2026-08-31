@@ -8,7 +8,6 @@ import sys
 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[1]
 _SOURCE_DIRECTORY = _ROOT_DIRECTORY / "src"
-_SIBLING_KICAD_TOOLS = _ROOT_DIRECTORY.parent / "kicad-tools" / "src"
 
 if str(_SOURCE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_SOURCE_DIRECTORY))
@@ -33,11 +32,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         "--kicad-path",
         default="/usr/share/kicad/",
         help="Root path of the KiCad symbol and footprint libraries used for symbol and footprint lookup.",
-    )
-    parser.add_argument(
-        "--kicad-tools-path",
-        default=None,
-        help="Path to a kicad-tools checkout (repository root or src directory) when kicad-tools is not installed.",
     )
     parser.add_argument(
         "--kicad-pcb-layers",
@@ -120,10 +114,6 @@ def main() -> int:
         convert_settings["kicad_pcb_width"] = arguments.kicad_pcb_width
     if arguments.kicad_pcb_height is not None:
         convert_settings["kicad_pcb_height"] = arguments.kicad_pcb_height
-    if arguments.kicad_tools_path:
-        convert_settings["kicad_tools_path"] = arguments.kicad_tools_path
-    elif _SIBLING_KICAD_TOOLS.is_dir():
-        convert_settings["kicad_tools_path"] = str(_SIBLING_KICAD_TOOLS)
     input_path = Path(arguments.sch_filepath)
     if not input_path.is_file():
         print(f"{input_path}: not a file", file=sys.stderr)

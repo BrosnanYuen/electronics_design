@@ -2,9 +2,9 @@
 
 from __future__ import annotations  # Keep annotation handling consistent across the project.
 
-import os  # Read the optional KiCad and kicad-tools path environment overrides.
+import os  # Read the optional KiCad path environment override.
 from pathlib import Path  # Use pathlib for clear path handling.
-import sys  # Detect an already importable kicad-tools installation.
+import sys  # Reach the loaded conversion module through the package registry.
 import tempfile  # Use a temporary directory so tests never modify checked-in files.
 import unittest  # Use the standard library test framework.
 
@@ -15,26 +15,9 @@ from electronics_design.kicad_sch import _read_text_file_lines  # Reuse the shar
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]  # Resolve the project root from the current test file.
 _KICAD_SCH_DIRECTORY = _ROOT_DIRECTORY / "kicad_convert" / "kicad_sch"  # Point at the checked-in KiCad schematic files.
 _KICAD_PATH = os.environ.get("ELECTRONICS_DESIGN_KICAD_PATH", "/usr/share/kicad")  # Resolve the KiCad library path with an optional environment override.
-_KICAD_TOOLS_PATH = os.environ.get(  # Resolve the kicad-tools checkout with an optional environment override.
-    "ELECTRONICS_DESIGN_KICAD_TOOLS_PATH",  # Read the documented override variable.
-    str(_ROOT_DIRECTORY.parent / "kicad-tools" / "src"),  # Fall back to the repository's sibling kicad-tools checkout.
-)  # Finish the kicad-tools path resolution.
-
-
-def _kicad_tools_available() -> bool:  # Decide whether the kicad-tools dependency is importable.
-    try:  # Attempt the normal import first.
-        import kicad_tools  # noqa: F401 - The import itself is the availability probe.
-        return True  # The distribution is installed.
-    except ImportError:  # Fall back to the configured checkout path.
-        tools_path = Path(_KICAD_TOOLS_PATH)  # Normalize the configured checkout path.
-        return (tools_path / "kicad_tools").is_dir() or (tools_path / "src" / "kicad_tools").is_dir()  # Probe the configured checkout.
-
-
-_KICAD_TOOLS_OK = _kicad_tools_available()  # Evaluate the kicad-tools availability once at import time.
 
 _CONVERT_SETTINGS = {  # Pin the settings so generated boards are reproducible.
     "kicad_path": _KICAD_PATH,  # Look symbols and footprints up from the configured KiCad installation.
-    "kicad_tools_path": str(_KICAD_TOOLS_PATH),  # Point the conversion at the configured kicad-tools checkout.
 }  # Finish the conversion settings dictionary.
 
 
@@ -58,8 +41,7 @@ def _schematic_net_partition(schematic_path: Path) -> set[frozenset[tuple[str, s
     return {frozenset(members) for members in by_name.values()}  # Return the schematic-side net partition.
 
 
-@unittest.skipUnless(_KICAD_TOOLS_OK, "kicad-tools is not importable and no checkout was configured")  # Skip the PCB conversion tests without the kicad-tools dependency.
-class TestKicadSchToKicadPcb(unittest.TestCase):  # Group the KiCad schematic to KiCad PCB conversion tests together.
+class TestKicadSchToKicadPcb(unittest.TestCase):  # Group the KiCad schematic to KiCad PCB conversion tests together.  # Group the KiCad schematic to KiCad PCB conversion tests together.
     def test_small_schematic_converts_to_valid_pcb(self) -> None:  # Verify one small schematic converts to a loadable routed board.
         self.assertTrue(_KICAD_SCH_DIRECTORY.joinpath("rc-filter.kicad_sch").is_file(), msg="rc-filter fixture must exist")  # Require the fixture.
         with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the generated board.
@@ -176,19 +158,13 @@ class TestKicadSchToKicadPcb(unittest.TestCase):  # Group the KiCad schematic to
             self.assertEqual(result[0], False, msg="missing inputs must fail")  # Require the failure flag.
             self.assertEqual(result[1], "INVALID_KICAD_SCH_FILE", msg=f"unexpected error code: {result[1]}")  # Require the schematic error code.
 
-    def test_unavailable_kicad_tools_reports_dependency_error(self) -> None:  # Verify a broken kicad-tools configuration reports the dependency code.
-        try:  # Detect an installed kicad-tools distribution.
-            import kicad_tools  # noqa: F401 - The probe import decides the skip.
-            self.skipTest("kicad-tools is installed; the unavailable path cannot be exercised")  # Skip when the failure cannot occur.
-        except ImportError:  # The distribution is absent as expected.
-            pass  # Continue with the unavailable-path test.
-        settings = dict(_CONVERT_SETTINGS)  # Copy the pinned settings.
-        settings["kicad_tools_path"] = "/nonexistent/kicad-tools/checkout"  # Point the checkout at a missing directory.
-        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory.
-            output_path = Path(temporary_directory) / "out.kicad_pcb"  # Derive the scratch output path.
-            result = kicad_sch_to_kicad_pcb(str(_KICAD_SCH_DIRECTORY / "rc-filter.kicad_sch"), str(output_path), settings)  # Run the conversion with the broken dependency.
-            self.assertEqual(result[0], False, msg="broken kicad-tools paths must fail")  # Require the failure flag.
-            self.assertEqual(result[1], "KICAD_TOOLS_UNAVAILABLE", msg=f"unexpected error code: {result[1]}")  # Require the dependency error code.
+    def test_kicad_tools_dependency_imports_directly(self) -> None:  # Verify kicad-tools is importable as a declared package dependency.
+        import kicad_tools  # The declared dependency import.
+        import electronics_design.kicad_sch_to_kicad_pcb as pcb_module  # The conversion module through the package registry.
+
+        module = sys.modules["electronics_design.kicad_sch_to_kicad_pcb"]  # Read the loaded module despite the function shadowing.
+        self.assertEqual(module._KICAD_TOOLS_IMPORT_ERROR, "", msg=f"kicad-tools must import cleanly: {module._KICAD_TOOLS_IMPORT_ERROR}")  # Require the clean import marker.
+        self.assertTrue(hasattr(kicad_tools, "__file__"), msg="kicad-tools must resolve to an installed distribution")  # Require the installed package.
 
     def test_generated_fallback_footprints_support_unmatched_pins(self) -> None:  # Verify components without footprint properties fall back to generated footprints.
         settings = dict(_CONVERT_SETTINGS)  # Copy the pinned settings.
