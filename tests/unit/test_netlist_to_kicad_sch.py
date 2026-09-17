@@ -31,6 +31,60 @@ _CONVERT_SETTINGS = {  # Pin the settings so generated files are reproducible.
 }  # Finish the conversion settings dictionary.
 
 
+def _collect_generated_wire_segments(schematic_root) -> list:  # Collect every two-point wire segment from one parsed schematic.
+    segments = []  # Collect the segment endpoint pairs.
+    for wire_node in schematic_root.find_children("wire"):  # Walk every wire record.
+        points_node = wire_node.find_child("pts")  # Locate the polyline point list.
+        assert points_node is not None  # Generated wires always carry a point list.
+        points = []  # Collect the wire's coordinate pairs.
+        for xy_node in points_node.find_children("xy"):  # Walk every coordinate pair.
+            values = [child.value for child in xy_node.children if child.value is not None]  # Read the numeric atoms.
+            points.append((float(values[0]), float(values[1])))  # Store the coordinate pair.
+        assert len(points) == 2, "Generated wires must be two-point segments."  # Require the routed segment shape.
+        segments.append((points[0], points[1]))  # Store the segment.
+    return segments  # Return the generated wire segments.
+
+
+def _collect_generated_junction_points(schematic_root) -> list:  # Collect every junction position and identifier from one parsed schematic.
+    junctions = []  # Collect the junction records.
+    for junction_node in schematic_root.find_children("junction"):  # Walk every junction record.
+        at_node = junction_node.find_child("at")  # Locate the position record.
+        assert at_node is not None  # Generated junctions always carry a position.
+        values = [child.value for child in at_node.children if child.value is not None]  # Read the coordinate atoms.
+        uuid_node = junction_node.find_child("uuid")  # Locate the identifier record.
+        assert uuid_node is not None  # Generated junctions always carry an identifier.
+        junction_uuid = str([child.value for child in uuid_node.children if child.value is not None][0])  # Read the identifier value.
+        junctions.append(((round(float(values[0]), 6), round(float(values[1]), 6)), junction_uuid))  # Store the normalized point and identifier.
+    return junctions  # Return the junction records.
+
+
+def _test_point_on_segment(px: float, py: float, segment: tuple, tolerance: float = 1e-4) -> bool:  # Decide whether a point lies on one segment.
+    (start_x, start_y), (end_x, end_y) = segment  # Unpack the segment endpoints.
+    if px < min(start_x, end_x) - tolerance or px > max(start_x, end_x) + tolerance:  # Reject points outside the X span.
+        return False  # Return False for non-overlapping X coordinates.
+    if py < min(start_y, end_y) - tolerance or py > max(start_y, end_y) + tolerance:  # Reject points outside the Y span.
+        return False  # Return False for non-overlapping Y coordinates.
+    delta_x, delta_y = end_x - start_x, end_y - start_y  # Compute the segment extent.
+    length_squared = delta_x * delta_x + delta_y * delta_y  # Compute the squared segment length.
+    if length_squared == 0.0:  # Handle degenerate zero-length segments.
+        return abs(px - start_x) <= tolerance and abs(py - start_y) <= tolerance  # Return the point-equality check.
+    projection = ((px - start_x) * delta_x + (py - start_y) * delta_y) / length_squared  # Project the point onto the segment.
+    if projection < -1e-9 or projection > 1.0 + 1e-9:  # Reject projections beyond the segment endpoints.
+        return False  # Return False for out-of-range projections.
+    closest_x = start_x + projection * delta_x  # Compute the closest X coordinate on the segment.
+    closest_y = start_y + projection * delta_y  # Compute the closest Y coordinate on the segment.
+    return abs(px - closest_x) <= tolerance and abs(py - closest_y) <= tolerance  # Return the distance check.
+
+
+def _test_point_strictly_inside_segment(point: tuple, segment: tuple, tolerance: float = 1e-4) -> bool:  # Decide whether a point sits on a segment away from both endpoints.
+    if not _test_point_on_segment(point[0], point[1], segment, tolerance):  # Require the point to lie on the segment.
+        return False  # Reject points that are not on the segment.
+    (start_x, start_y), (end_x, end_y) = segment  # Unpack the segment endpoints.
+    clear_of_start = abs(point[0] - start_x) > tolerance or abs(point[1] - start_y) > tolerance  # Require clearance from the start endpoint.
+    clear_of_end = abs(point[0] - end_x) > tolerance or abs(point[1] - end_y) > tolerance  # Require clearance from the end endpoint.
+    return clear_of_start and clear_of_end  # Return True only for strict interior contacts, which KiCad cannot connect without a junction.
+
+
 class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-schematic conversion tests together.
     def test_all_generated_netlists_are_valid(self) -> None:  # Verify every artifact generated from the authoritative KiCad schematics is a valid LTspice netlist.
         net_files = sorted(_NETLIST_DIRECTORY.glob("*.net"))  # Collect all generated LTspice netlist files.
@@ -132,6 +186,48 @@ class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-sc
                     self.assertEqual(reverse_result, (True, "OK", 0), msg=f"{stem} reverse conversion failed: {reverse_result}")  # Require successful reverse conversion.
                     self.assertTrue(ltspice_netlist_structure_cmp(str(net_path), str(round_trip_path)), msg=f"{stem} lost or rewired an element or net.")  # Require identical circuit structure.
                     self.assertTrue(ltspice_netlist_footer_cmp(str(net_path), str(round_trip_path)), msg=f"{stem} lost a directive, include, model, or instance parameter.")  # Require identical simulation metadata.
+
+    def test_junction_dots_cover_every_endpoint_on_wire_contact(self) -> None:  # Require KiCad junction dots at every endpoint-on-wire contact the router creates.
+        fixture_stems = ("NPN1", "rc-filter", "sallen-key-highpass")  # Cover compact, filter, and opamp decks that route endpoint-on-wire contacts.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Isolate the generated schematics.
+            for stem in fixture_stems:  # Convert and inspect every fixture.
+                with self.subTest(netlist=stem):  # Isolate failures per fixture.
+                    net_path = _NETLIST_DIRECTORY / f"{stem}.net"  # Resolve the source netlist.
+                    schematic_path = Path(temporary_directory) / f"{stem}.kicad_sch"  # Derive the generated schematic path.
+                    result = ltspice_netlist_to_kicad_sch(str(net_path), str(schematic_path), _CONVERT_SETTINGS)  # Run the public conversion API.
+                    self.assertEqual(result, (True, "OK", 0), msg=f"{stem} should convert but returned: {result}")  # Require successful conversion.
+                    generated_root = parse_string(schematic_path.read_text(encoding="utf-8"))  # Parse the generated schematic.
+                    segments = _collect_generated_wire_segments(generated_root)  # Read every routed wire segment.
+                    junctions = _collect_generated_junction_points(generated_root)  # Read every junction record.
+                    expected_points = set()  # Collect the endpoint-on-interior positions KiCad cannot connect without a junction.
+                    for index, segment in enumerate(segments):  # Walk every segment endpoint.
+                        for endpoint in segment:  # Test both endpoints of the segment.
+                            for other_index, other_segment in enumerate(segments):  # Walk the remaining copper.
+                                if other_index == index:  # Skip the segment against itself.
+                                    continue  # Move to the next candidate segment.
+                                if _test_point_strictly_inside_segment(endpoint, other_segment):  # Detect a strict endpoint-on-interior contact.
+                                    expected_points.add((round(endpoint[0], 6), round(endpoint[1], 6)))  # Record the required junction position.
+                    actual_points = {point for point, _uuid in junctions}  # Read the emitted junction positions.
+                    self.assertGreater(len(expected_points), 0, msg=f"{stem} must route endpoint-on-wire contacts to exercise the junction fix.")  # Require the fixture to exercise the fix.
+                    self.assertEqual(actual_points, expected_points, msg=f"{stem} junction dots must cover exactly the endpoint-on-wire contacts.")  # Require exact junction coverage.
+                    junction_uuids = [junction_uuid for _point, junction_uuid in junctions]  # Read the emitted junction identifiers.
+                    self.assertEqual(len(junction_uuids), len(set(junction_uuids)), msg=f"{stem} junction identifiers must be unique.")  # Require unique junction identifiers.
+                    for junction_node in generated_root.find_children("junction"):  # Verify the emitted junction payloads.
+                        self.assertIsNotNone(junction_node.find_child("diameter"), msg="Generated junctions must carry a diameter record.")  # Require the diameter field.
+                        self.assertIsNotNone(junction_node.find_child("color"), msg="Generated junctions must carry a color record.")  # Require the color field.
+
+    def test_junction_bearing_schematic_round_trips_to_the_same_netlist(self) -> None:  # Require junction-rich schematics to trace back to the same circuit.
+        net_path = _NETLIST_DIRECTORY / "sallen-key-highpass.net"  # Use the filter deck that routes many endpoint-on-wire contacts.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Isolate the generated artifacts.
+            schematic_path = Path(temporary_directory) / "sallen-key-highpass.kicad_sch"  # Derive the generated schematic path.
+            round_trip_path = Path(temporary_directory) / "sallen-key-highpass.roundtrip.net"  # Derive the reverse-converted netlist path.
+            forward_result = ltspice_netlist_to_kicad_sch(str(net_path), str(schematic_path), _CONVERT_SETTINGS)  # Generate the KiCad schematic.
+            self.assertEqual(forward_result, (True, "OK", 0), msg=f"Forward conversion failed: {forward_result}")  # Require successful forward conversion.
+            generated_root = parse_string(schematic_path.read_text(encoding="utf-8"))  # Parse the generated schematic.
+            self.assertGreater(len(generated_root.find_children("junction")), 0, msg="The regression fixture must generate junction dots.")  # Require junction coverage.
+            reverse_result = kicad_sch_to_ltspice_netlist(str(schematic_path), str(round_trip_path), _CONVERT_SETTINGS)  # Convert the schematic back to a netlist.
+            self.assertEqual(reverse_result, (True, "OK", 0), msg=f"Reverse conversion failed: {reverse_result}")  # Require successful reverse conversion.
+            self.assertTrue(ltspice_netlist_structure_cmp(str(net_path), str(round_trip_path)), msg="Junction dots must not alter the traced net structure.")  # Require identical circuit structure.
 
     def test_missing_input_returns_invalid_netlist_file(self) -> None:  # Verify the missing input error contract.
         with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the call.

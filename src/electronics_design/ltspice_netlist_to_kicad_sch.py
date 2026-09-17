@@ -1466,11 +1466,12 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
     lead_stubs_by_net = _build_pin_lead_stubs(nets, segments_by_net, all_records, grid)  # Build pin lead stubs so every pin owns a segment start.
     label_layout = _layout_visible_text(all_records, net_order, segments_by_net, lead_stubs_by_net, grid, page_width, page_height, singleton_pins)  # Place visible fields and net labels away from symbols, wires, and other text.
     wire_nodes = _build_wire_nodes(root_uuid, net_order, segments_by_net, lead_stubs_by_net)  # Build the wire nodes for every routed segment and pin stub.
+    junction_nodes = _build_junction_nodes(root_uuid, net_order, segments_by_net, lead_stubs_by_net)  # Add junction dots for every same-net endpoint-on-wire contact.
     no_connect_nodes = _build_no_connect_nodes(root_uuid, no_connect_positions)  # Mark exempt singleton NC pins with KiCad no-connect markers.
     label_nodes = _build_label_nodes(root_uuid, net_order, segments_by_net, label_layout)  # Label authored names; physical copper carries internal and ground nets.
     symbol_nodes = _build_symbol_instance_nodes(all_records, root_uuid)  # Build the symbol instance nodes.
     embedded_extra = {ground_lib_id: ground_symbol_node}  # Collect the ground symbol for embedding.
-    return True, (wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, embedded_extra), "", 0  # Return the assembled schematic body.
+    return True, (wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, embedded_extra, junction_nodes), "", 0  # Return the assembled schematic body.
 
 
 def _routed_nets_are_isolated(
@@ -2000,13 +2001,13 @@ def _shift_sxp_world_coordinates(node: SExp, delta_x: float, delta_y: float, col
 
 
 def _fit_parts_on_page(  # Translate the finished drawing and its directive text fully inside one page.
-    body_parts: Tuple[List[SExp], List[SExp], List[SExp], List[SExp], Dict[str, SExp]],  # Accept the assembled body nodes.
+    body_parts: Tuple[List[SExp], List[SExp], List[SExp], List[SExp], Dict[str, SExp], List[SExp]],  # Accept the assembled body nodes.
     text_nodes: Sequence[SExp],  # Accept the simulation directive text records.
     settings: Dict[str, Any],  # Accept the validated conversion settings.
     symbol_count: int,  # Accept the placed symbol count for the base paper choice.
 ) -> str:  # Return the paper name written into the schematic header.
-    wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, _embedded_extra = body_parts  # Unpack the assembled body nodes.
-    content_nodes = [*wire_nodes, *no_connect_nodes, *label_nodes, *symbol_nodes]  # Every node carrying world coordinates.
+    wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, _embedded_extra, junction_nodes = body_parts  # Unpack the assembled body nodes.
+    content_nodes = [*wire_nodes, *junction_nodes, *no_connect_nodes, *label_nodes, *symbol_nodes]  # Every node carrying world coordinates.
     points: List[Tuple[float, float]] = []  # Collect the world coordinate pairs.
     for node in content_nodes:  # Walk the drawing nodes.
         _shift_sxp_world_coordinates(node, 0.0, 0.0, points)  # Measure without translating.
@@ -3360,6 +3361,57 @@ def _wire_node(root_uuid: str, wire_counter: int, start_point: Tuple[float, floa
     ])  # Finish the wire node.
 
 
+def _build_junction_nodes(  # Build one junction dot per same-net endpoint-on-wire contact.
+    root_uuid: str,  # Accept the schematic root UUID for deterministic identifiers.
+    net_order: Sequence[str],  # Accept the net ordering.
+    segments_by_net: Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]],  # Accept the routed segments.
+    lead_stubs_by_net: Optional[Dict[str, List[Tuple[Tuple[float, float], Tuple[float, float]]]]] = None,  # Accept the pin lead stubs.
+) -> List[SExp]:  # Return the generated junction nodes.
+    junction_nodes: List[SExp] = []  # Collect the generated junction nodes.
+    junction_counter = 0  # Count junctions for deterministic identifiers.
+    for node_name in net_order:  # Walk every net in order.
+        segments = [  # Combine the net's stubs and routed copper so contacts between them are tested too.
+            *((lead_stubs_by_net or {}).get(node_name, [])),  # Include the pin lead stubs first.
+            *segments_by_net.get(node_name, []),  # Include the routed segments next.
+        ]
+        contact_points: List[Tuple[float, float]] = []  # Collect the unique endpoint-on-wire positions for this net.
+        for index, segment in enumerate(segments):  # Walk every segment of the net.
+            for endpoint in segment:  # Test both endpoints of the segment.
+                for other_index, other_segment in enumerate(segments):  # Walk the net's remaining copper.
+                    if other_index == index:  # Skip the segment against itself.
+                        continue  # Move to the next candidate segment.
+                    if _point_inside_segment(endpoint, other_segment):  # Require a strict endpoint-on-interior contact.
+                        normalized = (round(endpoint[0], 6), round(endpoint[1], 6))  # Normalize the contact position.
+                        if normalized not in contact_points:  # Keep each position once.
+                            contact_points.append(normalized)  # Store the unique contact position.
+        for point in contact_points:  # Emit one junction per unique contact position.
+            junction_counter += 1  # Advance the junction counter.
+            junction_nodes.append(_junction_node(root_uuid, junction_counter, point))  # Append the generated junction node.
+    return junction_nodes  # Return the generated junction nodes.
+
+
+def _point_inside_segment(  # Decide whether a point lies strictly inside one segment's interior.
+    point: Tuple[float, float],  # Accept the examined point.
+    segment: Tuple[Tuple[float, float], Tuple[float, float]],  # Accept the segment.
+    tolerance: float = _KI_CAD_CONTACT_TOLERANCE,  # Accept the contact tolerance used by the router.
+) -> bool:  # Return True only for a point on the segment away from both endpoints.
+    if not _point_on_segment_local(point[0], point[1], segment, tolerance):  # Require the point to lie on the segment.
+        return False  # Reject points that are not on the segment.
+    (start_x, start_y), (end_x, end_y) = segment  # Unpack the segment endpoints.
+    clear_of_start = abs(point[0] - start_x) > tolerance or abs(point[1] - start_y) > tolerance  # Require clearance from the start endpoint.
+    clear_of_end = abs(point[0] - end_x) > tolerance or abs(point[1] - end_y) > tolerance  # Require clearance from the end endpoint.
+    return clear_of_start and clear_of_end  # Return True only for strict interior contacts KiCad cannot infer without a junction.
+
+
+def _junction_node(root_uuid: str, junction_counter: int, point: Tuple[float, float]) -> SExp:  # Build one junction S-expression node.
+    return SExp(name="junction", children=[  # Build the junction list node.
+        SExp(name="at", children=[SExp(value=point[0]), SExp(value=point[1])]),  # Junction position on the shared wire point.
+        SExp(name="diameter", children=[SExp(value=0)]),  # Default diameter from the system settings.
+        SExp(name="color", children=[SExp(value=0), SExp(value=0), SExp(value=0), SExp(value=0)]),  # Default junction color.
+        SExp(name="uuid", children=[SExp(value=_derive_uuid(root_uuid, f"junction/{junction_counter}"))]),  # Junction identifier.
+    ])  # Finish the junction node.
+
+
 def _build_no_connect_nodes(  # Build one no-connect marker per exempt singleton NC pin.
     root_uuid: str,  # Accept the schematic root UUID for deterministic identifiers.
     positions: Sequence[Tuple[float, float]],  # Accept the NC pin positions in schematic space.
@@ -3800,7 +3852,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
     input_path: str,  # Accept the netlist input path for the root UUID.
     settings: Dict[str, Any],  # Accept the normalized settings.
     embedded_symbols: Dict[str, SExp],  # Accept the embedded symbol definitions.
-    body_parts: Tuple[List[SExp], List[SExp], List[SExp], List[SExp], Dict[str, SExp]],  # Accept the assembled body nodes.
+    body_parts: Tuple[List[SExp], List[SExp], List[SExp], List[SExp], Dict[str, SExp], List[SExp]],  # Accept the assembled body nodes.
     simulation_text_nodes: Sequence[SExp],  # Accept source simulator directives and node-free device cards.
     hinted_lib_ids: Sequence[str] = (),  # Accept library identifiers restored through forward-converter hints.
     symbol_count: int = 0,  # Accept the placed symbol count for automatic paper sizing.
@@ -3808,7 +3860,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
     root_uuid = _root_uuid(input_path)  # Derive the deterministic schematic root UUID.
     version = settings.get("kicad_sch_version") or datetime.date.today().strftime("%Y%m%d")  # Resolve the format version.
     generator = settings.get("kicad_sch_generator") or "electronics_design"  # Resolve the generator name.
-    wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, embedded_extra = body_parts  # Unpack the assembled body nodes.
+    wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, embedded_extra, junction_nodes = body_parts  # Unpack the assembled body nodes.
     paper_name = _fit_parts_on_page(body_parts, simulation_text_nodes, settings, symbol_count)  # Translate the finished drawing fully inside the page.
     all_embedded = dict(embedded_symbols)  # Copy the device symbol definitions.
     all_embedded.update(embedded_extra)  # Merge the ground power symbol definition.
@@ -3825,6 +3877,7 @@ def _assemble_schematic(  # Assemble the final schematic text from its parts.
         SExp(name="lib_symbols", children=lib_symbol_nodes),  # Embedded symbol definitions.
     ]  # Finish the header children.
     root_children.extend(wire_nodes)  # Append the routed wires.
+    root_children.extend(junction_nodes)  # Append the same-net junction dots that KiCad requires for endpoint-on-wire contacts.
     root_children.extend(no_connect_nodes)  # Append the exempt NC pin markers.
     root_children.extend(simulation_text_nodes)  # Append preserved simulator statements as active schematic text.
     root_children.extend(label_nodes)  # Append the net labels.
