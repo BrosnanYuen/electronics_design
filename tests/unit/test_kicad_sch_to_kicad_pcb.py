@@ -2,7 +2,9 @@
 
 from __future__ import annotations  # Keep annotation handling consistent across the project.
 
+import math  # Measure routed wire bend angles.
 import os  # Read the optional KiCad path environment override.
+from collections import defaultdict  # Group routed segments per net.
 from pathlib import Path  # Use pathlib for clear path handling.
 import sys  # Reach the loaded conversion module through the package registry.
 import tempfile  # Use a temporary directory so tests never modify checked-in files.
@@ -39,6 +41,53 @@ def _schematic_net_partition(schematic_path: Path) -> set[frozenset[tuple[str, s
                 continue  # Move to the next pin.
             by_name.setdefault(net_names[pin_root], set()).add((record["reference"], pin_number))  # Add the member pair.
     return {frozenset(members) for members in by_name.values()}  # Return the schematic-side net partition.
+
+
+def _pcb_bend_violations(pcb, min_angle: float, tolerance: float = 0.5) -> int:  # Count routed bends sharper than the configured minimum.
+    pad_points = {(round(pad.position[0], 4), round(pad.position[1], 4)) for footprint in pcb.footprints for pad in footprint.pads}  # Index every pad centre.
+    by_net: dict[int, list[tuple[tuple[float, float], tuple[float, float], str]]] = defaultdict(list)  # Group segments per net.
+    for segment in pcb.segments:  # Walk every routed segment.
+        by_net[segment.net_number].append((segment.start, segment.end, segment.layer))  # Record the segment geometry.
+    violations = 0  # Count the bends below the threshold.
+    for segments in by_net.values():  # Walk every net's copper.
+        endpoints: dict[tuple[float, float], list[int]] = defaultdict(list)  # Group segment ends per vertex.
+        for index, (start, end, _layer) in enumerate(segments):  # Walk every segment end.
+            endpoints[(round(start[0], 4), round(start[1], 4))].append(index)  # Record the start.
+            endpoints[(round(end[0], 4), round(end[1], 4))].append(index)  # Record the end.
+        for point, incident in endpoints.items():  # Walk every copper vertex.
+            if len(incident) != 2:  # Skip open ends and multi-branch junctions.
+                continue  # Move to the next vertex.
+            if any(abs(point[0] - pad_x) < 0.05 and abs(point[1] - pad_y) < 0.05 for pad_x, pad_y in pad_points):  # Skip pad terminations.
+                continue  # Move to the next vertex.
+            first_index, second_index = incident  # Read the two incident segments.
+            if segments[first_index][2] != segments[second_index][2]:  # Skip via layer transitions.
+                continue  # Move to the next vertex.
+            directions = []  # Collect the two wire directions leaving the vertex.
+            for index in incident:  # Walk both incident segments.
+                start, end, _layer = segments[index]  # Read the segment geometry.
+                start_key = (round(start[0], 4), round(start[1], 4))  # Resolve the start key.
+                other = end if start_key == point else start  # Pick the far endpoint.
+                directions.append(math.degrees(math.atan2(other[1] - point[1], other[0] - point[0])))  # Measure the away direction.
+            bend = abs((directions[0] - directions[1] + 180) % 360 - 180)  # Resolve the physical angle between the wires.
+            if bend < min_angle - tolerance:  # Detect a bend sharper than requested.
+                violations += 1  # Count the violation.
+    return violations  # Return the violation count.
+
+
+def _placed_component_records(schematic_path: Path, settings: dict) -> list[dict]:  # Place one schematic's components with the internal pipeline.
+    import importlib  # Import the conversion module through the package registry.
+
+    importlib.import_module("electronics_design.kicad_sch_to_kicad_pcb")  # Ensure the conversion submodule is loaded.
+    pcb_module = sys.modules["electronics_design.kicad_sch_to_kicad_pcb"]  # Read the real module despite the package-level function shadowing.
+    normalized = pcb_module._normalize_pcb_settings(settings)[1]  # Validate the conversion settings.
+    read_result = _read_text_file_lines(str(schematic_path))  # Read the schematic text with encoding detection.
+    root = _parse_sch_text("\n".join(read_result[1]))[1]  # Parse the schematic into an S-expression tree.
+    components = pcb_module._collect_components(root, normalized["_kicad_path"])[1]  # Parse instances and resolve symbols.
+    pcb_module._resolve_footprints(components, normalized)  # Resolve one footprint per component.
+    placed_ok, _size = pcb_module._place_components(components, normalized)  # Place the components on the board.
+    if not placed_ok:  # Stop when the placement failed.
+        raise AssertionError("the internal placement pipeline failed")  # Report the unexpected failure.
+    return [record for record in components if not record["power"]]  # Return the placed component records.
 
 
 class TestKicadSchToKicadPcb(unittest.TestCase):  # Group the KiCad schematic to KiCad PCB conversion tests together.  # Group the KiCad schematic to KiCad PCB conversion tests together.
@@ -183,7 +232,7 @@ class TestKicadSchToKicadPcb(unittest.TestCase):  # Group the KiCad schematic to
 
     def test_dense_fixture_converts_with_partial_routing(self) -> None:  # Verify a dense schematic converts successfully even when some nets stay unrouted.
         with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory.
-            output_path = Path(temporary_directory) / "CMOS-555-4.kicad_pcb"  # Derive the scratch output path.
+            output_path = Path(temporary_directory) / "CMOS-555-4.kicad_pcb"  # Derive the scratch PCB path.
             result = kicad_sch_to_kicad_pcb(  # Convert the dense 555 fixture.
                 str(_KICAD_SCH_DIRECTORY / "CMOS-555-4.kicad_sch"),  # Pass the schematic path.
                 str(output_path),  # Pass the scratch output path.
@@ -193,6 +242,72 @@ class TestKicadSchToKicadPcb(unittest.TestCase):  # Group the KiCad schematic to
             from kicad_tools.schema.pcb import PCB  # Import the kicad-tools PCB model.
             pcb = PCB.load(str(output_path))  # Load the generated board.
             self.assertGreaterEqual(len(pcb.footprints), 10, msg="the dense board must place its components")  # Require the placed footprints.
+
+    def test_wire_bends_meet_default_minimum_angle(self) -> None:  # Verify routed bends respect the default 120-degree minimum.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory.
+            output_path = Path(temporary_directory) / "bip-osc.kicad_pcb"  # Derive the scratch PCB path.
+            result = kicad_sch_to_kicad_pcb(  # Convert the multi-bend fixture.
+                str(_KICAD_SCH_DIRECTORY / "bip-osc.kicad_sch"),  # Pass the schematic path.
+                str(output_path),  # Pass the scratch output path.
+                _CONVERT_SETTINGS,  # Pass the pinned settings.
+            )  # Finish the conversion call.
+            self.assertEqual(result, (True, "OK", 0), msg=f"bip-osc conversion failed: {result}")  # Require the success tuple.
+            from kicad_tools.schema.pcb import PCB  # Import the kicad-tools PCB model.
+            pcb = PCB.load(str(output_path))  # Load the generated board.
+            violations = _pcb_bend_violations(pcb, 120.0)  # Count bends sharper than 120 degrees.
+            self.assertEqual(violations, 0, msg=f"every routed bend must be at least 120 degrees, found {violations} violations")  # Require the minimum angle.
+
+    def test_wire_bends_support_flexible_minimum_angles(self) -> None:  # Verify the minimum bend angle is configurable across many values.
+        for minimum_angle in (110.0, 135.0, 150.0):  # Walk the supported flexible thresholds.
+            settings = dict(_CONVERT_SETTINGS)  # Copy the pinned settings.
+            settings["kicad_pcb_min_wire_angle"] = minimum_angle  # Request the flexible threshold.
+            with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory.
+                output_path = Path(temporary_directory) / "rc-filter.kicad_pcb"  # Derive the scratch PCB path.
+                result = kicad_sch_to_kicad_pcb(  # Convert the small fixture.
+                    str(_KICAD_SCH_DIRECTORY / "rc-filter.kicad_sch"),  # Pass the schematic path.
+                    str(output_path),  # Pass the scratch output path.
+                    settings,  # Pass the flexible-angle settings.
+                )  # Finish the conversion call.
+                self.assertEqual(result, (True, "OK", 0), msg=f"min angle {minimum_angle} conversion failed: {result}")  # Require the success tuple.
+                from kicad_tools.schema.pcb import PCB  # Import the kicad-tools PCB model.
+                pcb = PCB.load(str(output_path))  # Load the generated board.
+                violations = _pcb_bend_violations(pcb, minimum_angle, tolerance=0.5)  # Count bends sharper than the requested threshold.
+                self.assertEqual(violations, 0, msg=f"min angle {minimum_angle} left {violations} sharp bends")  # Require the flexible threshold.
+
+    def test_compact_placement_shrinks_board_and_keeps_spacing(self) -> None:  # Verify compaction shrinks the outline while every footprint pair keeps its gap.
+        import importlib  # Import the conversion module through the package registry.
+
+        importlib.import_module("electronics_design.kicad_sch_to_kicad_pcb")  # Ensure the conversion submodule is loaded.
+        pcb_module = sys.modules["electronics_design.kicad_sch_to_kicad_pcb"]  # Read the real module despite the package-level function shadowing.
+        schematic_path = _KICAD_SCH_DIRECTORY / "bip-osc.kicad_sch"  # Use the multi-component fixture.
+        compact_records = _placed_component_records(schematic_path, dict(_CONVERT_SETTINGS))  # Place with compaction enabled.
+        loose_records = _placed_component_records(schematic_path, {**_CONVERT_SETTINGS, "kicad_pcb_compact_placement": False})  # Place without compaction.
+        compact_width, compact_height = pcb_module._placed_extents(compact_records)  # Measure the compacted content.
+        loose_width, loose_height = pcb_module._placed_extents(loose_records)  # Measure the uncompacted content.
+        self.assertLess(compact_width * compact_height, loose_width * loose_height, msg="compaction must shrink the placed content area")  # Require a dense board.
+        spacing = float(_CONVERT_SETTINGS.get("kicad_pcb_component_spacing", 0.5))  # Read the default minimum gap.
+        for first_index, first_record in enumerate(compact_records):  # Walk every component pair.
+            first_rect = pcb_module._component_rect(first_record, first_record["board_x"], first_record["board_y"])  # Build the first rectangle.
+            for second_record in compact_records[first_index + 1:]:  # Walk every later component.
+                second_rect = pcb_module._component_rect(second_record, second_record["board_x"], second_record["board_y"])  # Build the second rectangle.
+                self.assertFalse(pcb_module._rects_too_close(first_rect, second_rect, spacing - 1e-6), msg="compacted footprints must keep their minimum gap")  # Require the spacing contract.
+
+    def test_new_settings_validation_errors(self) -> None:  # Verify the new PCB settings reject unusable values.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for attempted outputs.
+            output_path = Path(temporary_directory) / "out.kicad_pcb"  # Derive the scratch output path.
+            schematic_path = str(_KICAD_SCH_DIRECTORY / "rc-filter.kicad_sch")  # Resolve the fixture path.
+            for key, value in (  # Walk every invalid new setting.
+                ("kicad_pcb_min_wire_angle", 0.0),  # The minimum angle must be positive.
+                ("kicad_pcb_min_wire_angle", 180.0),  # The minimum angle must stay below 180.
+                ("kicad_pcb_min_wire_angle", "wide"),  # The minimum angle must be numeric.
+                ("kicad_pcb_wire_bend_chamfer", 0.0),  # The bend chamfer must be positive.
+                ("kicad_pcb_component_spacing", -0.1),  # The footprint spacing must be nonnegative.
+                ("kicad_pcb_compact_placement", "yes"),  # The compaction toggle must be boolean.
+            ):  # Finish the invalid setting table.
+                bad_settings = {**_CONVERT_SETTINGS, key: value}  # Build the invalid settings.
+                result = kicad_sch_to_kicad_pcb(schematic_path, str(output_path), bad_settings)  # Run the conversion with the invalid setting.
+                self.assertEqual(result[0], False, msg=f"{key}={value!r} must fail")  # Require the failure flag.
+                self.assertEqual(result[1].split(":", 1)[0], "INVALID_CONVERT_SETTINGS", msg=f"unexpected error for {key}={value!r}: {result[1]}")  # Require the settings error code.
 
 
 

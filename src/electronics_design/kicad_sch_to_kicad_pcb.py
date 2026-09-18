@@ -17,6 +17,7 @@ import dataclasses  # Clone and modify kicad-tools net-class routing records.
 import math  # Compute placement scaling and overlap legalization geometry.
 import os  # Resolve search roots, create parents, and probe filesystem entries.
 import tempfile  # Host dynamically generated fallback footprint files.
+import warnings  # Suppress the intentional off-45-grid warning for smooth bends.
 from typing import Any  # Type generic record payloads.
 from typing import Dict  # Type settings, net, and pad mappings.
 from typing import List  # Type component, segment, and route collections.
@@ -85,6 +86,15 @@ _DEFAULT_VIA_DRILL = 0.35  # Default routed via drill in mm.
 _DEFAULT_ROUTING_TIMEOUT = 300.0  # Default wall-clock routing budget in seconds.
 _DEFAULT_PLACEMENT_STRATEGY = "schematic"  # Mirror the schematic signal-flow layout by default.
 _PLACEMENT_STRATEGIES = ("schematic", "rows")  # Supported placement strategy names.
+_DEFAULT_MIN_WIRE_ANGLE = 120.0  # Default minimum bend angle between two routed wires in degrees.
+_DEFAULT_WIRE_BEND_CHAMFER = 0.5  # Default corner cut length used to smooth a sharp bend in mm.
+_MIN_WIRE_BEND_CUT = 0.02  # Smallest useful corner cut length in mm.
+_WIRE_BEND_ANGLE_TOLERANCE = 1e-3  # Bend-angle comparison tolerance in degrees.
+_MICRO_SEGMENT_LENGTH = 0.05  # Router jitter segments at or below this length are merged away in mm.
+_MICRO_BEND_ANGLE = 1.0  # Near-collinear vertices within this direction change are merged away in degrees.
+_WIRE_BEND_SAFETY_MARGIN = 3.0  # Extra degrees kept clear of the threshold so file rounding cannot dip below it.
+_DEFAULT_COMPONENT_SPACING = 0.5  # Default minimum footprint-to-footprint gap in mm.
+_COMPACT_PLACEMENT_ITERATIONS = 6  # Bounded compaction sweeps per ordering variant.
 _FOOTPRINT_BODY_PADDING = 0.6  # Conservative body allowance added around pad extents in mm.
 _FOOTPRINT_LIBRARY_DIRECTORY = "footprints"  # KiCad install footprint-library directory name.
 _FOOTPRINT_LIBRARY_EXTENSION = ".pretty"  # KiCad footprint library directory suffix.
@@ -268,6 +278,22 @@ def _normalize_pcb_settings(convert_settings: Mapping) -> Tuple[bool, Optional[D
     if not isinstance(complete_value, bool):  # Require a boolean gate.
         return False, None, "INVALID_CONVERT_SETTINGS: kicad_pcb_require_complete_routing must be a boolean", ""  # Return the gate error.
     settings["require_complete_routing"] = complete_value  # Store the validated gate.
+    angle_result = _positive_float(convert_settings.get("kicad_pcb_min_wire_angle", _DEFAULT_MIN_WIRE_ANGLE))  # Validate the minimum bend angle.
+    if not angle_result[0] or angle_result[1] >= 180.0:  # Require an angle strictly inside (0, 180).
+        return False, None, "INVALID_CONVERT_SETTINGS: kicad_pcb_min_wire_angle must be a number in (0, 180)", ""  # Return the angle error.
+    settings["kicad_pcb_min_wire_angle"] = angle_result[1]  # Store the validated minimum bend angle.
+    chamfer_result = _positive_float(convert_settings.get("kicad_pcb_wire_bend_chamfer", _DEFAULT_WIRE_BEND_CHAMFER))  # Validate the bend chamfer length.
+    if not chamfer_result[0]:  # Reject unusable chamfer lengths.
+        return False, None, "INVALID_CONVERT_SETTINGS: kicad_pcb_wire_bend_chamfer must be a positive number", ""  # Return the chamfer error.
+    settings["kicad_pcb_wire_bend_chamfer"] = chamfer_result[1]  # Store the validated bend chamfer length.
+    spacing_result = _nonnegative_float(convert_settings.get("kicad_pcb_component_spacing", _DEFAULT_COMPONENT_SPACING))  # Validate the footprint spacing.
+    if not spacing_result[0]:  # Reject unusable spacing values.
+        return False, None, "INVALID_CONVERT_SETTINGS: kicad_pcb_component_spacing must be a nonnegative number", ""  # Return the spacing error.
+    settings["kicad_pcb_component_spacing"] = spacing_result[1]  # Store the validated footprint spacing.
+    compact_value = convert_settings.get("kicad_pcb_compact_placement", True)  # Read the placement-compaction toggle.
+    if not isinstance(compact_value, bool):  # Require a boolean compaction toggle.
+        return False, None, "INVALID_CONVERT_SETTINGS: kicad_pcb_compact_placement must be a boolean", ""  # Return the compaction error.
+    settings["kicad_pcb_compact_placement"] = compact_value  # Store the validated compaction toggle.
     settings["_kicad_path"] = base_result[1]  # Store the validated KiCad install path for the footprint search.
     return True, settings, "", base_result[1]  # Return the validated settings bundle.
 
@@ -277,6 +303,15 @@ def _positive_float(value: Any) -> Tuple[bool, Optional[float]]:  # Validate one
         return False, None  # Signal the validation failure.
     number = float(value)  # Coerce the numeric value to float.
     if not math.isfinite(number) or number <= 0.0:  # Require finite positive magnitudes.
+        return False, None  # Signal the validation failure.
+    return True, number  # Return the validated float.
+
+
+def _nonnegative_float(value: Any) -> Tuple[bool, Optional[float]]:  # Validate one nonnegative finite number.
+    if isinstance(value, bool) or not isinstance(value, (int, float)):  # Reject booleans and non-numbers.
+        return False, None  # Signal the validation failure.
+    number = float(value)  # Coerce the numeric value to float.
+    if not math.isfinite(number) or number < 0.0:  # Require finite nonnegative magnitudes.
         return False, None  # Signal the validation failure.
     return True, number  # Return the validated float.
 
@@ -707,7 +742,14 @@ def _place_components(components: List[Dict[str, Any]], settings: Dict[str, Any]
     if row_layout is not None:  # Apply the precomputed row-packed origins.
         for record, (row_x, row_y) in zip(placed, row_layout):  # Walk the paired placements.
             record["board_x"], record["board_y"] = _snap_position(row_x, row_y)  # Store the snapped origin.
-    _legalize_overlaps(placed)  # Push apart component bodies that overlap on the board.
+    spacing = settings["kicad_pcb_component_spacing"]  # Read the validated minimum footprint spacing.
+    _legalize_overlaps(placed, spacing)  # Enforce the minimum gap between component bodies.
+    if settings["kicad_pcb_compact_placement"]:  # Compact the layout unless the caller opted out.
+        _compact_placement(placed, spacing)  # Pull every component toward the origin to shrink the outline.
+        _snap_placed_positions(placed)  # Return the compacted origins to the placement grid.
+        _legalize_overlaps(placed, spacing)  # Restore the minimum gap after grid snapping.
+    if not _placement_respects_spacing(placed, spacing):  # Verify the compacted board keeps its minimum gap.
+        return False, (0.0, 0.0)  # Report the placement failure.
     content_width, content_height = _placed_extents(placed)  # Measure the placed content extents.
     board_width = explicit_width  # Start from the explicit width when provided.
     board_height = explicit_height  # Start from the explicit height when provided.
@@ -715,8 +757,7 @@ def _place_components(components: List[Dict[str, Any]], settings: Dict[str, Any]
     needed_height = content_height + 2.0 * margin  # Compute the outline height the content requires.
     board_width = max(board_width or 0.0, needed_width, _MIN_BOARD_SIZE)  # Grow the width to fit the content.
     board_height = max(board_height or 0.0, needed_height, _MIN_BOARD_SIZE)  # Grow the height to fit the content.
-    if explicit_width is None or explicit_height is None:  # Center the content inside a freshly grown outline.
-        _center_placed_content(placed, board_width, board_height)  # Re-center the content on the final board.
+    _center_placed_content(placed, board_width, board_height)  # Keep the content centered inside the final outline.
     return True, (board_width, board_height)  # Return the resolved board outline size.
 
 
@@ -724,6 +765,22 @@ def _snap_position(x: float, y: float) -> Tuple[float, float]:  # Snap one posit
     snapped_x = round(x / _PLACEMENT_SNAP) * _PLACEMENT_SNAP  # Snap the X coordinate.
     snapped_y = round(y / _PLACEMENT_SNAP) * _PLACEMENT_SNAP  # Snap the Y coordinate.
     return (round(snapped_x, 6), round(snapped_y, 6))  # Return the snapped position.
+
+
+def _placement_respects_spacing(placed: Sequence[Dict[str, Any]], spacing: float) -> bool:  # Verify every component pair keeps the minimum gap.
+    for first_index in range(len(placed)):  # Walk every first component.
+        first_rect = _component_rect(placed[first_index], placed[first_index]["board_x"], placed[first_index]["board_y"])  # Build the first rectangle.
+        for second_index in range(first_index + 1, len(placed)):  # Walk every second component.
+            second_record = placed[second_index]  # Read the second component.
+            second_rect = _component_rect(second_record, second_record["board_x"], second_record["board_y"])  # Build the second rectangle.
+            if _rects_too_close(first_rect, second_rect, spacing - 1e-6):  # Detect a pair that breaks the minimum gap.
+                return False  # Report the spacing violation.
+    return True  # Report the valid placement.
+
+
+def _snap_placed_positions(placed: Sequence[Dict[str, Any]]) -> None:  # Snap every placed origin back onto the placement grid.
+    for record in placed:  # Walk every component record.
+        record["board_x"], record["board_y"] = _snap_position(record["board_x"], record["board_y"])  # Store the snapped origin.
 
 
 def _rows_placement(placed: Sequence[Dict[str, Any]], margin: float) -> List[Tuple[float, float]]:  # Pack components into deterministic rows.
@@ -770,11 +827,11 @@ def _component_rect(record: Dict[str, Any], origin_x: float, origin_y: float) ->
     return (origin_x + min_x, origin_y + min_y, origin_x + max_x, origin_y + max_y)  # Return the board rectangle.
 
 
-def _rects_overlap(first: Tuple[float, float, float, float], second: Tuple[float, float, float, float]) -> bool:  # Detect one-axis overlap between two rectangles.
-    return first[0] < second[2] and second[0] < first[2] and first[1] < second[3] and second[1] < first[3]  # Return the strict overlap test.
+def _rects_too_close(first: Tuple[float, float, float, float], second: Tuple[float, float, float, float], spacing: float) -> bool:  # Detect whether two rectangles violate the minimum gap.
+    return first[0] - spacing < second[2] and second[0] - spacing < first[2] and first[1] - spacing < second[3] and second[1] - spacing < first[3]  # Return the spacing-aware overlap test.
 
 
-def _legalize_overlaps(placed: Sequence[Dict[str, Any]]) -> None:  # Push apart component bodies that overlap on the board.
+def _legalize_overlaps(placed: Sequence[Dict[str, Any]], spacing: float = 0.0) -> None:  # Push apart component bodies until the minimum gap is met.
     for _iteration in range(_OVERLAP_LEGALIZE_ITERATIONS):  # Bound the legalization sweeps.
         moved = False  # Track whether any component moved this sweep.
         for first_index in range(len(placed)):  # Walk every first component.
@@ -783,22 +840,70 @@ def _legalize_overlaps(placed: Sequence[Dict[str, Any]]) -> None:  # Push apart 
                 second_record = placed[second_index]  # Read the second component.
                 first_rect = _component_rect(first_record, first_record["board_x"], first_record["board_y"])  # Build the first rectangle.
                 second_rect = _component_rect(second_record, second_record["board_x"], second_record["board_y"])  # Build the second rectangle.
-                if not _rects_overlap(first_rect, second_rect):  # Skip non-overlapping pairs.
+                if not _rects_too_close(first_rect, second_rect, spacing):  # Skip pairs that already keep the required gap.
                     continue  # Move to the next pair.
-                overlap_x = min(first_rect[2], second_rect[2]) - max(first_rect[0], second_rect[0])  # Compute the X overlap.
-                overlap_y = min(first_rect[3], second_rect[3]) - max(first_rect[1], second_rect[1])  # Compute the Y overlap.
+                overlap_x = min(first_rect[2], second_rect[2]) - max(first_rect[0], second_rect[0]) + spacing  # Compute the X gap shortfall.
+                overlap_y = min(first_rect[3], second_rect[3]) - max(first_rect[1], second_rect[1]) + spacing  # Compute the Y gap shortfall.
                 push = max(overlap_x, overlap_y) / 2.0 + _PLACEMENT_SNAP  # Compute the separation push distance.
-                if overlap_x >= overlap_y:  # Push along the smaller-overlap axis.
+                if overlap_x <= overlap_y:  # Push along the axis that needs the smaller correction.
                     direction = 1.0 if first_record["board_x"] <= second_record["board_x"] else -1.0  # Choose the push direction.
                     first_record["board_x"] = round(first_record["board_x"] - direction * push, 6)  # Move the first component.
                     second_record["board_x"] = round(second_record["board_x"] + direction * push, 6)  # Move the second component.
-                else:  # Push vertically when the Y overlap is smaller.
+                else:  # Push vertically when the Y shortfall is larger.
                     direction = 1.0 if first_record["board_y"] <= second_record["board_y"] else -1.0  # Choose the vertical direction.
                     first_record["board_y"] = round(first_record["board_y"] - direction * push, 6)  # Move the first component.
                     second_record["board_y"] = round(second_record["board_y"] + direction * push, 6)  # Move the second component.
                 moved = True  # Record the movement.
         if not moved:  # Stop once no pair overlaps.
             break  # Exit the legalization loop.
+
+
+def _compact_placement(placed: Sequence[Dict[str, Any]], spacing: float) -> None:  # Pull every component toward the origin to shrink the placed area.
+    original_positions = [(float(record["board_x"]), float(record["board_y"])) for record in placed]  # Snapshot the legal starting layout.
+    best_positions: Optional[List[Tuple[float, float]]] = None  # Track the tightest layout found.
+    best_area = math.inf  # Track the tightest layout area.
+    for variant in range(2):  # Try both deterministic sweep orderings.
+        for record, (start_x, start_y) in zip(placed, original_positions):  # Reset the layout before each variant.
+            record["board_x"], record["board_y"] = start_x, start_y  # Restore the snapshot.
+        for _iteration in range(_COMPACT_PLACEMENT_ITERATIONS):  # Bound the compaction sweeps.
+            _compact_axis(placed, spacing, 0, variant)  # Pull every component toward the minimum X.
+            _compact_axis(placed, spacing, 1, variant)  # Pull every component toward the minimum Y.
+        content_width, content_height = _placed_extents(placed)  # Measure the compacted bounding box.
+        area = content_width * content_height  # Score the layout by its bounding-box area.
+        if area < best_area - 1e-9:  # Keep every strictly tighter layout.
+            best_area = area  # Record the new best area.
+            best_positions = [(float(record["board_x"]), float(record["board_y"])) for record in placed]  # Snapshot the layout.
+    if best_positions is not None:  # Restore the winning layout.
+        for record, (best_x, best_y) in zip(placed, best_positions):  # Walk every component record.
+            record["board_x"], record["board_y"] = best_x, best_y  # Apply the winning origin.
+
+
+def _compact_axis(placed: Sequence[Dict[str, Any]], spacing: float, axis: int, variant: int) -> None:  # Pack every component toward the origin along one axis.
+    if axis == 0:  # Handle the horizontal sweep.
+        primary = lambda record: (float(record["board_x"]), float(record["board_y"])) if variant == 0 else (float(record["board_y"]), float(record["board_x"]))  # Choose the horizontal ordering key.
+    else:  # Handle the vertical sweep.
+        primary = lambda record: (float(record["board_y"]), float(record["board_x"])) if variant == 0 else (float(record["board_x"]), float(record["board_y"]))  # Choose the vertical ordering key.
+    ordered = sorted(placed, key=lambda record: (primary(record), str(record["reference"])))  # Order the components deterministically.
+    axis_min_index, axis_max_index = (0, 2) if axis == 0 else (1, 3)  # Resolve the local-extent indices for this axis.
+    cross_min_index, cross_max_index = (1, 3) if axis == 0 else (0, 2)  # Resolve the local-extent indices for the other axis.
+    axis_coordinate = "board_x" if axis == 0 else "board_y"  # Resolve the board-coordinate key for this axis.
+    cross_coordinate = "board_y" if axis == 0 else "board_x"  # Resolve the board-coordinate key for the other axis.
+    packed: List[Dict[str, Any]] = []  # Track the components already fixed this sweep.
+    for record in ordered:  # Walk the ordered components.
+        local = record["footprint_extents"]  # Read the local bounding extents.
+        cross_low = float(record[cross_coordinate]) + local[cross_min_index]  # Resolve this component's low edge on the other axis.
+        cross_high = float(record[cross_coordinate]) + local[cross_max_index]  # Resolve this component's high edge on the other axis.
+        limit: Optional[float] = None  # Track the nearest blocking component edge.
+        for other in packed:  # Walk every component already placed this sweep.
+            other_local = other["footprint_extents"]  # Read the packed component's local extents.
+            other_low = float(other[cross_coordinate]) + other_local[cross_min_index]  # Resolve the packed low edge.
+            other_high = float(other[cross_coordinate]) + other_local[cross_max_index]  # Resolve the packed high edge.
+            if other_low - spacing < cross_high and cross_low - spacing < other_high:  # Detect cross-axis proximity within the minimum gap.
+                blocking_edge = float(other[axis_coordinate]) + other_local[axis_max_index] + spacing  # Compute the blocked coordinate.
+                limit = blocking_edge if limit is None else max(limit, blocking_edge)  # Keep the furthest blocking edge.
+        target_min = limit if limit is not None else 0.0  # Pack against the origin when nothing blocks.
+        record[axis_coordinate] = round(target_min - local[axis_min_index], 6)  # Move the component's low edge to the target.
+        packed.append(record)  # Mark the component as fixed for this sweep.
 
 
 def _center_placed_content(placed: Sequence[Dict[str, Any]], board_width: float, board_height: float) -> None:  # Center the placed content inside the final outline.
@@ -991,6 +1096,7 @@ def _route_board(  # Route the saved board with the kicad-tools autorouter.
         routes = router.route_all(timeout=settings["kicad_pcb_routing_timeout"])  # Route every ordinary net.
     except Exception as route_error:  # Report the routing failure.
         return False, f"ROUTING_FAILED: {_exception_detail(route_error)}"  # Return the routing failure with detail.
+    _enforce_wire_bend_angles(routes, components, settings)  # Smooth every bend to the configured minimum angle.
     pad_members: Dict[str, int] = {}  # Count pads per net for the census.
     for record in components:  # Walk every placed component.
         for pad_number, net_name in record["pad_nets"].items():  # Walk every resolved pad net.
@@ -1016,31 +1122,402 @@ def _route_board(  # Route the saved board with the kicad-tools autorouter.
         missing = sorted(routeable_nets - routed_nets)  # List the unrouted nets.
         return False, f"ROUTING_FAILED: {len(missing)} net(s) remain unrouted: {', '.join(missing)}"  # Return the routing failure.
     try:  # Guard the copper write-back.
-        for route in routes:  # Walk every routed net.
-            net_name = route.net_name  # Read the routed net name.
-            if not net_name:  # Skip unnamed copper.
-                continue  # Move to the next route.
-            for segment in route.segments:  # Write every trace segment.
-                pcb.add_trace(  # Append the segment to the board.
-                    (segment.x1, segment.y1),  # Pass the segment start.
-                    (segment.x2, segment.y2),  # Pass the segment end.
-                    width=segment.width,  # Pass the segment width.
-                    layer=segment.layer.kicad_name,  # Pass the copper layer name.
-                    net=net_name,  # Pass the net name.
-                )  # Finish the segment write.
-            for via in route.vias:  # Write every layer-transition via.
-                pcb.add_via(  # Append the via.
-                    via.x,  # Pass the via X.
-                    via.y,  # Pass the via Y.
-                    size=via.diameter,  # Pass the via diameter.
-                    drill=via.drill,  # Pass the via drill.
-                    layers=(via.layers[0].kicad_name, via.layers[1].kicad_name),  # Pass the connected layers.
-                    net=net_name,  # Pass the net name.
-                )  # Finish the via write.
+        with warnings.catch_warnings():  # Keep the intentional smooth-bend advisory from surfacing to callers.
+            warnings.filterwarnings("ignore", message=".*off-angle segment.*")  # The smoothed geometry was clearance-checked above.
+            for route in routes:  # Walk every routed net.
+                net_name = route.net_name  # Read the routed net name.
+                if not net_name:  # Skip unnamed copper.
+                    continue  # Move to the next route.
+                for segment in route.segments:  # Write every trace segment.
+                    pcb.add_trace(  # Append the segment to the board.
+                        (segment.x1, segment.y1),  # Pass the segment start.
+                        (segment.x2, segment.y2),  # Pass the segment end.
+                        width=segment.width,  # Pass the segment width.
+                        layer=segment.layer.kicad_name,  # Pass the copper layer name.
+                        net=net_name,  # Pass the net name.
+                    )  # Finish the segment write.
+                for via in route.vias:  # Write every layer-transition via.
+                    pcb.add_via(  # Append the via.
+                        via.x,  # Pass the via X.
+                        via.y,  # Pass the via Y.
+                        size=via.diameter,  # Pass the via diameter.
+                        drill=via.drill,  # Pass the via drill.
+                        layers=(via.layers[0].kicad_name, via.layers[1].kicad_name),  # Pass the connected layers.
+                        net=net_name,  # Pass the net name.
+                    )  # Finish the via write.
         pcb.save(output_path)  # Rewrite the board with routed copper.
     except Exception as write_error:  # Report the copper write-back failure.
         return False, f"ROUTING_FAILED: unable to write routed copper: {_exception_detail(write_error)}"  # Return the routing failure with detail.
     return True, ""  # Return the routing success.
+
+
+def _enforce_wire_bend_angles(routes: List[Any], components: Sequence[Dict[str, Any]], settings: Dict[str, Any]) -> None:  # Smooth every routed bend to the configured minimum angle.
+    min_angle = float(settings["kicad_pcb_min_wire_angle"])  # Read the validated minimum bend angle.
+    max_change = 180.0 - min_angle  # Resolve the largest allowed direction change per vertex.
+    chamfer = float(settings["kicad_pcb_wire_bend_chamfer"])  # Read the validated corner cut length.
+    clearance = float(settings["kicad_pcb_clearance"])  # Read the validated copper clearance.
+    foreign = _collect_foreign_copper(routes, components)  # Snapshot every foreign-net obstacle once.
+    routes_by_net: Dict[Any, List[Any]] = {}  # Group the routed chains by net so cross-route joints are smoothed too.
+    for route in routes:  # Walk every routed net chain.
+        if route.segments:  # Register only chains that carry copper.
+            routes_by_net.setdefault(route.net, []).append(route)  # Group the chain under its net.
+    for net_routes in routes_by_net.values():  # Walk every net's copper.
+        _smooth_net_copper(net_routes, max_change, chamfer, clearance, foreign)  # Smooth every corner along the net's paths.
+
+
+def _smooth_net_copper(net_routes: List[Any], max_change: float, chamfer: float, clearance: float, foreign: Sequence[Dict[str, Any]]) -> None:  # Rebuild one net's copper with smooth bend fillets.
+    segments = [segment for route in net_routes for segment in route.segments]  # Collect every segment of the net.
+    if len(segments) < 2:  # Skip nets without an interior corner.
+        return  # Leave the net unchanged.
+    via_keys = {(round(via.x, 6), round(via.y, 6)) for route in net_routes for via in route.vias}  # Index the net's layer-transition points.
+    rebuilt, changed = _rebuild_net_copper(segments, via_keys, max_change, chamfer, clearance, foreign)  # Rebuild the net with tangent fillets.
+    if not changed:  # Stop when the geometry already satisfies the settings.
+        return  # Leave the net unchanged.
+    net_routes[0].segments = rebuilt  # Park the net's complete rebuilt geometry on its first chain.
+    for route in net_routes[1:]:  # Reset the remaining chains of the net.
+        route.segments = []  # Avoid writing the same copper twice.
+
+
+def _rebuild_net_copper(segments: Sequence[Any], via_keys: Set[Tuple[float, float]], max_change: float, chamfer: float, clearance: float, foreign: Sequence[Dict[str, Any]]) -> Tuple[List[Any], bool]:  # Rebuild one net's segment list with smoothed paths.
+    endpoints: Dict[Tuple[float, float], List[Tuple[int, int]]] = {}  # Map every segment endpoint onto its incident segment ends.
+    for index, segment in enumerate(segments):  # Walk every net segment.
+        endpoints.setdefault(_point_key(segment.x1, segment.y1), []).append((index, 0))  # Record the segment start.
+        endpoints.setdefault(_point_key(segment.x2, segment.y2), []).append((index, 1))  # Record the segment end.
+    boundary_keys: Set[Tuple[float, float]] = set()  # Collect the nodes that terminate smoothable paths.
+    for key, incident in endpoints.items():  # Walk every net node.
+        if len(incident) != 2 or key in via_keys:  # Detect open ends, junctions, and via transitions.
+            boundary_keys.add(key)  # Stop paths at the boundary node.
+            continue  # Move to the next node.
+        if segments[incident[0][0]].layer != segments[incident[1][0]].layer:  # Detect layer changes.
+            boundary_keys.add(key)  # Stop paths at the layer boundary.
+    used = [False] * len(segments)  # Track the segments already assigned to a path.
+    paths: List[List[Tuple[int, bool]]] = []  # Collect every path description.
+    for seed in range(len(segments)):  # Anchor paths at every boundary-incident segment first.
+        if used[seed]:  # Skip segments already consumed by another path.
+            continue  # Move to the next seed.
+        segment = segments[seed]  # Read the seed segment.
+        if _point_key(segment.x1, segment.y1) in boundary_keys or _point_key(segment.x2, segment.y2) in boundary_keys:  # Detect a boundary-anchored chain.
+            paths.append(_walk_net_path(seed, segments, endpoints, used, boundary_keys))  # Walk the anchored chain.
+    for seed in range(len(segments)):  # Handle the remaining closed loops.
+        if used[seed]:  # Skip segments already consumed.
+            continue  # Move to the next seed.
+        paths.append(_walk_net_path(seed, segments, endpoints, used, boundary_keys))  # Walk the loop chain.
+    rebuilt: List[Any] = []  # Collect the replacement geometry for the whole net.
+    changed = False  # Track whether this pass modified the geometry.
+    for path in paths:  # Walk every path.
+        points = _path_points(path, segments)  # Flatten the path into an ordered polyline.
+        if len(points) < 2:  # Preserve degenerate paths verbatim.
+            rebuilt.append(segments[path[0][0]])  # Keep the original segment.
+            continue  # Move to the next path.
+        template = segments[path[0][0]]  # Use the path's first segment for the rebuilt trace metadata.
+        simplified = _simplify_path_points(points, template, clearance, foreign)  # Drop duplicate, micro, and near-collinear vertices.
+        if len(simplified) != len(points):  # Detect geometry simplified by this pass.
+            changed = True  # Record the modification.
+        smoothed, filleted = _smooth_path_points(simplified, template, max_change, chamfer, clearance, foreign)  # Fillet the remaining sharp vertices.
+        if filleted:  # Detect geometry smoothed by this pass.
+            changed = True  # Record the modification.
+        rebuilt.extend(smoothed)  # Append the rebuilt path geometry.
+    return rebuilt, changed  # Return the rebuilt geometry and change marker.
+
+
+def _walk_net_path(seed: int, segments: Sequence[Any], endpoints: Dict[Tuple[float, float], List[Tuple[int, int]]], used: List[bool], boundary_keys: Set[Tuple[float, float]]) -> List[Tuple[int, bool]]:  # Walk one smoothable path through the net graph.
+    segment = segments[seed]  # Read the seed segment.
+    start_key = _point_key(segment.x1, segment.y1)  # Resolve the seed start key.
+    end_key = _point_key(segment.x2, segment.y2)  # Resolve the seed end key.
+    start_boundary = start_key in boundary_keys  # Detect a boundary at the seed start.
+    end_boundary = end_key in boundary_keys  # Detect a boundary at the seed end.
+    if start_boundary and not end_boundary:  # Prefer walking away from a boundary.
+        path: List[Tuple[int, bool]] = [(seed, True)]  # Start the path at the seed start.
+        current_key = end_key  # Continue from the seed end.
+    elif end_boundary and not start_boundary:  # Handle the opposite orientation.
+        path = [(seed, False)]  # Start the path at the seed end.
+        current_key = start_key  # Continue from the seed start.
+    else:  # Handle loops and segments that join two boundaries.
+        path = [(seed, True)]  # Walk the seed forward.
+        current_key = end_key  # Continue from the seed end.
+    used[seed] = True  # Mark the seed consumed.
+    while current_key not in boundary_keys:  # Walk through every degree-two interior node.
+        candidates = [entry for entry in endpoints[current_key] if not used[entry[0]]]  # Collect the unused continuations.
+        if not candidates:  # Stop when the path dead-ends.
+            break  # Exit the walk.
+        index, end_flag = candidates[0]  # Continue through the first unused segment.
+        used[index] = True  # Mark the continuation consumed.
+        forward = end_flag == 0  # Traverse forward when entering at the segment start.
+        path.append((index, forward))  # Append the continuation.
+        next_segment = segments[index]  # Read the continuation segment.
+        current_key = _point_key(next_segment.x2, next_segment.y2) if forward else _point_key(next_segment.x1, next_segment.y1)  # Advance to the far end.
+    return path  # Return the ordered path description.
+
+
+def _path_points(path: Sequence[Tuple[int, bool]], segments: Sequence[Any]) -> List[Tuple[float, float]]:  # Flatten one path into an ordered polyline.
+    points: List[Tuple[float, float]] = []  # Collect the path vertices.
+    for index, forward in path:  # Walk the path segments in order.
+        segment = segments[index]  # Read the current segment.
+        first = (segment.x1, segment.y1) if forward else (segment.x2, segment.y2)  # Resolve the entry point.
+        second = (segment.x2, segment.y2) if forward else (segment.x1, segment.y1)  # Resolve the exit point.
+        if not points or not _points_close(points[-1][0], points[-1][1], first[0], first[1], tolerance=1e-4):  # Detect gaps in the chain.
+            points.append(first)  # Append the entry point when it starts a new run.
+        points.append(second)  # Append the exit point.
+    return points  # Return the ordered polyline.
+
+
+def _simplify_path_points(points: Sequence[Tuple[float, float]], template: Any, clearance: float, foreign: Sequence[Dict[str, Any]]) -> List[Tuple[float, float]]:  # Drop duplicate, micro, and near-collinear polyline vertices.
+    simplified = list(points)  # Copy the input polyline.
+    changed = True  # Track whether the last sweep removed a vertex.
+    while changed and len(simplified) > 2:  # Sweep until no removable vertex remains.
+        changed = False  # Reset the change marker for this sweep.
+        index = 1  # Start at the first interior vertex.
+        while index < len(simplified) - 1:  # Walk every interior vertex.
+            previous = simplified[index - 1]  # Read the previous vertex.
+            current = simplified[index]  # Read the current vertex.
+            following = simplified[index + 1]  # Read the following vertex.
+            first_length = math.dist(previous, current)  # Measure the incoming segment.
+            second_length = math.dist(current, following)  # Measure the outgoing segment.
+            if first_length < 1e-9 or second_length < 1e-9:  # Remove duplicate vertices.
+                simplified.pop(index)  # Drop the duplicate vertex.
+                changed = True  # Record the removal.
+                continue  # Restart at the same index.
+            incoming = _unit_vector(previous[0], previous[1], current[0], current[1])  # Resolve the incoming direction.
+            outgoing = _unit_vector(current[0], current[1], following[0], following[1])  # Resolve the outgoing direction.
+            removable = False  # Track whether the vertex may be dropped.
+            if incoming is not None and outgoing is not None:  # Guard degenerate directions.
+                change = _direction_change_degrees(incoming, outgoing)  # Measure the direction change.
+                removable = change <= _MICRO_BEND_ANGLE or min(first_length, second_length) <= _MICRO_SEGMENT_LENGTH  # Drop near-collinear and micro vertices.
+            if removable and _straight_leg_is_clear(previous, following, template, clearance, foreign):  # Verify the replacement leg clearance.
+                simplified.pop(index)  # Drop the removable vertex.
+                changed = True  # Record the removal.
+                continue  # Restart at the same index.
+            index += 1  # Advance to the next interior vertex.
+    return simplified  # Return the simplified polyline.
+
+
+def _straight_leg_is_clear(first: Tuple[float, float], second: Tuple[float, float], template: Any, clearance: float, foreign: Sequence[Dict[str, Any]]) -> bool:  # Verify one straight replacement leg keeps its copper clearance.
+    return _smoothed_legs_are_clear([first, second], template.net_name, template.layer, template.width, clearance, foreign)  # Reuse the fillet clearance checker.
+
+
+def _smooth_path_points(points: Sequence[Tuple[float, float]], template: Any, max_change: float, chamfer: float, clearance: float, foreign: Sequence[Dict[str, Any]]) -> Tuple[List[Any], bool]:  # Replace every sharp polyline vertex with a smooth fillet.
+    if len(points) < 2:  # Handle empty and single-point paths.
+        return [], False  # Emit no geometry.
+    if len(points) == 2:  # Handle straight two-point paths.
+        return [_clone_segment(template, points[0], points[1])], False  # Emit the single straight segment.
+    fillet_max_change = max(max_change - _WIRE_BEND_SAFETY_MARGIN, _WIRE_BEND_ANGLE_TOLERANCE)  # Keep the chords clear of the exact threshold.
+    lengths = [math.dist(points[index], points[index + 1]) for index in range(len(points) - 1)]  # Measure every polyline segment.
+    consumed_start = [0.0] * len(lengths)  # Track the length consumed at each segment start.
+    consumed_end = [0.0] * len(lengths)  # Track the length consumed at each segment end.
+    corners: Dict[int, Tuple[float, float, Tuple[float, float], Tuple[float, float]]] = {}  # Record the smoothed interior vertices.
+    for index in range(1, len(points) - 1):  # Walk every interior vertex.
+        incoming = _unit_vector(points[index - 1][0], points[index - 1][1], points[index][0], points[index][1])  # Resolve the incoming direction.
+        outgoing = _unit_vector(points[index][0], points[index][1], points[index + 1][0], points[index + 1][1])  # Resolve the outgoing direction.
+        if incoming is None or outgoing is None:  # Skip degenerate vertices.
+            continue  # Move to the next vertex.
+        change = _direction_change_degrees(incoming, outgoing)  # Measure the direction change.
+        if change <= fillet_max_change + _WIRE_BEND_ANGLE_TOLERANCE:  # Keep bends that already satisfy the minimum angle.
+            continue  # Move to the next vertex.
+        available_in = lengths[index - 1]  # Resolve the incoming length before any corner consumes it.
+        available_out = lengths[index]  # Resolve the outgoing length before any corner consumes it.
+        if available_in <= 0.0 or available_out <= 0.0:  # Skip degenerate vertices.
+            continue  # Move to the next vertex.
+        cut = min(chamfer, 0.45 * available_in, 0.45 * available_out)  # Resolve the initial corner cut length.
+        while cut >= _MIN_WIRE_BEND_CUT:  # Shrink the fillet until it is clearance-clean.
+            fillet = _corner_fillet_points(points[index], incoming, outgoing, cut, change, fillet_max_change)  # Build the candidate fillet.
+            if _smoothed_legs_are_clear(fillet, template.net_name, template.layer, template.width, clearance, foreign):  # Verify the fillet clearance.
+                break  # Keep the clearance-clean fillet.
+            cut *= 0.5  # Halve the fillet and retry.
+        if cut < _MIN_WIRE_BEND_CUT:  # Skip corners that cannot be smoothed safely.
+            continue  # Move to the next vertex.
+        consumed_end[index - 1] += cut  # Consume the incoming segment end.
+        consumed_start[index] += cut  # Consume the outgoing segment start.
+        corners[index] = (change, cut, incoming, outgoing)  # Record the smoothed vertex.
+    rebuilt: List[Any] = []  # Collect the replacement segments.
+    for index in range(len(lengths)):  # Walk every polyline segment.
+        start_point = _offset_point(points[index], points[index + 1], consumed_start[index])  # Resolve the trimmed start point.
+        end_point = _offset_point(points[index + 1], points[index], consumed_end[index])  # Resolve the trimmed end point.
+        if math.dist(start_point, end_point) > 1e-9:  # Keep only non-degenerate trims.
+            rebuilt.append(_clone_segment(template, start_point, end_point))  # Append the trimmed segment.
+        if index + 1 in corners:  # Append the fillet that follows this segment.
+            change, cut, incoming, outgoing = corners[index + 1]  # Unpack the recorded corner.
+            fillet = _corner_fillet_points(points[index + 1], incoming, outgoing, cut, change, fillet_max_change)  # Rebuild the fillet polyline.
+            for first, second in zip(fillet, fillet[1:]):  # Walk every fillet leg.
+                if math.dist(first, second) > 1e-9:  # Keep only non-degenerate legs.
+                    rebuilt.append(_clone_segment(template, first, second))  # Append the fillet leg.
+    return rebuilt, bool(corners)  # Return the rebuilt path geometry and the fillet marker.
+
+
+def _collect_foreign_copper(routes: Sequence[Any], components: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:  # Snapshot the copper that smoothed bends must keep clear of.
+    items: List[Dict[str, Any]] = []  # Collect every foreign-net obstacle record.
+    for route in routes:  # Walk every routed chain.
+        for segment in route.segments:  # Walk every routed trace segment.
+            items.append({  # Store the segment obstacle.
+                "kind": "segment",  # Mark the obstacle shape.
+                "net": route.net_name,  # The owning net name.
+                "layer": segment.layer,  # The copper layer.
+                "geometry": (segment.x1, segment.y1, segment.x2, segment.y2),  # The segment endpoints.
+                "half": float(segment.width) / 2.0,  # The trace half-width.
+            })  # Finish the segment record.
+        for via in route.vias:  # Walk every routed via.
+            items.append({  # Store the via obstacle.
+                "kind": "disc",  # Mark the obstacle shape.
+                "net": route.net_name,  # The owning net name.
+                "layer": None,  # Vias connect layers and block all of them.
+                "geometry": (via.x, via.y, float(via.diameter) / 2.0),  # The via centre and radius.
+                "half": 0.0,  # Discs carry no extra half-width.
+            })  # Finish the via record.
+    for record in components:  # Walk every placed component.
+        if record["power"]:  # Power symbols place no pads.
+            continue  # Move to the next record.
+        for pad in record.get("footprint_pads", []):  # Walk every footprint pad.
+            net_name = record.get("pad_nets", {}).get(pad["number"], "")  # Resolve the pad net name.
+            centre_x = float(record["board_x"]) + float(pad["x"])  # Resolve the board-frame pad X.
+            centre_y = float(record["board_y"]) + float(pad["y"])  # Resolve the board-frame pad Y.
+            items.append({  # Store the pad obstacle as an axis-aligned rectangle.
+                "kind": "rect",  # Mark the obstacle shape.
+                "net": net_name,  # The owning net name.
+                "layer": None,  # Pads block conservatively on every layer.
+                "geometry": (centre_x, centre_y, float(pad["width"]), float(pad["height"])),  # The pad centre and size.
+                "half": 0.0,  # Rectangles carry no extra half-width.
+            })  # Finish the pad record.
+    return items  # Return the complete obstacle snapshot.
+
+
+def _unit_vector(x1: float, y1: float, x2: float, y2: float) -> Optional[Tuple[float, float]]:  # Normalize one displacement into a unit vector.
+    dx = x2 - x1  # Compute the displacement X.
+    dy = y2 - y1  # Compute the displacement Y.
+    length = math.hypot(dx, dy)  # Measure the displacement length.
+    if length < 1e-12:  # Reject degenerate displacements.
+        return None  # Signal the unusable displacement.
+    return (dx / length, dy / length)  # Return the normalized direction.
+
+
+def _points_close(first_x: float, first_y: float, second_x: float, second_y: float, tolerance: float = 1e-6) -> bool:  # Compare two board points.
+    return abs(first_x - second_x) <= tolerance and abs(first_y - second_y) <= tolerance  # Return the tolerance comparison.
+
+
+def _direction_change_degrees(first: Tuple[float, float], second: Tuple[float, float]) -> float:  # Measure the angle between two travel directions.
+    dot = max(-1.0, min(1.0, first[0] * second[0] + first[1] * second[1]))  # Compute the clamped direction dot product.
+    return math.degrees(math.acos(dot))  # Return the direction change in degrees.
+
+
+def _clone_segment(template: Any, start_point: Tuple[float, float], end_point: Tuple[float, float]) -> Any:  # Clone one router segment with new endpoints.
+    return dataclasses.replace(  # Reuse the segment's width, layer, and net metadata.
+        template,  # Keep the template metadata.
+        x1=float(start_point[0]),  # Assign the new start X.
+        y1=float(start_point[1]),  # Assign the new start Y.
+        x2=float(end_point[0]),  # Assign the new end X.
+        y2=float(end_point[1]),  # Assign the new end Y.
+    )  # Finish the cloned segment.
+
+
+def _offset_point(origin: Tuple[float, float], target: Tuple[float, float], distance: float) -> Tuple[float, float]:  # Compute a point measured from one vertex toward another.
+    direction = _unit_vector(origin[0], origin[1], target[0], target[1])  # Resolve the vertex direction.
+    if direction is None:  # Handle duplicate vertices.
+        return origin  # Return the origin unchanged.
+    return (origin[0] + direction[0] * distance, origin[1] + direction[1] * distance)  # Return the offset point.
+
+
+def _corner_fillet_points(vertex: Tuple[float, float], incoming: Tuple[float, float], outgoing: Tuple[float, float], cut: float, change: float, max_change: float) -> List[Tuple[float, float]]:  # Build the fillet polyline replacing one sharp corner.
+    point_in = (vertex[0] - incoming[0] * cut, vertex[1] - incoming[1] * cut)  # Resolve the incoming tangent point.
+    point_out = (vertex[0] + outgoing[0] * cut, vertex[1] + outgoing[1] * cut)  # Resolve the outgoing tangent point.
+    steps = max(2, int(math.ceil(change / max_change - 1e-9)))  # Resolve how many chords approximate the fillet arc.
+    if steps == 2:  # Use the plain 45-degree chamfer for the common case.
+        return [point_in, point_out]  # Return the single chord.
+    half = math.radians(change / 2.0)  # Resolve the half direction change.
+    radius = cut / math.tan(half)  # Resolve the tangent-arc radius.
+    bisector = _unit_vector(incoming[0], incoming[1], outgoing[0], outgoing[1])  # Resolve the interior bisector direction.
+    if bisector is None:  # Handle antiparallel directions.
+        return [point_in, point_out]  # Fall back to the direct chord.
+    centre_distance = cut / math.sin(half)  # Resolve the arc-centre distance from the vertex.
+    centre = (vertex[0] + bisector[0] * centre_distance, vertex[1] + bisector[1] * centre_distance)  # Resolve the arc centre.
+    first_radial = _unit_vector(centre[0], centre[1], point_in[0], point_in[1])  # Resolve the first radial direction.
+    if first_radial is None:  # Handle a degenerate radial.
+        return [point_in, point_out]  # Fall back to the direct chord.
+    last_radial = (point_out[0] - centre[0], point_out[1] - centre[1])  # Resolve the last radial vector.
+    cross = first_radial[0] * last_radial[1] - first_radial[1] * last_radial[0]  # Resolve the arc sweep sign.
+    sign = 1.0 if cross >= 0.0 else -1.0  # Choose the short-arc rotation direction.
+    points: List[Tuple[float, float]] = [point_in]  # Start the fillet at the incoming tangent point.
+    for index in range(1, steps):  # Walk every intermediate chord vertex.
+        angle = sign * math.radians(change) * (index / steps)  # Resolve the radial rotation for this vertex.
+        cosine = math.cos(angle)  # Precompute the cosine.
+        sine = math.sin(angle)  # Precompute the sine.
+        points.append((  # Append the rotated point on the arc.
+            centre[0] + radius * (first_radial[0] * cosine - first_radial[1] * sine),  # Compute the arc point X.
+            centre[1] + radius * (first_radial[0] * sine + first_radial[1] * cosine),  # Compute the arc point Y.
+        ))  # Finish the intermediate vertex.
+    points.append(point_out)  # Terminate the fillet at the outgoing tangent point.
+    return points  # Return the fillet polyline.
+
+
+def _point_segment_distance(point_x: float, point_y: float, x1: float, y1: float, x2: float, y2: float) -> float:  # Measure the distance from one point to one segment.
+    dx = x2 - x1  # Compute the segment displacement X.
+    dy = y2 - y1  # Compute the segment displacement Y.
+    length_squared = dx * dx + dy * dy  # Measure the squared segment length.
+    if length_squared <= 1e-18:  # Handle degenerate segments.
+        return math.hypot(point_x - x1, point_y - y1)  # Return the point distance.
+    parameter = ((point_x - x1) * dx + (point_y - y1) * dy) / length_squared  # Project the point onto the segment.
+    parameter = max(0.0, min(1.0, parameter))  # Clamp the projection to the segment.
+    return math.hypot(point_x - x1 - parameter * dx, point_y - y1 - parameter * dy)  # Return the clamped distance.
+
+
+def _orientation(ax: float, ay: float, bx: float, by: float, cx: float, cy: float) -> float:  # Compute the signed area of one triangle.
+    return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)  # Return the cross product.
+
+
+def _segments_intersect(ax1: float, ay1: float, ax2: float, ay2: float, bx1: float, by1: float, bx2: float, by2: float) -> bool:  # Detect whether two segments cross.
+    first = _orientation(ax1, ay1, ax2, ay2, bx1, by1)  # Orient the first endpoint.
+    second = _orientation(ax1, ay1, ax2, ay2, bx2, by2)  # Orient the second endpoint.
+    third = _orientation(bx1, by1, bx2, by2, ax1, ay1)  # Orient the third endpoint.
+    fourth = _orientation(bx1, by1, bx2, by2, ax2, ay2)  # Orient the fourth endpoint.
+    return (first * second < 0.0) and (third * fourth < 0.0)  # Return the proper-crossing test.
+
+
+def _segment_segment_distance(ax1: float, ay1: float, ax2: float, ay2: float, bx1: float, by1: float, bx2: float, by2: float) -> float:  # Measure the distance between two segments.
+    if _segments_intersect(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2):  # Detect a crossing pair.
+        return 0.0  # Return the touching distance.
+    return min(  # Return the closest endpoint-to-segment distance.
+        _point_segment_distance(ax1, ay1, bx1, by1, bx2, by2),  # First endpoint of the first segment.
+        _point_segment_distance(ax2, ay2, bx1, by1, bx2, by2),  # Second endpoint of the first segment.
+        _point_segment_distance(bx1, by1, ax1, ay1, ax2, ay2),  # First endpoint of the second segment.
+        _point_segment_distance(bx2, by2, ax1, ay1, ax2, ay2),  # Second endpoint of the second segment.
+    )  # Finish the distance selection.
+
+
+def _segment_rect_distance(x1: float, y1: float, x2: float, y2: float, min_x: float, min_y: float, max_x: float, max_y: float) -> float:  # Measure the distance between one segment and one axis-aligned rectangle.
+    if (min_x <= x1 <= max_x and min_y <= y1 <= max_y) or (min_x <= x2 <= max_x and min_y <= y2 <= max_y):  # Detect endpoints inside the rectangle.
+        return 0.0  # Return the touching distance.
+    corners = [(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)]  # Collect the rectangle corners.
+    best = math.inf  # Track the smallest edge distance.
+    for index, (corner_x, corner_y) in enumerate(corners):  # Walk every rectangle edge.
+        next_x, next_y = corners[(index + 1) % len(corners)]  # Resolve the edge end.
+        best = min(best, _segment_segment_distance(x1, y1, x2, y2, corner_x, corner_y, next_x, next_y))  # Shrink the distance.
+    return best  # Return the closest distance.
+
+
+def _smoothed_legs_are_clear(points: Sequence[Tuple[float, float]], net_name: str, layer: Any, width: float, clearance: float, foreign: Sequence[Dict[str, Any]]) -> bool:  # Verify that a fillet keeps its copper clearance.
+    half_width = float(width) / 2.0  # Resolve the smoothed trace half-width.
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):  # Walk every fillet leg.
+        for item in foreign:  # Walk every foreign-net obstacle.
+            if item["net"] == net_name:  # Skip copper on the same net.
+                continue  # Move to the next obstacle.
+            if item["kind"] == "segment":  # Handle foreign trace segments.
+                if item["layer"] != layer:  # Skip copper on another layer.
+                    continue  # Move to the next obstacle.
+                distance = _segment_segment_distance(x1, y1, x2, y2, *item["geometry"])  # Measure the segment separation.
+                if distance < half_width + item["half"] + clearance - 1e-6:  # Detect a clearance violation.
+                    return False  # Report the blocked fillet.
+            elif item["kind"] == "disc":  # Handle foreign vias.
+                centre_x, centre_y, radius = item["geometry"]  # Unpack the via geometry.
+                distance = _point_segment_distance(centre_x, centre_y, x1, y1, x2, y2)  # Measure the via separation.
+                if distance < half_width + radius + clearance - 1e-6:  # Detect a clearance violation.
+                    return False  # Report the blocked fillet.
+            else:  # Handle foreign pads.
+                centre_x, centre_y, pad_width, pad_height = item["geometry"]  # Unpack the pad geometry.
+                distance = _segment_rect_distance(  # Measure the pad separation.
+                    x1, y1, x2, y2,  # Pass the fillet leg.
+                    centre_x - pad_width / 2.0, centre_y - pad_height / 2.0,  # Pass the pad minimum corner.
+                    centre_x + pad_width / 2.0, centre_y + pad_height / 2.0,  # Pass the pad maximum corner.
+                )  # Finish the pad distance measurement.
+                if distance < half_width + clearance - 1e-6:  # Detect a clearance violation.
+                    return False  # Report the blocked fillet.
+    return True  # Report the clear fillet.
 
 
 def _validate_generated_pcb(output_path: str, components: List[Dict[str, Any]]) -> Tuple[bool, str]:  # Validate the finished board file.
