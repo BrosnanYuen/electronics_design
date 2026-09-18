@@ -493,3 +493,26 @@ R1 N001 0 1k
             )
 
             self.assertEqual(result, (True, "OK", 0))
+
+    def test_x_pin_count_mismatch_is_rejected(self) -> None:  # Reject X lines whose pins exceed the listed nodes.
+        netlist_text = "R1 a 0 1k\nXU1 a b LTC3895\nR2 b 0 1k\n.tran 1\n.backanno\n.end\n"
+        symbol_pose = {
+            "R1": {"RECTANGLE": [[0, 0], [64, 64]], "PINS": [[0, 32, "1", 1], [64, 32, "2", 2]]},
+            "R2": {"RECTANGLE": [[0, 0], [64, 64]], "PINS": [[0, 32, "1", 1], [64, 32, "2", 2]]},
+            "XU1": {"RECTANGLE": [[0, 0], [64, 96]], "PINS": [[0, 32, "1", 1], [64, 32, "2", 2], [32, 96, "3", 3]]},
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            netlist_path = temporary_path / "short_x.net"
+            symbol_pose_path = temporary_path / "short_x_symbols.json"
+            output_path = temporary_path / "short_x_wires.json"
+            netlist_path.write_text(netlist_text, encoding="utf-8")
+            symbol_pose_path.write_text(json.dumps(symbol_pose, indent=2) + "\n", encoding="utf-8")
+            result = ltspice_netlist_to_wiring(str(netlist_path), str(symbol_pose_path), str(output_path), _CONVERT_SETTINGS)
+            self.assertFalse(result[0], msg="Short X lines must fail the strict pin-coverage validation.")
+            self.assertTrue(result[1].startswith("X_PIN_COUNT_MISMATCH"), msg=f"Expected X_PIN_COUNT_MISMATCH but got: {result[1]}")
+            self.assertEqual(result[2], 2, msg="The error must point at the X line.")
+            relaxed_settings = dict(_CONVERT_SETTINGS)
+            relaxed_settings["ltspice_allow_spice_order_mismatch"] = True
+            relaxed_result = ltspice_netlist_to_wiring(str(netlist_path), str(symbol_pose_path), str(output_path), relaxed_settings)
+            self.assertFalse(relaxed_result[1].startswith("X_PIN_COUNT_MISMATCH"), msg="The opt-out setting must restore silent skipping.")  # Later routing may still fail; the pin-coverage error must be gone.

@@ -656,6 +656,8 @@ def _emit_device_lines(components: List[Dict[str, object]], net_names: Dict[str,
             instance_name = reference  # Reuse the original instance name.
         instance_name = _unique_ordinary_instance_name(instance_name, prefix, reserved_instance_names, emitted_instance_names)  # Renumber duplicate schematic references deterministically.
         emitted_instance_names.add(instance_name.upper())  # Reserve the final emitted name.
+        if prefix == "X":  # Subcircuit node positions must match the model's SpiceOrder positions.
+            node_tokens = _expand_spice_order_node_positions(instance_name, str(record["lib_id"]), ordered_pins, node_tokens)  # Pad sparse SpiceOrder gaps with exempt no-connect fillers.
         if prefix == "X":  # Subcircuit calls carry their original KiCad metadata as comment hints.
             lines.append(_KICAD_LIB_ID_MARKER + instance_name + " " + str(record["lib_id"]))  # Record the exact KiCad symbol so reverse conversion restores it.
             sim_pins_text = _record_property(record, "Sim.Pins")  # Read the authored package-to-model-port mapping.
@@ -822,6 +824,37 @@ def _pin_sort_key(pin_number: str) -> Tuple[int, str]:  # Build a numeric-first 
     if str(pin_number).isdigit():  # Numeric pin numbers sort before symbolic ones.
         return (0, int(str(pin_number)))  # Return the integer key for numeric pins.
     return (1, str(pin_number))  # Return the string key for symbolic pins.
+
+
+def _expand_spice_order_node_positions(  # Place sparse SpiceOrder pins onto their true subcircuit node positions.
+    instance_name: str,  # Accept the emitted X instance name for deterministic filler naming.
+    lib_id: str,  # Accept the library identifier to identify ASY-derived embedded symbols.
+    ordered_pins: Sequence[str],  # Accept the SPICE-ordered pin numbers.
+    node_tokens: Sequence[str],  # Accept the connected node tokens in the matching order.
+) -> List[str]:
+    lib_parts = str(lib_id).split(":", 1)  # Split the library qualifier from the symbol name.
+    if len(lib_parts) != 2 or lib_parts[0] != lib_parts[1]:  # Only ASY-derived embedded symbols number their pins by SpiceOrder.
+        return list(node_tokens)  # Keep the compact positional emission for ordinary library symbols.
+    if len(ordered_pins) != len(node_tokens):  # Defensive check for malformed records.
+        return list(node_tokens)  # Keep the original tokens unchanged.
+    positions: List[int] = []  # Collect the positive integer SpiceOrder positions.
+    for pin_number in ordered_pins:  # Walk every ordered pin number.
+        text = str(pin_number).strip()  # Normalize the pin number text.
+        if not text.isdigit():  # Non-integer pin numbers cannot be SpiceOrders.
+            return list(node_tokens)  # Keep the original tokens unchanged.
+        position = int(text)  # Convert the pin number into its one-based node position.
+        if position <= 0:  # SpiceOrders are positive one-based positions.
+            return list(node_tokens)  # Keep the original tokens unchanged.
+        positions.append(position)  # Record the node position.
+    if len(set(positions)) != len(positions):  # Duplicate positions cannot map onto one node list.
+        return list(node_tokens)  # Keep the original tokens unchanged.
+    max_position = max(positions, default=0)  # Read the highest model port position.
+    if max_position == len(positions):  # Contiguous one-based pins already round-trip exactly.
+        return list(node_tokens)  # Keep the compact emission unchanged.
+    expanded = [f"NC_{instance_name}_{position}" for position in range(1, max_position + 1)]  # Fill every model port with an exempt no-connect name.
+    for position, token in zip(positions, node_tokens):  # Overwrite the addressed positions with their real node tokens.
+        expanded[position - 1] = token  # Place the connected token at its SpiceOrder position.
+    return expanded  # Return the positionally correct subcircuit call.
 
 
 def _node_name_for_net(net_root: str, net_names: Dict[str, str]) -> str:  # Convert a net representative into an LTspice node token.

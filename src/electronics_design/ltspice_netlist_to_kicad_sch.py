@@ -48,6 +48,10 @@ from .kicad_sch_to_ltspice_netlist import _transform_point  # Reuse the shared p
 from .kicad_sexp_parser import SExp  # Build schematic and symbol S-expression trees.
 from .kicad_sexp_parser import parse_string  # Parse generated ASY-fallback symbol files.
 from .ltspice_asy_to_kicad_symbol import ltspice_asy_to_kicad_symbol  # Convert missing symbols from LTspice ASY files.
+from .ltspice_library import describe_asy_search  # Report the ASY search roots and attempted paths.
+from .ltspice_library import find_asy_file  # Reuse the shared recursive ASY resolver.
+from .ltspice_library import resolve_search_roots  # Reuse the shared LTspice search-root resolver.
+from .ltspice_library import suggest_asy_search_paths  # Suggest near-match ASY directories for diagnostics.
 from .ltspice_net import _parse_elements  # Reuse the shared netlist element parser.
 from .ltspice_net import _read_text_file_lines  # Reuse the shared encoding-aware netlist reader.
 from .ltspice_net import is_valid_ltspice_netlist_file  # Validate the input netlist file.
@@ -409,18 +413,7 @@ def _model_polarity_type(raw_line: str, kind_token: str) -> str:  # Normalize on
 
 
 def _ltspice_search_roots(settings: Dict[str, Any]) -> List[str]:  # Collect the configured LTspice symbol search roots.
-    search_roots: List[str] = []  # Collect the search roots.
-    custom_paths = settings.get("custom_search_paths")  # Read the optional custom search paths.
-    if isinstance(custom_paths, (list, tuple)):  # Accept list-style custom paths.
-        for custom_path in custom_paths:  # Walk every custom search path.
-            if isinstance(custom_path, str) and custom_path.strip():  # Keep nonempty path strings.
-                search_roots.append(os.path.expanduser(custom_path.strip()))  # Expand and store the custom root.
-    for setting_key in ("ltspice_wine_path", "ltspice_windows_path"):  # Walk the LTspice install root settings.
-        raw_path = settings.get(setting_key)  # Read the configured install root.
-        if isinstance(raw_path, str) and raw_path.strip():  # Keep nonempty path strings.
-            normalized_path = os.path.expanduser(raw_path.strip().replace("\\", "/"))  # Normalize separators and expand the root.
-            search_roots.append(normalized_path)  # Store the install root.
-    return search_roots  # Return the collected search roots.
+    return list(resolve_search_roots(settings))  # Reuse the shared search-root resolver.
 
 
 def _find_library_file(library_name: str, search_roots: Sequence[str]) -> Optional[str]:  # Locate one referenced library file under the configured roots.
@@ -604,6 +597,9 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
     hinted_lib_id: str = "",  # Accept the forward-converter library identifier hint to relax no-connect pin excess.
     subcircuit_definitions: Optional[Mapping[str, Sequence[str]]] = None,  # Accept subcircuit port lists for dynamic symbol generation.
     hint_roles: str = "",  # Accept the forward-converter Sim.Pins role mapping for dynamic pin naming.
+    allow_spice_order_gaps: bool = True,  # Accept ASY symbols whose SpiceOrder gaps map onto unconnected X-line nodes.
+    node_devices: Optional[Mapping[str, Set[int]]] = None,  # Accept the node-to-element index for gap connectivity checks.
+    element_index: int = -1,  # Accept the current element index for gap connectivity checks.
 ) -> BuildResult:  # Return the resolution success with the lib_id and symbol node.
     bare_lib_ids: List[str] = []  # Defer expensive library-wide searches until configured ASY fallbacks have been tried.
     for lib_id in lib_ids:  # Walk the candidate library identifiers in order.
@@ -622,7 +618,7 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
             pinned_matches = _symbol_pin_count_matches(element, pin_count, allow_generic_subcircuits)  # Check the ordinary pin-count rule.
             hinted_matches = lib_id == hinted_lib_id and _extra_no_connect_pins_match(element, pin_count, len(element.nodes), symbol_node)  # Hints allow extra no-connect symbol pins absent from the deck.
             if symbol_node.find_child("power") is not None or pinned_matches or hinted_matches:  # Power symbols carry one pin; converter-added substrates may reconstruct as three-pin symbols; hinted symbols may leave no-connect pins unlisted.
-                return True, (lib_id, symbol_node), "", 0  # Return the resolved symbol.
+                return True, (lib_id, symbol_node, False, True), "", 0  # Return the resolved symbol; library resolutions never depend on connectivity.
     asy_names = list(_PREFIX_ASY_FALLBACKS.get(element.prefix, ()))  # Read the prefix ASY fallback names.
     if element.prefix in {"D", "J", "M", "Q", "Z"}:  # Prefer a model-specific ASY when discrete-device node counts exceed generic symbols.
         payload = element.tokens[1 + len(element.nodes):]  # Read the model and parameter tokens after the connectivity nodes.
@@ -634,6 +630,8 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
         if subcircuit_name:  # Only propose a fallback when a name exists.
             asy_names = [subcircuit_name + _ASY_EXTENSION]  # Build the subcircuit ASY filename.
     asy_names.extend(extra_asy_names)  # Append polarity-derived fallback names after the prefix defaults.
+    attempted_asy_names: List[str] = list(dict.fromkeys(asy_names))  # Preserve the distinct ASY basenames tried for diagnostics.
+    attempted_library_ids: List[str] = list(dict.fromkeys(lib_ids))  # Preserve the distinct library candidates tried for diagnostics.
     for asy_name in asy_names:  # Walk the candidate ASY basenames.
         asy_path = _find_asy_file(asy_name, settings)  # Search the configured LTspice roots for the file.
         if asy_path is None:  # Skip names that do not exist anywhere.
@@ -657,10 +655,21 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
         if symbol_node is None:  # Skip generated files without the expected symbol.
             continue  # Move to the next ASY name.
         fallback_pins_result = _extract_symbol_pins(symbol_node, 1, 1, stem)  # Check the generated symbol pin graphics.
-        if not fallback_pins_result[0] or not _symbol_pin_count_matches(element, len(fallback_pins_result[1]), allow_generic_subcircuits):  # Require a round-trippable pin-count match before embedding.
+        if not fallback_pins_result[0]:  # Require usable pin graphics before any acceptance rule.
             continue  # Move to the next ASY name.
+        fallback_pins = fallback_pins_result[1]  # Read the generated symbol pin geometry.
+        exact_match = _symbol_pin_count_matches(element, len(fallback_pins), allow_generic_subcircuits)  # Check the ordinary pin-count rule.
+        sparse_match = False  # Track whether the sparse SpiceOrder coverage rule accepted the symbol.
+        if not exact_match:  # Accept sparse SpiceOrder coverage only for X devices when the gaps are unconnected.
+            sparse_match = (
+                allow_spice_order_gaps
+                and element.prefix == "X"
+                and _spice_order_pin_count_matches(element, fallback_pins, node_devices, element_index)
+            )  # Evaluate the connectivity-dependent sparse-coverage acceptance rule.
+            if not sparse_match:  # Reject symbols that no acceptance rule explains.
+                continue  # Move to the next ASY name.
         embedded_lib_id = f"{stem}:{stem}"  # Qualify the embedded symbol so kicad_path never shadows it.
-        return True, (embedded_lib_id, symbol_node), "", 0  # Return the embedded fallback symbol.
+        return True, (embedded_lib_id, symbol_node, True, not sparse_match), "", 0  # Return the embedded fallback symbol; sparse acceptance stays out of the shape cache.
     for lib_id in bare_lib_ids:  # Fall back to a library-wide search only when no configured ASY resolves the bare name.
         symbol_node = library_cache.find(lib_id)  # Search all KiCad symbol libraries for the bare symbol name.
         if symbol_node is None:  # Skip names that no library defines.
@@ -668,7 +677,7 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
         short_name = _split_lib_id(lib_id)[1]  # Read the short symbol name for pin extraction.
         pins_result = _extract_symbol_pins(symbol_node, 1, 1, short_name)  # Validate the candidate pin graphics.
         if pins_result[0] and _symbol_pin_count_matches(element, len(pins_result[1]), allow_generic_subcircuits) and _subcircuit_round_trips(element, symbol_node):  # Require usable geometry, a round-trippable pin count, and a round-trippable identity.
-            return True, (lib_id, symbol_node), "", 0  # Return the library-wide resolution.
+            return True, (lib_id, symbol_node, False, True), "", 0  # Return the library-wide resolution.
     if element.prefix == "X" and allow_generic_subcircuits:  # Dynamically generate a symbol only when the trusted generator marker proves the deck's schematic provenance.
         payload = element.tokens[1 + len(element.nodes):]  # Read the payload tokens after the connectivity nodes.
         subcircuit_name = payload[0] if payload else "SUBCKT"  # Read the subcircuit name from the payload.
@@ -682,9 +691,32 @@ def _resolve_symbol(  # Resolve one device to a KiCad symbol from kicad_path or 
         generated_result = _write_generated_subcircuit_symbol_file(subcircuit_name, len(element.nodes), port_names, temp_directory, settings)  # Generate a self-contained KiCad symbol file on the fly.
         if generated_result[0]:  # Use the generated symbol when it passes validation.
             return generated_result  # Return the dynamically generated symbol.
-    detail = "', '".join(lib_ids)  # Join the candidate identifiers for the error message.
-    message = f"UNKNOWN_SYMBOL: Unable to resolve a KiCad symbol for device '{element.tokens[0]}' in kicad_path candidates ['{detail}'] or the configured LTspice ASY search paths"  # Explain the failed resolution.
+    detail = "', '".join(attempted_library_ids)  # Join the candidate identifiers for the error message.
+    diagnostics = _unknown_symbol_diagnostics(attempted_asy_names, settings)  # Build the actionable ASY search diagnostics.
+    message = (  # Assemble the unknown-symbol error with diagnostics.
+        f"UNKNOWN_SYMBOL: Unable to resolve a KiCad symbol for device '{element.tokens[0]}' "
+        f"in kicad_path candidates ['{detail}'] or the configured LTspice ASY search paths. {diagnostics}"
+    )  # Finish the error message.
     return False, None, message, element.line_number  # Return the unknown symbol error with the element line.
+
+
+def _unknown_symbol_diagnostics(asy_names: Sequence[str], settings: Dict[str, Any]) -> str:  # Build actionable ASY search diagnostics for the error payload.
+    search_roots, attempts = describe_asy_search(asy_names, settings)  # Read the roots and the conventional paths checked.
+    attempted_paths = [path for _root, candidates in attempts for path in candidates]  # Flatten the conventional candidate paths.
+    tried_names = ", ".join(asy_names) if asy_names else "(none)"  # Join the candidate ASY basenames.
+    roots_text = ", ".join(search_roots) if search_roots else "(none configured)"  # Join the resolved search roots.
+    paths_text = ", ".join(attempted_paths) if attempted_paths else "(none)"  # Join the conventional candidate paths.
+    parts = [  # Assemble the diagnostic sections.
+        f"Tried ASY names: {tried_names}.",  # Name every candidate basename.
+        f"Search roots: {roots_text}.",  # Name every resolved root.
+        f"Checked paths: {paths_text}.",  # Name every concrete conventional path.
+    ]  # Finish the diagnostic sections.
+    suggestions = suggest_asy_search_paths(asy_names, settings)  # Look for same-stem or close-stem directories.
+    if suggestions:  # Only advertise usable suggestions.
+        suggestion_text = ", ".join(f"'{path}'" for path in suggestions)  # Quote every suggested directory.
+        parts.append(f"Closest matches: {suggestion_text}; add the containing directory to custom_search_paths.")  # Tell the caller how to fix the lookup.
+    parts.append("Note: LTspice symbols are commonly nested under lib/sym/<category>/.")  # Explain the common nested layout.
+    return " ".join(parts)  # Return the joined diagnostic text.
 
 
 def _symbol_pin_count_matches(element: ParsedElement, pin_count: int, generated_by_converter: bool) -> bool:
@@ -708,6 +740,43 @@ def _extra_no_connect_pins_match(element: ParsedElement, pin_count: int, node_co
     if excess <= 0:  # Exact and smaller shapes use the ordinary pin-count rule.
         return False  # Return False so the ordinary rule owns those cases.
     return len(_no_connect_pin_numbers(symbol_node)) >= excess  # Accept only when enough no-connect pins explain the difference.
+
+
+def _spice_order_pin_map(pins: Mapping[str, Tuple[float, float, str]]) -> Optional[Dict[int, str]]:  # Map symbolic SpiceOrder numbers onto their symbol pin numbers.
+    mapping: Dict[int, str] = {}  # Collect the positive integer SpiceOrder mapping.
+    for pin_number in pins:  # Walk every symbol pin number.
+        text = str(pin_number).strip()  # Normalize the pin number text.
+        if not text.isdigit():  # Require an integer pin number that can be a SpiceOrder.
+            return None  # Signal that the symbol does not use SpiceOrder pin numbering.
+        value = int(text)  # Convert the pin number into its SpiceOrder value.
+        if value <= 0 or value in mapping:  # Reject nonpositive or duplicate pin numbers.
+            return None  # Signal that the symbol does not use SpiceOrder pin numbering.
+        mapping[value] = pin_number  # Record the SpiceOrder-to-pin mapping.
+    return mapping or None  # Return the mapping, or None when no pins exist.
+
+
+def _spice_order_pin_count_matches(  # Accept ASY symbols whose sparse SpiceOrders leave only unconnected X-line nodes.
+    element: ParsedElement,  # Accept the parsed device element.
+    pins: Mapping[str, Tuple[float, float, str]],  # Accept the symbol pin geometry keyed by pin number.
+    node_devices: Optional[Mapping[str, Set[int]]],  # Accept the node-to-element index for connectivity checks.
+    element_index: int,  # Accept the current element index for connectivity checks.
+) -> bool:
+    spice_pin_map = _spice_order_pin_map(pins)  # Read the symbol's SpiceOrder pin numbers.
+    if spice_pin_map is None:  # Non-integer pin numbers cannot carry SpiceOrder gaps.
+        return False  # Signal that the sparse-coverage rule does not apply.
+    if any(spice_order > len(element.nodes) for spice_order in spice_pin_map):  # Every pin must address a real X-line position.
+        return False  # Signal that the symbol expects more nodes than the deck lists.
+    covered_positions = set(spice_pin_map)  # Index the X-line positions addressed by a pin.
+    for position, node in enumerate(element.nodes, start=1):  # Walk every X-line position.
+        if position in covered_positions:  # Positions with a matching pin are always valid.
+            continue  # Move to the next position.
+        if str(node).upper().startswith(_NC_NODE_PREFIXES):  # The NC* convention marks intentional filler nodes.
+            continue  # Move to the next position.
+        if node_devices is None:  # Without connectivity information only NC nodes are trusted.
+            return False  # Signal that the gap cannot be proven unconnected.
+        if node_devices.get(node, set()) - {element_index}:  # A node shared with another device is a real net.
+            return False  # Signal that the gap carries real connectivity.
+    return True  # Accept the sparse SpiceOrder coverage.
 
 
 def _no_connect_pin_numbers(symbol_node: SExp) -> Set[str]:  # Collect the pin numbers whose electrical type is no_connect.
@@ -741,17 +810,7 @@ def _polarity_asy_fallback_names(element: ParsedElement, model_types: Dict[str, 
 
 
 def _find_asy_file(asy_name: str, settings: Dict[str, Any]) -> Optional[str]:  # Search the configured LTspice roots for one ASY file.
-    search_roots = _ltspice_search_roots(settings)  # Collect the configured LTspice search roots.
-    for search_root in search_roots:  # Walk every search root.
-        candidates = [  # Build the candidate paths for this root.
-            os.path.join(search_root, asy_name),  # The root itself may hold the symbol.
-            os.path.join(search_root, "sym", asy_name),  # The conventional sym subdirectory.
-            os.path.join(search_root, "lib", "sym", asy_name),  # The conventional LTspice library layout.
-        ]  # Finish the candidate path list.
-        for candidate in candidates:  # Walk the candidate paths.
-            if os.path.isfile(candidate):  # Stop at the first existing file.
-                return candidate  # Return the resolved ASY path.
-    return None  # Return None when no root contains the ASY file.
+    return find_asy_file(asy_name, settings)  # Reuse the shared recursive ASY resolver.
 
 
 def _build_component_records(  # Resolve symbols and build one component record per device element.
@@ -769,8 +828,13 @@ def _build_component_records(  # Resolve symbols and build one component record 
     library_cache = _LibraryCache(settings["kicad_path"])  # Prepare the kicad_path library cache.
     records: List[Dict[str, Any]] = []  # Collect the resolved component records.
     embedded_symbols: Dict[str, SExp] = {}  # Collect embedded symbol definitions keyed by lib_id.
-    resolved_symbols: Dict[Tuple[Tuple[str, ...], Tuple[str, ...], str, int], Tuple[str, SExp]] = {}  # Reuse symbol resolution for repeated device shapes.
-    for element in elements:  # Walk every parsed device element.
+    resolved_symbols: Dict[Tuple[Tuple[str, ...], Tuple[str, ...], str, int], Tuple[str, SExp, bool]] = {}  # Reuse symbol resolution for repeated device shapes.
+    allow_spice_order_gaps = bool(settings.get("kicad_sch_allow_spice_order_gaps", True))  # Accept sparse SpiceOrder coverage only when enabled.
+    node_devices: Dict[str, Set[int]] = {}  # Index every node onto the element indices that reference it.
+    for node_element_index, node_element in enumerate(elements):  # Walk every parsed device element once.
+        for node_name in node_element.nodes:  # Walk every connectivity node attached to the element.
+            node_devices.setdefault(str(node_name), set()).add(node_element_index)  # Record the device that references the node.
+    for element_index, element in enumerate(elements):  # Walk every parsed device element.
         prefix = element.prefix  # Read the device prefix.
         if prefix in _UNSUPPORTED_PREFIXES:  # Reject devices with no KiCad schematic representation.
             message = f"UNSUPPORTED_DEVICE: LTspice device prefix '{prefix}' has no KiCad schematic symbol representation"  # Explain the unsupported prefix.
@@ -786,15 +850,16 @@ def _build_component_records(  # Resolve symbols and build one component record 
         resolution_key = (tuple(candidate_ids), tuple(extra_asy_names), prefix, len(element.nodes))  # Key resolution by all shape-affecting inputs.
         cached_symbol = resolved_symbols.get(resolution_key)  # Reuse an earlier identical resolution.
         if cached_symbol is None:  # Resolve this device shape on first use.
-            resolve_result = _resolve_symbol(library_cache, candidate_ids, element, settings, temp_directory, extra_asy_names, allow_generic_subcircuits, hinted_lib_id, subcircuit_definitions, hint_roles)  # Resolve the device symbol.
+            resolve_result = _resolve_symbol(library_cache, candidate_ids, element, settings, temp_directory, extra_asy_names, allow_generic_subcircuits, hinted_lib_id, subcircuit_definitions, hint_roles, allow_spice_order_gaps, node_devices, element_index)  # Resolve the device symbol.
             if not resolve_result[0]:  # Stop when resolution fails.
                 return resolve_result  # Return the resolution error unchanged.
-            lib_id, symbol_node = resolve_result[1]  # Read the resolved lib_id and symbol node.
-            resolved_symbols[resolution_key] = (lib_id, symbol_node)  # Cache the successful shape resolution.
+            lib_id, symbol_node, spice_order_based, cache_safe = resolve_result[1]  # Read the resolved lib_id, symbol node, pin-numbering mode, and cache-safety flag.
+            if cache_safe:  # Connectivity-independent resolutions are safe to reuse across identical device shapes.
+                resolved_symbols[resolution_key] = (lib_id, symbol_node, spice_order_based)  # Cache the successful shape resolution.
         else:  # Reuse the cached symbol definition.
-            lib_id, symbol_node = cached_symbol  # Unpack the resolved library id and node.
+            lib_id, symbol_node, spice_order_based = cached_symbol  # Unpack the resolved library id, node, and pin-numbering mode.
         sim_library = library_names[0] if library_names else ""  # Restore the deck's library reference as the instance Sim.Library.
-        record_result = _build_one_record(element, lib_id, symbol_node, hinted_lib_id, sim_library, hint_roles, hint_value)  # Build the component record.
+        record_result = _build_one_record(element, lib_id, symbol_node, hinted_lib_id, sim_library, hint_roles, hint_value, spice_order_based)  # Build the component record.
         if not record_result[0]:  # Stop when the record build reports a failure.
             return record_result  # Return the record error unchanged.
         record = record_result[1]  # Read the finished component record.
@@ -812,6 +877,7 @@ def _build_one_record(  # Build one component record from a resolved device and 
     sim_library: str = "",  # Accept the deck's referenced library filename for Sim.Library recovery.
     hint_roles: str = "",  # Accept the forward-converter Sim.Pins role mapping hint.
     hint_value: str = "",  # Accept the forward-converter display value hint.
+    spice_order_based: bool = False,  # Accept whether the symbol pin numbers are SpiceOrders.
 ) -> BuildResult:  # Return the built record or a failure.
     short_name = _split_lib_id(lib_id)[1]  # Read the short symbol name for sub-symbol lookup.
     symbol_props = _collect_properties(symbol_node)  # Collect the library symbol properties.
@@ -822,7 +888,7 @@ def _build_one_record(  # Build one component record from a resolved device and 
         message = f"UNKNOWN_SYMBOL: symbol '{lib_id}' has no pin definitions for unit 1"  # Explain the missing pin graphics.
         return False, None, message, element.line_number  # Return the unknown symbol error with the element line.
     pins = pins_result[1]  # Read the pin geometry mapping.
-    pin_map = _build_pin_map(symbol_props, pins, element.nodes)  # Map netlist nodes onto pin numbers.
+    pin_map = _build_pin_map(symbol_props, pins, element.nodes, spice_order_based)  # Map netlist nodes onto pin numbers.
     prefix = element.prefix  # Read the device prefix.
     payload = element.tokens[1 + len(element.nodes):]  # Read the payload tokens after the nodes.
     power = symbol_node.find_child("power") is not None  # Detect power symbols from the library definition.
@@ -931,7 +997,16 @@ def _build_pin_map(  # Map netlist node positions onto symbol pin numbers.
     symbol_props: Dict[str, str],  # Accept the library symbol properties.
     pins: Dict[str, Tuple[float, float, str]],  # Accept the pin geometry mapping.
     nodes: Sequence[str],  # Accept the netlist node tokens in SPICE order.
+    spice_order_based: bool = False,  # Accept whether the symbol pin numbers are SpiceOrders.
 ) -> Dict[int, str]:  # Return the node-index to pin-number mapping.
+    if spice_order_based:  # ASY-derived symbols number their pins by SpiceOrder, so node index i maps onto SpiceOrder i + 1.
+        spice_pin_map = _spice_order_pin_map(pins)  # Read the symbol's SpiceOrder pin numbers.
+        if spice_pin_map is not None:  # Use the exact SpiceOrder mapping when the pin numbers are integers.
+            return {
+                index: spice_pin_map[index + 1]
+                for index in range(len(nodes))
+                if index + 1 in spice_pin_map
+            }  # Return the SpiceOrder-mapped pins, leaving uncovered filler nodes unmapped.
     sim_device = symbol_props.get("Sim.Device", "").upper()  # Read the simulation device class.
     sim_pins_text = symbol_props.get("Sim.Pins", "")  # Read the Sim.Pins role mapping.
     role_map: Dict[str, str] = {}  # Map SPICE roles onto pin numbers.
@@ -2983,7 +3058,7 @@ def _write_generated_subcircuit_symbol_file(  # Dynamically generate a validated
     for candidate_node in fallback_root.find_children("symbol"):  # Walk the top-level symbol definitions.
         candidate_values = [child.value for child in candidate_node.children if child.is_atom]  # Collect the name atoms.
         if candidate_values and str(candidate_values[0]) == lib_id:  # Match the expected qualified identifier.
-            return True, (lib_id, candidate_node), "", 0  # Return the generated symbol.
+            return True, (lib_id, candidate_node, False, True), "", 0  # Return the generated symbol with positional pin numbering.
     return False, None, "ASY_PARSE_ERROR: generated subcircuit symbol file is missing its symbol definition", 0  # Return the parse error.
 
 
@@ -4060,6 +4135,10 @@ def _normalize_convert_settings(convert_settings: Mapping) -> Tuple[bool, Option
     placement_strategy = settings.get("kicad_placement_strategy", _PLACEMENT_STRATEGY)
     if placement_strategy not in ("physics", "evolutionary", "hybrid", "flow"):
         return False, None
+    gaps_value = settings.get("kicad_sch_allow_spice_order_gaps", True)  # Read the sparse SpiceOrder acceptance toggle.
+    if not isinstance(gaps_value, bool):  # Require a boolean toggle.
+        return False, None  # Signal the settings failure.
+    settings["kicad_sch_allow_spice_order_gaps"] = gaps_value  # Store the validated toggle.
     integer_limits = {
         "kicad_evolutionary_population": (2, None),
         "kicad_evolutionary_generations": (1, None),

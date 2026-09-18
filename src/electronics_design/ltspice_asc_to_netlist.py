@@ -24,6 +24,7 @@ import numpy as np
 
 from . import ltspice_asc as _asc
 from . import ltspice_asy as _asy
+from . import ltspice_library as _library
 from . import ltspice_net as _net
 from ._parallel import configure_parallel_workers
 from ._parallel import parallel_worker_count
@@ -40,7 +41,6 @@ _DEFAULT_ANALYSIS_DIRECTIVE = ".op"
 _OK_RESULT: ConversionResult = (True, "OK", 0)
 _LIBRARY_FILE_SUFFIXES = {".bjt", ".dio", ".jft", ".lib", ".mos", ".sub"}
 _SYMBOL_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, "SymbolDefinition"]] = {}
-_SYMBOL_FILEPATH_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, str]] = {}
 _LIBRARY_LOOKUP_CACHE: Dict[Tuple[str, ...], Dict[str, str]] = {}
 _SYMBOL_CACHE_LOCK = RLock()
 
@@ -403,15 +403,7 @@ def _split_embedded_commands(command_text: str) -> Tuple[str, ...]:
 
 
 def _resolve_search_roots(convert_settings: Mapping[str, object]) -> Tuple[str, ...]:
-    custom_search_paths = _normalize_custom_search_paths(convert_settings.get("custom_search_paths", ()))
-    wine_path = _normalize_search_path(convert_settings.get("ltspice_wine_path", ""))
-    windows_path = _normalize_search_path(convert_settings.get("ltspice_windows_path", ""))
-    search_roots: List[str] = []
-    for candidate_path in (*custom_search_paths, wine_path, windows_path):
-        if candidate_path == "" or candidate_path in search_roots:
-            continue
-        search_roots.append(candidate_path)
-    return tuple(search_roots)
+    return _library.resolve_search_roots(convert_settings)
 
 
 def _resolve_search_roots_for_asc(asc_filepath: str, convert_settings: Mapping[str, object]) -> Tuple[str, ...]:
@@ -437,32 +429,6 @@ def _discover_local_search_roots(asc_filepath: str) -> Tuple[str, ...]:
             search_roots.append(str(parent))
             break
     return tuple(search_roots)
-
-
-def _normalize_custom_search_paths(value: object) -> Tuple[str, ...]:
-    if value is None:
-        return ()
-    if isinstance(value, (str, os.PathLike)):
-        return (_normalize_search_path(value),)
-    try:
-        values = tuple(value)
-    except TypeError:
-        return ()
-    return tuple(
-        normalized_path
-        for normalized_path in (_normalize_search_path(item) for item in values)
-        if normalized_path != ""
-    )
-
-
-def _normalize_search_path(value: object) -> str:
-    try:
-        path_string = os.fspath(value).strip()
-    except TypeError:
-        return ""
-    if path_string == "":
-        return ""
-    return os.path.expanduser(path_string)
 
 
 def _resolve_windows_ltspice_path(convert_settings: Mapping[str, object]) -> str:
@@ -499,18 +465,7 @@ def _build_symbol_lookup(search_roots: Sequence[str]) -> Dict[str, SymbolDefinit
 
 
 def _build_symbol_filepath_lookup(search_roots: Sequence[str]) -> Dict[str, str]:
-    cache_key = tuple(search_roots)
-    with _SYMBOL_CACHE_LOCK:
-        cached_lookup = _SYMBOL_FILEPATH_LOOKUP_CACHE.get(cache_key)
-    if cached_lookup is not None:
-        return cached_lookup
-    lookup: Dict[str, str] = {}
-    for filepath, relative_path, filename, stem in _discover_symbol_records(search_roots):
-        lookup.setdefault(relative_path.lower(), filepath)
-        lookup.setdefault(filename.lower(), filepath)
-        lookup.setdefault(stem.lower(), filepath)
-    with _SYMBOL_CACHE_LOCK:
-        return _SYMBOL_FILEPATH_LOOKUP_CACHE.setdefault(cache_key, lookup)
+    return _library.build_asy_filepath_lookup(search_roots)
 
 
 def _discover_symbol_records(
@@ -529,19 +484,7 @@ def _discover_symbol_records(
 
 
 def _discover_symbol_records_for_root(symbol_root: str) -> List[Tuple[str, str, str, str]]:
-    if not os.path.isdir(symbol_root):
-        return []
-    records: List[Tuple[str, str, str, str]] = []
-    for symbol_path in Path(symbol_root).rglob("*.asy"):
-        records.append(
-            (
-                str(symbol_path),
-                symbol_path.relative_to(symbol_root).as_posix(),
-                symbol_path.name,
-                symbol_path.stem,
-            )
-        )
-    return records
+    return _library.discover_asy_records_for_root(symbol_root)
 
 
 def _load_symbol_record(

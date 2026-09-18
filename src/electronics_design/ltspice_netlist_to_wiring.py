@@ -21,6 +21,7 @@ from typing import Tuple
 import numpy as np
 
 from . import ltspice_asc as _asc
+from . import ltspice_library as _library
 from . import ltspice_net as _net
 from ._parallel import configure_parallel_workers
 from ._parallel import parallel_worker_count
@@ -83,6 +84,9 @@ def ltspice_netlist_to_wiring(
     route_settings = _resolve_route_settings(convert_settings)
     if route_settings is None:
         return False, "INVALID_CONVERT_SETTINGS", 0
+    allow_spice_order_mismatch = convert_settings.get("ltspice_allow_spice_order_mismatch", False)  # Read the strict X-line validation toggle.
+    if not isinstance(allow_spice_order_mismatch, bool):  # Require a boolean toggle.
+        return False, "INVALID_CONVERT_SETTINGS", 0  # Reject malformed toggles.
     format_validation_result = _net.is_valid_ltspice_netlist_format(netlist_filepath)
     if not format_validation_result[0]:
         return False, "INVALID_NETLIST_FILE", _line_number_from_message(format_validation_result[1], 0)
@@ -105,6 +109,7 @@ def ltspice_netlist_to_wiring(
         route_settings["minimum_dist"],
         route_settings["wire_pin_out_dist"],
         routing_grid,
+        allow_spice_order_mismatch,
     )
     if not net_attachments_result[0]:
         return False, net_attachments_result[1], net_attachments_result[2]
@@ -319,8 +324,10 @@ def _collect_net_pin_attachments(
     minimum_dist: int,
     wire_pin_out_dist: int,
     routing_grid: int,
+    allow_spice_order_mismatch: bool = False,
 ) -> Tuple[bool, str, int, Dict[str, Tuple[NetPinAttachment, ...]]]:
     attachments_by_net: Dict[str, List[NetPinAttachment]] = {}
+    node_devices = _build_node_device_index(logical_lines)  # Index every node onto the devices that reference it.
     exit_distance = minimum_dist + wire_pin_out_dist
     for logical_line in logical_lines:
         if logical_line.kind != "device":
@@ -340,6 +347,15 @@ def _collect_net_pin_attachments(
         node_names = node_result[1]
         if not node_names or not symbol_entry.pins:
             continue
+        if tokens[0][0].upper() == "X" and not allow_spice_order_mismatch:  # Validate X lines before silently dropping or ignoring pins.
+            coverage_error = _library.validate_x_pin_coverage(
+                instance_name,
+                node_names,
+                [pin.spice_order for pin in symbol_entry.pins],
+                node_devices,
+            )  # Check every pin against the X line and every uncovered node against the connectivity index.
+            if coverage_error is not None:  # Stop on the first electrically wrong X line.
+                return False, coverage_error, logical_line.line_number, {}
         for pin in symbol_entry.pins:
             node_index = pin.spice_order - 1
             if node_index < 0 or node_index >= len(node_names):
@@ -381,6 +397,24 @@ def _collect_net_pin_attachments(
             )
         )
     return True, "OK", 0, normalized_attachments
+
+
+def _build_node_device_index(logical_lines: Sequence[LogicalCodeLine]) -> Dict[str, Set[str]]:
+    device_nodes: List[Tuple[str, Sequence[str]]] = []
+    for logical_line in logical_lines:
+        if logical_line.kind != "device":
+            continue
+        tokens = logical_line.text.split()
+        if not tokens or tokens[0][0].upper() == "K":
+            continue
+        instance_name = _normalize_instance_name(tokens[0])
+        if instance_name == "":
+            continue
+        node_result = _net._extract_nodes(tokens)
+        if not node_result[0]:
+            continue
+        device_nodes.append((instance_name, node_result[1]))
+    return _library.build_node_device_index(device_nodes)
 
 
 def _normalize_instance_name(instance_token: str) -> str:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Keep annotation handling consistent across the project.
 
+import importlib  # Import the netlist-to-KiCad module internals for the sparse-coverage and nested-lookup tests.
 import os  # Read the optional KiCad path environment override.
 from pathlib import Path  # Use pathlib for clear path handling.
 import tempfile  # Use a temporary directory for round-trip netlist outputs.
@@ -19,6 +20,8 @@ _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]  # Resolve the project roo
 _NETLIST_DIRECTORY = _ROOT_DIRECTORY / "kicad_convert" / "netlist"  # Point at the checked-in LTspice netlist files.
 
 _KICAD_PATH = os.environ.get("ELECTRONICS_DESIGN_KICAD_PATH", "/usr/share/kicad")  # Resolve the KiCad library path with an optional environment override.
+
+_SCH_MODULE = importlib.import_module("electronics_design.ltspice_netlist_to_kicad_sch")  # Access the module internals, since the package re-exports the public function under the same name.
 
 _CONVERT_SETTINGS = {  # Pin the settings so generated files are reproducible.
     "kicad_path": _KICAD_PATH,  # Look symbols up from the configured KiCad installation path.
@@ -321,6 +324,120 @@ class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-sc
             self.assertEqual(result[0], False, msg="Unresolvable symbols must fail conversion.")  # Require failure.
             self.assertTrue(result[1].startswith("UNKNOWN_SYMBOL"), msg=f"Unresolvable symbols must report UNKNOWN_SYMBOL but returned: {result[1]}")  # Require the symbol error code.
             self.assertGreater(result[2], 0, msg="Symbol failures must report the element source line.")  # Require a real line number.
+
+    def test_unknown_symbol_diagnostics_are_actionable(self) -> None:  # Require the error payload to name the ASY search surface and a close match.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the crafted input, output, and nested symbol.
+            symbol_root = Path(temporary_directory)  # Use the scratch directory as the only configured search root.
+            nested_directory = symbol_root / "lib" / "sym" / "MyParts"  # Build a nested LTspice-style category directory.
+            nested_directory.mkdir(parents=True)  # Create the nested directory tree.
+            close_symbol = _ROOT_DIRECTORY / "test_files" / "netlist_to_asc" / "symbols" / "LTC3895.asy"  # Reuse a real symbol as a close-stem decoy.
+            (nested_directory / "MissingSubcktX.asy").write_bytes(close_symbol.read_bytes())  # Plant a close-stem symbol under the nested directory.
+            crafted_path = symbol_root / "crafted.net"  # Derive the crafted netlist path.
+            crafted_path.write_text(  # Write a valid netlist that references an unresolvable subcircuit.
+                "R1 a 0 1k\nXU1 a b MissingSubckt\nR2 b 0 1k\n.tran 1\n.backanno\n.end\n",  # Use two resistors to keep nodes connected.
+                encoding="utf-8",  # Write UTF-8 text.
+            )  # Finish writing the crafted netlist.
+            settings = dict(_CONVERT_SETTINGS)  # Copy the shared settings before overriding the symbol roots.
+            settings["custom_search_paths"] = [str(symbol_root)]  # Search only the scratch root.
+            result = ltspice_netlist_to_kicad_sch(str(crafted_path), str(symbol_root / "crafted.kicad_sch"), settings)  # Convert the crafted netlist.
+            self.assertFalse(result[0], msg="Unresolvable symbols must fail conversion.")  # Require failure.
+            self.assertIn("Tried ASY names: MissingSubckt.asy", result[1], msg="The error must name every candidate ASY basename.")  # Require the tried basenames.
+            self.assertIn(f"Search roots: {symbol_root}", result[1], msg="The error must name every resolved root.")  # Require the resolved root.
+            self.assertIn("Checked paths:", result[1], msg="The error must name the concrete paths attempted.")  # Require the attempted paths.
+            self.assertIn("lib/sym/<category>/", result[1], msg="The error must explain the common nested layout.")  # Require the nested-layout note.
+            self.assertIn(str(nested_directory), result[1], msg="The error must suggest the directory holding the closest match.")  # Require the close-match suggestion.
+
+    def test_sparse_spice_order_x_line_resolves(self) -> None:  # Accept 39-node X lines against the sparse 28-pin LTC3895 symbol.
+        settings = dict(_CONVERT_SETTINGS)  # Copy the shared settings before overriding the symbol roots.
+        settings["custom_search_paths"] = [str(_ROOT_DIRECTORY / "test_files" / "netlist_to_asc" / "symbols")]  # Point at the sparse fixture symbols.
+        normalized_ok, normalized = _SCH_MODULE._normalize_convert_settings(settings)  # Normalize the settings exactly like the public API.
+        self.assertTrue(normalized_ok, msg="The fixture settings must normalize successfully.")  # Require usable settings.
+        netlist_path = _ROOT_DIRECTORY / "test_files" / "netlist_to_asc" / "large_power_supply.net"  # Use the real 39-node fixture deck.
+        lines = netlist_path.read_text(encoding="utf-8").splitlines()  # Read the fixture netlist lines.
+        elements = _SCH_MODULE._parse_elements(lines)[1]  # Parse the netlist elements.
+        model_types = _SCH_MODULE._build_model_types(lines, normalized)  # Parse the model polarity mapping.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for ASY conversions.
+            result = _SCH_MODULE._build_component_records(elements, model_types, normalized, temporary_directory)  # Resolve every device.
+            self.assertTrue(result[0], msg=f"Sparse SpiceOrder X lines must resolve but returned: {result[2]}")  # Require successful resolution.
+            records = result[1][0]  # Read the resolved component records.
+            buck = next(record for record in records if record["reference"] == "BUCKP")  # Select one LTC3895 instance.
+            self.assertEqual(buck["lib_id"], "LTC3895:LTC3895", msg="The fixture LTC3895 must resolve through the ASY fallback.")  # Require the embedded ASY symbol.
+            self.assertEqual(len(buck["pin_map"]), 28, msg="Only the 28 real SpiceOrder pins may map onto the 39-node X line.")  # Require the sparse mapping.
+            self.assertNotIn(8, buck["pin_map"], msg="The unfilled SpiceOrder 9 position must stay unmapped.")  # Require the gap to stay unmapped.
+            self.assertEqual(buck["pin_map"].get(9), "10", msg="Node index 9 must map onto SpiceOrder 10.")  # Require exact SpiceOrder mapping.
+            self.assertEqual(buck["pin_map"].get(38), "39", msg="Node index 38 must map onto SpiceOrder 39.")  # Require the last SpiceOrder mapping.
+            strict_settings = dict(normalized)  # Copy the normalized settings for the strict path.
+            strict_settings["kicad_sch_allow_spice_order_gaps"] = False  # Disable the sparse SpiceOrder acceptance.
+            with tempfile.TemporaryDirectory() as strict_directory:  # Create a second scratch directory for the strict attempt.
+                strict_result = _SCH_MODULE._build_component_records(elements, model_types, strict_settings, strict_directory)  # Resolve every device strictly.
+            self.assertFalse(strict_result[0], msg="Disabling sparse SpiceOrder gaps must reject the 39-node X line.")  # Require failure.
+            self.assertTrue(str(strict_result[2]).startswith("UNKNOWN_SYMBOL"), msg=f"Expected UNKNOWN_SYMBOL but got: {strict_result[2]}")  # Require the resolution error.
+
+    def test_recursive_asy_lookup_finds_nested_symbols(self) -> None:  # Resolve symbols placed in lib/sym/<category> directories.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch LTspice-style tree.
+            symbol_root = Path(temporary_directory)  # Use the scratch directory as the only configured search root.
+            fixture_symbols = _ROOT_DIRECTORY / "test_files" / "netlist_to_asc" / "symbols"  # Read the sparse fixture symbols.
+            for category, symbol_name in (("PowerProducts", "LTC3895.asy"), ("SpecialFunctions", "LT4320-1.asy")):  # Place each symbol in its own nested category.
+                nested_directory = symbol_root / "lib" / "sym" / category  # Build the nested category directory.
+                nested_directory.mkdir(parents=True, exist_ok=True)  # Create the nested directory tree.
+                (nested_directory / symbol_name).write_bytes((fixture_symbols / symbol_name).read_bytes())  # Copy the fixture symbol.
+            settings = dict(_CONVERT_SETTINGS)  # Copy the shared settings before overriding the symbol roots.
+            settings["custom_search_paths"] = [str(symbol_root)]  # Search only the nested scratch tree.
+            normalized_ok, normalized = _SCH_MODULE._normalize_convert_settings(settings)  # Normalize the settings exactly like the public API.
+            self.assertTrue(normalized_ok, msg="The nested fixture settings must normalize successfully.")  # Require usable settings.
+            netlist_path = _ROOT_DIRECTORY / "test_files" / "netlist_to_asc" / "large_power_supply.net"  # Use the real multi-controller fixture deck.
+            lines = netlist_path.read_text(encoding="utf-8").splitlines()  # Read the fixture netlist lines.
+            elements = _SCH_MODULE._parse_elements(lines)[1]  # Parse the netlist elements.
+            model_types = _SCH_MODULE._build_model_types(lines, normalized)  # Parse the model polarity mapping.
+            with tempfile.TemporaryDirectory() as scratch_directory:  # Create a scratch directory for ASY conversions.
+                result = _SCH_MODULE._build_component_records(elements, model_types, normalized, scratch_directory)  # Resolve every device.
+            self.assertTrue(result[0], msg=f"Nested .asy symbols must resolve but returned: {result[2]}")  # Require successful nested resolution.
+            records = result[1][0]  # Read the resolved component records.
+            resolved_ids = {record["lib_id"] for record in records if record["prefix"] == "X"}  # Collect the X-device symbol identifiers.
+            self.assertEqual(resolved_ids, {"LTC3895:LTC3895", "LT4320-1:LT4320-1"}, msg="The nested symbols must resolve through the ASY fallback.")  # Require the nested symbols.
+
+    def test_sparse_spice_order_gap_round_trips(self) -> None:  # Preserve X-line node positions across a full round trip.
+        sparse_asy = (  # Define a minimal symbol whose pins skip SpiceOrder 3.
+            "Version 4.1\n"  # Use a supported ASY version header.
+            "SymbolType BLOCK\n"  # Use the block symbol type.
+            "RECTANGLE Normal 48 0 -48 -64\n"  # Draw a small body rectangle.
+            "WINDOW 0 0 -32 Center 2\n"  # Place the value window.
+            "SYMATTR Value SparsePart\n"  # Name the symbol value.
+            "SYMATTR Prefix X\n"  # Use the subcircuit reference prefix.
+            "SYMATTR Description Sparse SpiceOrder fixture\n"  # Describe the fixture.
+            "PIN 48 -16 RIGHT 8\nPINATTR PinName P1\nPINATTR SpiceOrder 1\n"  # Define the first port.
+            "PIN 48 -32 RIGHT 8\nPINATTR PinName P2\nPINATTR SpiceOrder 2\n"  # Define the second port.
+            "PIN 48 -48 RIGHT 8\nPINATTR PinName P4\nPINATTR SpiceOrder 4\n"  # Define the fourth port, skipping SpiceOrder 3.
+        )  # Finish the sparse symbol text.
+        netlist_text = "R1 a 0 1k\nR2 b 0 1k\nR3 c 0 1k\nXU1 a b NC_gap c SparsePart\n.tran 1\n.backanno\n.end\n"  # Keep every real node connected while position 3 stays an exempt filler.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the symbol, netlist, and outputs.
+            symbol_root = Path(temporary_directory)  # Use the scratch directory as the only configured search root.
+            (symbol_root / "SparsePart.asy").write_text(sparse_asy, encoding="utf-8")  # Write the sparse symbol fixture.
+            netlist_path = symbol_root / "sparse.net"  # Derive the crafted netlist path.
+            netlist_path.write_text(netlist_text, encoding="utf-8")  # Write the crafted netlist.
+            settings = dict(_CONVERT_SETTINGS)  # Copy the shared settings before overriding the symbol roots.
+            settings["custom_search_paths"] = [str(symbol_root)]  # Search only the scratch root.
+            schematic_path = symbol_root / "sparse.kicad_sch"  # Derive the generated schematic path.
+            forward_result = ltspice_netlist_to_kicad_sch(str(netlist_path), str(schematic_path), settings)  # Generate the KiCad schematic.
+            self.assertEqual(forward_result, (True, "OK", 0), msg=f"sparse SpiceOrder decks must convert: {forward_result}")  # Require successful forward conversion.
+            round_trip_path = symbol_root / "sparse.rt.net"  # Derive the round-trip netlist path.
+            reverse_result = kicad_sch_to_ltspice_netlist(str(schematic_path), str(round_trip_path), settings)  # Convert the schematic back.
+            self.assertEqual(reverse_result, (True, "OK", 0), msg=f"sparse SpiceOrder schematics must convert back: {reverse_result}")  # Require successful reverse conversion.
+            round_trip_lines = round_trip_path.read_text(encoding="utf-8").splitlines()  # Read the emitted netlist lines.
+            x_node_tokens = []  # Collect the emitted X-line nodes.
+            resistor_nodes = set()  # Collect the real resistor nodes.
+            for raw_line in round_trip_lines:  # Walk every emitted device line.
+                tokens = raw_line.split()  # Split the line into tokens.
+                if not tokens:  # Skip blank lines.
+                    continue  # Move to the next line.
+                if tokens[0].upper().startswith("X"):  # Capture the X subcircuit call.
+                    x_node_tokens = tokens[1:]  # Read the nodes and the trailing subcircuit name.
+                elif tokens[0].upper().startswith("R"):  # Capture the resistor nodes.
+                    resistor_nodes.update(node for node in tokens[1:3] if node not in {"0", "GND"})  # Record the non-ground nodes.
+            self.assertEqual(len(x_node_tokens), 5, msg="The reverse conversion must emit four nodes plus the subcircuit name.")  # Require the gap-preserving node list.
+            x_nodes = x_node_tokens[:-1]  # Drop the trailing subcircuit name.
+            self.assertTrue(x_nodes[2].upper().startswith("NC"), msg="The uncovered SpiceOrder position must become an NC filler.")  # Require the filler.
+            self.assertEqual({x_nodes[0], x_nodes[1], x_nodes[3]}, resistor_nodes, msg="Real nets must land on their SpiceOrder positions.")  # Require positionally correct connectivity.
 
 
 if __name__ == "__main__":  # Allow running the module directly for debugging.

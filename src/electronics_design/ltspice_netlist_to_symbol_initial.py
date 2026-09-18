@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 import os
 from pathlib import Path
@@ -17,8 +18,10 @@ from typing import Tuple
 
 from . import ltspice_asc as _asc
 from . import ltspice_asc_to_netlist as _asc_to_netlist
+from . import ltspice_library as _library
 from . import ltspice_net as _net
 from ._parallel import configure_parallel_workers
+from .ltspice_asy import get_ltspice_asy_pins as _get_ltspice_asy_pins
 
 ConversionResult = Tuple[bool, str, int]
 
@@ -67,6 +70,9 @@ def ltspice_netlist_to_symbol_initial(
     voltage_must_have_dc = _net._resolve_voltage_must_have_dc(convert_settings)
     if voltage_must_have_dc is None:
         return False, "INVALID_CONVERT_SETTINGS", 0
+    allow_spice_order_mismatch = convert_settings.get("ltspice_allow_spice_order_mismatch", False)  # Read the strict X-line validation toggle.
+    if not isinstance(allow_spice_order_mismatch, bool):
+        return False, "INVALID_CONVERT_SETTINGS", 0
     if not _coerce_path_success(symbol_json_filepath_out):
         return False, "INVALID_OUTPUT_PATH", 0
     _net.is_valid_ltspice_netlist_file(netlist_filepath)
@@ -91,6 +97,10 @@ def ltspice_netlist_to_symbol_initial(
         comment_symbol_hints,
         voltage_must_have_dc,
     )
+    if not allow_spice_order_mismatch:  # Validate X-line node coverage against the resolved .asy SpiceOrders.
+        coverage_result = _validate_x_pin_coverage(logical_lines, symbol_initial, symbol_path_lookup)  # Check every X device before writing.
+        if coverage_result is not None:  # Stop on the first electrically wrong X line.
+            return coverage_result  # Return the X_PIN_COUNT_MISMATCH error.
     write_result = _write_symbol_json_file(symbol_json_filepath_out, symbol_initial)
     if not write_result[0]:
         return False, write_result[1], 0
@@ -679,6 +689,51 @@ def _symbol_relative_path_from_lookup(symbol_name: str, symbol_path_lookup: Mapp
     if best_key is None:
         return None
     return Path(best_key).stem
+
+
+@lru_cache(maxsize=512)
+def _asy_spice_orders(filepath: str) -> Tuple[int, ...]:
+    try:
+        return tuple(int(pin_row[3]) for pin_row in _get_ltspice_asy_pins(filepath))
+    except (IndexError, TypeError, ValueError):
+        return ()
+
+
+def _validate_x_pin_coverage(
+    logical_lines: Sequence[LogicalCodeLine],
+    symbol_records: Mapping[str, Mapping[str, object]],
+    symbol_path_lookup: Mapping[str, str],
+) -> Optional[ConversionResult]:
+    device_nodes: List[Tuple[str, Sequence[str]]] = []
+    x_lines: List[Tuple[LogicalCodeLine, str, Sequence[str]]] = []
+    for logical_line in logical_lines:
+        if logical_line.kind != "device":
+            continue
+        tokens = logical_line.text.split()
+        if not tokens or tokens[0][0].upper() == "K":
+            continue
+        instance_name = _normalize_instance_name(tokens[0])
+        node_result = _net._extract_nodes(tokens)
+        if not node_result[0]:
+            continue
+        device_nodes.append((instance_name, node_result[1]))
+        if tokens[0][0].upper() == "X":
+            x_lines.append((logical_line, instance_name, node_result[1]))
+    node_devices = _library.build_node_device_index(device_nodes)
+    for logical_line, instance_name, nodes in x_lines:
+        symbol_name = str(symbol_records.get(instance_name, {}).get("SYMBOL", ""))
+        if symbol_name == "":
+            continue
+        resolved_filepath = _asc_to_netlist._resolve_symbol_filepath(symbol_name, symbol_path_lookup)
+        if resolved_filepath is None:
+            continue
+        spice_orders = _asy_spice_orders(resolved_filepath)
+        if not spice_orders:
+            continue
+        coverage_error = _library.validate_x_pin_coverage(instance_name, nodes, spice_orders, node_devices)
+        if coverage_error is not None:
+            return False, coverage_error, logical_line.line_number
+    return None
 
 
 def _infer_x_symbol_name_from_library_context(
