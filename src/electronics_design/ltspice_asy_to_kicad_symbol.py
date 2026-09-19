@@ -12,11 +12,13 @@
 
 from __future__ import annotations  # Postpone annotation evaluation for forward references.
 
+from collections import OrderedDict  # Bound the process-level conversion cache with FIFO eviction.
 import datetime  # Derive the default KiCad format version from the current date.
 import math  # Compute arc geometry for KiCad arc records.
 import os  # Resolve and create filesystem paths for the output file.
 import re  # Parse line numbers out of validator messages.
 from numbers import Real  # Validate numeric settings values.
+import threading  # Guard the process-level conversion cache across worker threads.
 from typing import Any  # Type generic record tuples.
 from typing import Dict  # Type the collected SYMATTR attribute map.
 from typing import List  # Type collected record lists.
@@ -43,6 +45,12 @@ _WIDE_STROKE_WIDTH = 0.508  # Map LTspice Wide drawing width to KiCad millimeter
 _VERSION_PATTERN = re.compile(r"^\d{8}$")  # Match KiCad version tokens in YYYYMMDD date format.
 
 _LINE_SUFFIX_PATTERN = re.compile(r"Line (\d+)\s*$")  # Extract trailing line numbers from validator messages.
+
+_SYMBOL_CACHE_LIMIT = 256  # Bound the process-level cache so long sessions cannot grow without limit.
+
+_SYMBOL_TEXT_CACHE: "OrderedDict[Tuple[Any, ...], str]" = OrderedDict()  # Store validated generated symbol text per (input, settings) key.
+
+_SYMBOL_TEXT_CACHE_LOCK = threading.Lock()  # Guard the process-level cache across parallel symbol discovery.
 
 _PREFIX_TO_REFERENCE = {  # Map LTspice SYMATTR Prefix values onto KiCad reference designator prefixes.
     "X": "U",  # Subcircuit symbols become U-prefixed parts in KiCad.
@@ -153,6 +161,9 @@ def ltspice_asy_to_kicad_symbol(  # Convert one LTspice ASY symbol file into one
     - ``kicad_symbol_default_footprint``: footprint property (default ``""``).
     - ``kicad_symbol_default_datasheet``: datasheet property (default ``"~"``).
     - ``kicad_symbol_pin_length``: pin length in mm (default ``2.54``).
+    - ``kicad_symbol_cache``: reuse a process-level cache of validated generated
+      symbol text keyed by the input path, its mtime/size, and the settings
+      above (default ``True``).
 
     Returns ``(True, "OK", 0)`` on success or ``(False, "<error code>", <line>)``
     on failure.
@@ -169,6 +180,14 @@ def ltspice_asy_to_kicad_symbol(  # Convert one LTspice ASY symbol file into one
     if not input_result[0]:  # Stop when the input path is unusable.
         return False, "INVALID_ASY_FILE", 0  # Return the required ASY file error code.
     input_path = input_result[1]  # Read the coerced input path string.
+    cache_key = _symbol_cache_key(input_path, settings) if settings["cache"] else None  # Build the cache key when caching is enabled.
+    if cache_key is not None:  # Serve repeated conversions from the process-level cache.
+        cached_symbol_text = _cache_lookup_symbol_text(cache_key)  # Read the cached generated text.
+        if cached_symbol_text is not None:  # Reuse the exact validated text.
+            write_result = _write_text_file(output_path, cached_symbol_text)  # Write the cached text to the requested output.
+            if not write_result[0]:  # Stop when the output cannot be written.
+                return False, "WRITE_ERROR", 0  # Return the required write error code.
+            return True, "OK", 0  # Return success for the cache hit.
     validation_result = is_valid_ltspice_asy(input_path)  # Validate the ASY structure before conversion.
     if not validation_result[0]:  # Stop when the ASY file fails validation.
         return False, "INVALID_ASY_FILE", _line_from_message(validation_result[1])  # Return the failing source line.
@@ -187,6 +206,8 @@ def ltspice_asy_to_kicad_symbol(  # Convert one LTspice ASY symbol file into one
     generated_result = is_valid_kicad_symbol_file(output_path)  # Validate the freshly written symbol file.
     if not generated_result[0]:  # Stop when the generated file fails the symbol validator.
         return False, "INVALID_GENERATED_KICAD_SYMBOL", _line_from_message(generated_result[1])  # Return the failing output line.
+    if cache_key is not None:  # Remember the validated text for later conversions.
+        _cache_store_symbol_text(cache_key, symbol_text)
     return True, "OK", 0  # Return success when the conversion completed.
 
 
@@ -206,14 +227,51 @@ def _normalize_convert_settings(convert_settings: Mapping) -> Tuple[bool, Option
     pin_length_value = convert_settings.get("kicad_symbol_pin_length", _DEFAULT_PIN_LENGTH)  # Read the pin length override.
     if isinstance(pin_length_value, bool) or not isinstance(pin_length_value, Real) or pin_length_value <= 0:  # Require a positive numeric length.
         return False, None  # Signal the settings failure.
+    cache_value = convert_settings.get("kicad_symbol_cache", True)  # Read the process-level cache toggle.
+    if not isinstance(cache_value, bool):  # Require a boolean cache toggle.
+        return False, None  # Signal the settings failure.
     settings = {  # Assemble the normalized settings dictionary.
         "version": str(version_value),  # Store the checked version string.
         "generator": generator_value,  # Store the generator string.
         "footprint": str(footprint_value),  # Store the footprint property string.
         "datasheet": str(datasheet_value),  # Store the datasheet property string.
         "pin_length": float(pin_length_value),  # Store the numeric pin length.
+        "cache": cache_value,  # Store the validated cache toggle.
     }  # Finish the settings assembly.
     return True, settings  # Return the normalized settings dictionary.
+
+
+def _symbol_cache_key(input_path: str, settings: Mapping[str, Any]) -> Optional[Tuple[Any, ...]]:  # Build the process-level cache key for one conversion.
+    try:  # Read the input identity without racing the file.
+        file_stat = os.stat(input_path)  # Read the file metadata.
+    except OSError:  # Treat unreadable inputs as uncacheable.
+        return None  # Signal that the conversion cannot use the cache.
+    return (
+        os.path.abspath(input_path),  # Identify the source file.
+        file_stat.st_mtime_ns,  # Invalidate when the symbol content timestamp changes.
+        file_stat.st_size,  # Invalidate when the symbol content size changes.
+        settings["version"],  # Invalidate when the KiCad symbol version changes.
+        settings["generator"],  # Invalidate when the generator string changes.
+        settings["footprint"],  # Invalidate when the default footprint changes.
+        settings["datasheet"],  # Invalidate when the default datasheet changes.
+        settings["pin_length"],  # Invalidate when the pin length changes.
+    )  # Finish the cache key.
+
+
+def _cache_lookup_symbol_text(cache_key: Tuple[Any, ...]) -> Optional[str]:  # Read one cached generated symbol text.
+    with _SYMBOL_TEXT_CACHE_LOCK:  # Guard the shared cache.
+        cached_text = _SYMBOL_TEXT_CACHE.get(cache_key)  # Look the key up.
+        if cached_text is not None:  # Refresh the key's recency on a hit.
+            _SYMBOL_TEXT_CACHE.move_to_end(cache_key)  # Keep the most recently used keys.
+    return cached_text  # Return the cached text or None.
+
+
+def _cache_store_symbol_text(cache_key: Tuple[Any, ...], symbol_text: str) -> None:  # Remember one validated generated symbol text.
+    with _SYMBOL_TEXT_CACHE_LOCK:  # Guard the shared cache.
+        _SYMBOL_TEXT_CACHE[cache_key] = symbol_text  # Store the generated text.
+        _SYMBOL_TEXT_CACHE.move_to_end(cache_key)  # Mark the key as most recently used.
+        while len(_SYMBOL_TEXT_CACHE) > _SYMBOL_CACHE_LIMIT:  # Bound the cache size.
+            _SYMBOL_TEXT_CACHE.popitem(last=False)  # Evict the oldest entry.
 
 
 def _coerce_output_path(filepath: str) -> Tuple[bool, Optional[str]]:  # Convert the output path input into a filesystem string.

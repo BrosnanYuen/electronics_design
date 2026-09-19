@@ -96,6 +96,10 @@ _EVOLUTIONARY_POPULATION = 10  # Keep the default global search bounded for API 
 _EVOLUTIONARY_GENERATIONS = 6  # Default number of genetic placement generations.
 _ROUTING_TRIALS = 3  # Try complementary net orders and retain the best complete route.
 _TRACE_OPTIMIZATION_PASSES = 8  # Bound topology-preserving trace consolidation work.
+_WIRING_RETRIES = 2  # Default additional deterministic placement/routing attempts after the first.
+_WIRING_RETRY_MAX = 4  # Bound the retry ladder so conversions stay deterministic and time-limited.
+_WIRING_RETRY_PAGE_CEILING = "A2"  # Cap paper growth at A2 so retries stay useful and bounded.
+_TRANSIENT_ROUTING_RECORD_KEYS = ("routing_bounds", "pin_positions", "property_layout")  # Placement state rebuilt on every retry.
 _SYMBOL_BODY_PADDING = 1.27  # Extra body padding added around symbol graphics.
 _PLACEMENT_START_X = 25.4  # Initial placement row starts at this X coordinate in mm.
 _PLACEMENT_STEP_X = 25.4  # Initial placement row column spacing in mm.
@@ -271,7 +275,7 @@ def _build_schematic_text(lines: Sequence[str], input_path: str, settings: Dict[
         if not records_result[0]:  # Stop when symbol resolution reports a failure.
             return records_result  # Return the resolution error unchanged.
         records, embedded_symbols = records_result[1]  # Read the resolved component records and embedded symbols.
-        routing_result = _route_and_build(root_uuid=_root_uuid(input_path), records=records, settings=settings)  # Route nets and assemble the schematic nodes.
+        routing_result = _route_and_build_with_retries(root_uuid=_root_uuid(input_path), records=records, settings=settings)  # Route nets with a bounded retry ladder and assemble the schematic nodes.
         if not routing_result[0]:  # Stop when routing reports a failure.
             return routing_result  # Return the routing error unchanged.
         schematic_nodes = routing_result[1]  # Read the assembled schematic body nodes.
@@ -1549,6 +1553,88 @@ def _route_and_build(root_uuid: str, records: List[Dict[str, Any]], settings: Di
     return True, (wire_nodes, no_connect_nodes, label_nodes, symbol_nodes, embedded_extra, junction_nodes), "", 0  # Return the assembled schematic body.
 
 
+def _route_and_build_with_retries(root_uuid: str, records: List[Dict[str, Any]], settings: Dict[str, Any]) -> BuildResult:  # Run the wiring stage with a bounded deterministic retry ladder.
+    """Retry the placement and routing stage when wiring collides.
+
+    The first attempt reproduces the historical single-shot behavior. Later
+    attempts alternate to the hybrid placement engine, bump the placement seed,
+    and grow the paper along the A4 -> A3 -> A2 ladder until one attempt
+    produces complete isolated copper. The record placement state is restored
+    before every attempt so each retry starts from the same input.
+    """
+
+    retries = int(settings.get("kicad_sch_wiring_retries", _WIRING_RETRIES))  # Read the validated retry budget.
+    attempts = _wiring_attempt_ladder(settings, len(records), retries)  # Build the deterministic attempt plan.
+    snapshot = [(float(record["x"]), float(record["y"]), float(record["angle"])) for record in records]  # Capture the pre-placement record state.
+    last_result: Optional[BuildResult] = None  # Track the final failure.
+    for attempt in attempts:  # Walk the attempt plan in order.
+        _restore_records_for_routing(records, snapshot)  # Reset every record before the attempt.
+        attempt_settings = dict(settings)  # Copy the settings so attempts never leak into each other.
+        attempt_settings["kicad_placement_seed"] = attempt["seed"]  # Apply the attempt's deterministic seed.
+        if attempt["page"] is not None:  # Grow the paper for retries that requested a larger sheet.
+            attempt_settings["kicad_sch_page_width"] = attempt["page_width"]  # Set the attempt page width.
+            attempt_settings["kicad_sch_page_height"] = attempt["page_height"]  # Set the attempt page height.
+        result = _route_and_build(root_uuid, records, attempt_settings, forced_strategy=attempt["strategy"])  # Run one placement/routing attempt.
+        if result[0]:  # Stop at the first successful attempt.
+            return result  # Return the built schematic body.
+        last_result = result  # Remember the failure for the final report.
+        if not _is_retryable_wiring_failure(result[2]):  # Only wiring failures benefit from a fresh placement.
+            break  # Stop retrying on non-retryable failures.
+    return _enrich_wiring_failure(last_result, len(attempts))  # Report the exhausted ladder with the attempt count.
+
+
+def _wiring_attempt_ladder(settings: Dict[str, Any], symbol_count: int, retries: int) -> List[Dict[str, Any]]:  # Build the deterministic retry plan.
+    base_seed = int(settings.get("kicad_placement_seed", 0))  # Read the caller's deterministic placement seed.
+    attempts: List[Dict[str, Any]] = [{"strategy": None, "page": None, "page_width": None, "page_height": None, "seed": base_seed}]  # Always try the caller's setup first.
+    if retries <= 0:  # Honor a disabled retry budget.
+        return attempts  # Return the single historical attempt.
+    explicit_page = settings.get("kicad_sch_page_width") is not None or settings.get("kicad_sch_page_height") is not None  # Explicit page sizes are never overridden.
+    base_name, _base_width, _base_height = _page_size_for_symbol_count(settings, symbol_count)  # Resolve the caller's base paper.
+    ladder_names = [entry[0] for entry in _PAGE_LADDER]  # Index the paper ladder names.
+    base_index = ladder_names.index(base_name) if base_name in ladder_names else 0  # Start growing above the base paper.
+    ceiling_index = ladder_names.index(_WIRING_RETRY_PAGE_CEILING)  # Bound paper growth at the configured ceiling.
+    for retry_index in range(1, retries + 1):  # Build every additional attempt.
+        page_name: Optional[str] = None  # Default to the caller's page when the page cannot grow.
+        page_width: Optional[float] = None  # Default to the caller's page width.
+        page_height: Optional[float] = None  # Default to the caller's page height.
+        if not explicit_page:  # Grow the paper only when the caller left it automatic.
+            page_name = ladder_names[min(base_index + retry_index, ceiling_index)]  # Advance along the paper ladder.
+            for ladder_name, ladder_width, ladder_height in _PAGE_LADDER:  # Look the selected paper dimensions up.
+                if ladder_name == page_name:  # Match the chosen page.
+                    page_width, page_height = ladder_width, ladder_height  # Read the chosen dimensions.
+                    break  # Stop searching.
+        attempts.append({  # Append the retry attempt.
+            "strategy": "hybrid",  # Use the deterministic hybrid engine as the alternate placer.
+            "page": page_name,  # Store the optional page name.
+            "page_width": page_width,  # Store the optional page width.
+            "page_height": page_height,  # Store the optional page height.
+            "seed": base_seed + retry_index,  # Bump the seed deterministically per attempt.
+        })
+    return attempts  # Return the bounded attempt plan.
+
+
+def _restore_records_for_routing(records: Sequence[Dict[str, Any]], snapshot: Sequence[Tuple[float, float, float]]) -> None:  # Reset every record to its pre-placement state.
+    for record, (origin_x, origin_y, origin_angle) in zip(records, snapshot):  # Walk every captured record.
+        record["x"] = origin_x  # Restore the placement X.
+        record["y"] = origin_y  # Restore the placement Y.
+        record["angle"] = origin_angle  # Restore the placement angle.
+        for key in _TRANSIENT_ROUTING_RECORD_KEYS:  # Drop state that the routing stage rebuilds.
+            record.pop(key, None)  # Remove any transient routing key.
+
+
+def _is_retryable_wiring_failure(message: Any) -> bool:  # Decide whether a failed attempt benefits from a fresh placement.
+    return str(message).startswith("WIRING_GENERATION_ERROR")  # Only wiring failures are retryable.
+
+
+def _enrich_wiring_failure(result: Optional[BuildResult], attempt_count: int) -> BuildResult:  # Report the exhausted retry ladder.
+    if result is None:  # Guard against an empty attempt plan.
+        return False, None, "WIRING_GENERATION_ERROR: routing failed without a diagnostic", 0  # Return a defensive failure.
+    message = str(result[2])  # Read the final failure message.
+    if _is_retryable_wiring_failure(message) and attempt_count > 1:  # Name the attempt count once the ladder is exhausted.
+        message = f"{message} (all {attempt_count} deterministic placement/routing attempts failed)"  # Append the bounded-attempt report.
+    return False, result[1], message, result[3]  # Return the enriched failure tuple.
+
+
 def _routed_nets_are_isolated(
     segments_by_net: Mapping[str, Sequence[Tuple[Tuple[float, float], Tuple[float, float]]]],
     nets: Mapping[str, Sequence[Tuple[int, str, float, float]]],
@@ -2010,6 +2096,16 @@ def _relocate_power_on_net(  # Move one voltage-power symbol onto a body-clear a
     return True  # Report the relocation.
 
 
+def _power_overlap_description(record: Dict[str, Any]) -> str:  # Describe one power record with its attachment pin and coordinates.
+    pin_positions = record.get("pin_positions") or {}  # Read the attached pin positions when the fallback stages recorded them.
+    if pin_positions:  # Prefer the exact attachment point for diagnostics.
+        attachment = next(iter(pin_positions.values()))  # Read the first attached pin position.
+        location = f"pin at ({_format_number(attachment[0])}, {_format_number(attachment[1])})"  # Describe the attachment point.
+    else:  # Fall back to the symbol origin when no pin position is recorded.
+        location = f"at ({_format_number(record['x'])}, {_format_number(record['y'])})"  # Describe the symbol origin.
+    return f"power symbol '{record['reference']}' {location} intersects a symbol body"  # Return the actionable overlap description.
+
+
 def _repair_power_body_overlaps(  # Guarantee no power symbol body intersects another symbol body.
     records: Sequence[Dict[str, Any]],  # Accept every component record including voltage power symbols.
     ground_records: Sequence[Dict[str, Any]],  # Accept the generated GND records.
@@ -2037,7 +2133,7 @@ def _repair_power_body_overlaps(  # Guarantee no power symbol body intersects an
                 ground_overlaps = True  # Request another GND repair pass.
                 continue  # Move to the next record.
             if not _relocate_power_on_net(record, segments_by_net, placed_bodies, grid, page_width, page_height, all_pin_points, others):  # Relocate onto clear net copper.
-                unresolved.append(f"power symbol '{record['reference']}' intersects a symbol body")  # Report the unfixable overlap.
+                unresolved.append(_power_overlap_description(record))  # Report the unfixable overlap with its coordinates.
         if not ground_overlaps and not unresolved:  # Everything is clear.
             return []  # Report full clearance.
         if ground_overlaps:  # Repair the GND attachments once more against the updated placements.
@@ -2049,7 +2145,7 @@ def _repair_power_body_overlaps(  # Guarantee no power symbol body intersects an
         rect = _record_body_rect(record, "text_bounds")  # Measure the current drawn body.
         others = _other_symbol_body_rects(record, records, ground_records)  # Collect every other body rectangle.
         if any(_rects_strictly_overlap(rect, body) for body in others):  # Detect leftover overlaps.
-            remaining.append(f"power symbol '{record['reference']}' intersects a symbol body")  # Report the overlap.
+            remaining.append(_power_overlap_description(record))  # Report the overlap with its coordinates.
     return remaining  # Return the unresolved overlaps.
 
 
@@ -4139,12 +4235,17 @@ def _normalize_convert_settings(convert_settings: Mapping) -> Tuple[bool, Option
     if not isinstance(gaps_value, bool):  # Require a boolean toggle.
         return False, None  # Signal the settings failure.
     settings["kicad_sch_allow_spice_order_gaps"] = gaps_value  # Store the validated toggle.
+    cache_value = settings.get("kicad_symbol_cache", True)  # Read the ASY conversion cache toggle.
+    if not isinstance(cache_value, bool):  # Require a boolean cache toggle.
+        return False, None  # Signal the settings failure.
+    settings["kicad_symbol_cache"] = cache_value  # Store the validated cache toggle.
     integer_limits = {
         "kicad_evolutionary_population": (2, None),
         "kicad_evolutionary_generations": (1, None),
         "kicad_placement_seed": (0, None),
         "kicad_routing_trials": (1, 3),
         "kicad_trace_optimization_passes": (0, None),
+        "kicad_sch_wiring_retries": (0, _WIRING_RETRY_MAX),
     }
     for integer_key, (minimum, maximum) in integer_limits.items():
         value = settings.get(integer_key)

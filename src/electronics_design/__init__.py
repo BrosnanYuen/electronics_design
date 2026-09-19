@@ -18,6 +18,9 @@ from .ltspice import is_valid_ltspice_asc_spacing  # Re-export the ASC spacing v
 from .ltspice import is_valid_ltspice_asy  # Re-export the ASY validator.
 from .ltspice import get_ltspice_asy_size  # Re-export the ASY size helper.
 from .ltspice import get_ltspice_asy_pins  # Re-export the ASY pin extraction helper.
+from .ltspice import get_ltspice_asy_spice_orders  # Re-export the ASY SpiceOrder extraction helper.
+from .ltspice import get_ltspice_asy_pin_count  # Re-export the ASY pin count helper.
+from .ltspice import get_ltspice_netlist_device_pins  # Re-export the netlist device pin introspection helper.
 from .ltspice import rectangle_points_to_lines  # Re-export the rectangle edge helper.
 from .ltspice import ltspice_asc_to_netlist  # Re-export the ASC-to-netlist conversion helper.
 from .ltspice import ltspice_asc_structure_cmp  # Re-export the ASC structural comparison helper.
@@ -62,6 +65,9 @@ __all__ = [  # Define the supported public API surface.
     "is_valid_ltspice_asy",  # Export the ASY validator name.
     "get_ltspice_asy_size",  # Export the ASY size helper name.
     "get_ltspice_asy_pins",  # Export the ASY pin extraction helper name.
+    "get_ltspice_asy_spice_orders",  # Export the ASY SpiceOrder extraction helper name.
+    "get_ltspice_asy_pin_count",  # Export the ASY pin count helper name.
+    "get_ltspice_netlist_device_pins",  # Export the netlist device pin introspection helper name.
     "rectangle_points_to_lines",  # Export the rectangle edge helper name.
     "ltspice_asc_to_netlist",  # Export the ASC-to-netlist conversion helper name.
     "ltspice_asc_structure_cmp",  # Export the ASC structural comparison helper name.

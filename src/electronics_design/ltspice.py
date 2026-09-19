@@ -9,6 +9,7 @@ from . import ltspice_asc_to_netlist as _asc_to_netlist  # Import the ASC-to-net
 from . import ltspice_autoplace_symbol_pose as _autoplace_symbol_pose  # Import the symbol autoplace module.
 from . import ltspice_asy as _asy  # Import the ASY-specific implementation module.
 from . import ltspice_net as _net  # Import the netlist-specific implementation module.
+from . import ltspice_netlist_introspection as _netlist_introspection  # Import the netlist symbol-pin introspection module.
 from . import ltspice_netlist_to_asc as _netlist_to_asc  # Import the netlist-to-ASC orchestration module.
 from . import ltspice_netlist_to_symbol_initial as _netlist_to_symbol_initial  # Import the netlist-to-symbol-initial conversion module.
 from . import ltspice_netlist_symbol_wire_to_asc as _netlist_symbol_wire_to_asc  # Import the netlist/symbol/wire-to-ASC conversion module.
@@ -41,7 +42,10 @@ ltspice_symbol_estimate = _symbol_estimate.ltspice_symbol_estimate  # Re-export 
 is_valid_ltspice_asy = _asy.is_valid_ltspice_asy  # Re-export the ASY validator.
 get_ltspice_asy_size = _asy.get_ltspice_asy_size  # Re-export the ASY size helper.
 get_ltspice_asy_pins = _asy.get_ltspice_asy_pins  # Re-export the ASY pin extraction helper.
+get_ltspice_asy_spice_orders = _asy.get_ltspice_asy_spice_orders  # Re-export the ASY SpiceOrder extraction helper.
+get_ltspice_asy_pin_count = _asy.get_ltspice_asy_pin_count  # Re-export the ASY pin count helper.
 rectangle_points_to_lines = _asy.rectangle_points_to_lines  # Re-export the rectangle edge helper.
+get_ltspice_netlist_device_pins = _netlist_introspection.get_ltspice_netlist_device_pins  # Re-export the netlist device pin introspection helper.
 
 is_valid_ltspice_netlist_format = _net.is_valid_ltspice_netlist_format  # Re-export the netlist format validator.
 is_valid_ltspice_netlist_footer = _net.is_valid_ltspice_netlist_footer  # Re-export the netlist footer validator.
@@ -87,7 +91,10 @@ __all__ = [  # Publish the stable public API surface through the legacy wrapper.
     "is_valid_ltspice_asy",  # Export the ASY validator.
     "get_ltspice_asy_size",  # Export the ASY size helper.
     "get_ltspice_asy_pins",  # Export the ASY pin extraction helper.
+    "get_ltspice_asy_spice_orders",  # Export the ASY SpiceOrder extraction helper.
+    "get_ltspice_asy_pin_count",  # Export the ASY pin count helper.
     "rectangle_points_to_lines",  # Export the rectangle edge helper.
+    "get_ltspice_netlist_device_pins",  # Export the netlist device pin introspection helper.
     "is_valid_ltspice_netlist_format",  # Export the netlist format validator.
     "is_valid_ltspice_netlist_footer",  # Export the netlist footer validator.
     "is_ltspice_netlist_structure_connected",  # Export the connectivity validator.

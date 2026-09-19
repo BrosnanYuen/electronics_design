@@ -74,8 +74,18 @@ Error messages follow the same contract as ASC validation: `"File not found!"`, 
 | `is_valid_ltspice_asy(filepath)` | `(bool, str)` |
 | `get_ltspice_asy_size(filepath)` | `np.ndarray([[min_x, min_y], [max_x, max_y]])` |
 | `get_ltspice_asy_pins(filepath)` | `[[x, y, "PinName", spice_order], ...]` |
+| `get_ltspice_asy_spice_orders(filepath)` | `[spice_order, ...]` (ascending) |
+| `get_ltspice_asy_pin_count(filepath)` | `int` |
 
-`get_ltspice_asy_size` and `get_ltspice_asy_pins` raise `ValueError` on invalid inputs.
+`get_ltspice_asy_size`, `get_ltspice_asy_pins`, `get_ltspice_asy_spice_orders`, and `get_ltspice_asy_pin_count` raise `ValueError` on invalid inputs.
+
+### Netlist Introspection
+
+| Function | Returns |
+|---|---|
+| `get_ltspice_netlist_device_pins(netlist_filepath, convert_settings)` | `{instance_name: {SYMBOL, ASY, ASY_PIN_COUNT, DECK_NODE_COUNT, SPICE_ORDERS, UNCOVERED_NODES, LINE, VALID, DETAIL}, ...}` |
+
+Reports, per device, the resolved symbol name, the resolved `.asy` path, the `.asy` pin count, the deck node count, the declared `SpiceOrder` values, the deck nodes left uncovered by any `SpiceOrder`, and whether the deck nodes map onto the symbol pins (`VALID`).  This exposes the pin compatibility rules used by the converters, so callers no longer have to probe LTspice with varying `X`-line lengths.  Raises `ValueError` when the netlist or the settings are unusable.
 
 ### Netlist Comparison
 
@@ -111,7 +121,7 @@ Converts both ASC files to netlists and compares their structure.  Returns `(Tru
 - `ltspice_netlist_to_asc` runs the public netlist-to-symbol-initial, autoplace, and netlist/symbol/wire-to-ASC stages to generate one validated schematic from a netlist.
 - `ltspice_netlist_symbol_wire_to_asc` reconstructs one LTspice schematic from a netlist, resolved symbol-pose JSON, and routed wire JSON. The generated `.asc` file is written in Latin-1 encoding.
 - `kicad_sch_to_ltspice_netlist` converts one KiCad schematic (`.kicad_sch`) into one validated LTspice netlist (`.net`). Symbol definitions, pin geometry, and simulation attributes are looked up from the KiCad symbol libraries under `convert_settings["kicad_path"]` (falling back to the schematic's embedded `lib_symbols` definitions). Power symbols become LTspice voltage sources named after their reference designator (without the leading `#`) with the symbol value as the DC payload; `GND`/`0` power symbols become node `0`. Inductors receive LTspice's standard `Rser=1m` default and three-pin BJT/MOSFET symbols receive the substrate node `0`, matching LTspice's own netlist generator. Pin order follows the symbol's `Sim.Pins` role mapping when present and ascending pin numbers otherwise. Subcircuit calls whose ASY-derived embedded symbol numbers its pins sparsely by `SpiceOrder` (the `Name:Name` embedded-symbol convention) emit one node position per `SpiceOrder`, padding uncovered positions with exempt `NC*` fillers, so the reconstructed `X` line keeps the model port alignment. Error codes include `INVALID_KICAD_SCH_FILE`, `KICAD_SCH_READ_ERROR`, `KICAD_SCH_PARSE_ERROR`, `UNKNOWN_KICAD_SYMBOL`, `UNCONNECTED_SYMBOL_PIN`, `MISSING_COMPONENT_PAYLOAD`, and `INVALID_GENERATED_NETLIST`.
-- `ltspice_netlist_to_kicad_sch` converts one validated LTspice netlist (`.net`) into one validated KiCad schematic (`.kicad_sch`). Every device resolves to a symbol from the KiCad symbol libraries under `convert_settings["kicad_path"]` (resistors, capacitors, and inductors map to the `Device` library; transistors, diodes, and sources to the `Simulation_SPICE` library symbols whose `Sim.Device`/`Sim.Pins` attributes match the netlist device class). When no library symbol matches, the device's LTspice `.asy` file is searched recursively under the configured `custom_search_paths`, `ltspice_wine_path`, and `ltspice_windows_path` roots (including nested layouts such as `lib/sym/<category>/LTC3895.asy`) and converted through the public `ltspice_asy_to_kicad_symbol` API. An `.asy` symbol whose `SpiceOrder` values are sparse (for example the 28-pin `LTC3895.asy` driving a 39-node `X` line) is accepted when every deck node not addressed by a `SpiceOrder` is an `NC*` filler or is connected only to that same `X` device, and the nodes are mapped by `SpiceOrder` rather than by pin position; set `kicad_sch_allow_spice_order_gaps` to `False` to require exact pin-count equality. When the symbol still cannot be found, the `UNKNOWN_SYMBOL` payload names every candidate `.asy` basename, every resolved search root, the concrete paths attempted, a suggested `custom_search_paths` directory for the closest stem match, and a reminder that LTspice symbols commonly live under `lib/sym/<category>/`. For `X` subcircuit devices that still resolve to nothing, a validated `.kicad_sym` library file is dynamically generated on the fly: ports are classified by their connected net names (ground and supply nets become `power_in` pins on the bottom and top, `*OUT*` nets become `output` pins on the right, everything else becomes `input` pins on the left), the body is an op-amp-style triangle, and a `REF` circle block with a `REF` text label is added when a `REF`-named port exists. Independent voltage sources remain explicit two-pin simulation symbols, waveform sources prefer their matching `VPULSE`/`VSIN`/other waveform symbol, and the global ground net receives a `GND` power symbol. Component bodies are placed by the default human-style signal-flow layout (or the configured force-directed/evolutionary/hybrid engine when `kicad_placement_strategy` is set), then every ordinary net is physically routed pin-to-pin by a Numba-compiled grid A* router. Hard ownership prevents foreign-net overlap; verified straight-through soft crossings and isolated per-net physical trunk fallbacks handle congested layouts without replacing the full schematic with disconnected labels or global fallback trunks. A final collision-aware text pass positions visible references and values away from symbol bodies, routed wires, page edges, and previously placed text. Authored semantic net labels remain electrically attached for round-trip node identity, while auto-numbered internal nets and ground rely on their physical copper. Embedded symbol pin-name/number annotations are also hidden to prevent text over compact graphics. The generated schematic embeds every resolved symbol definition in its `lib_symbols` section, so `kicad_sch_to_ltspice_netlist` can convert it back without extra files and `ltspice_netlist_structure_cmp` reports structural equivalence with the original netlist. The placement and routing cores are self-contained adaptations of the MIT-licensed `kicad-tools` project (`optim` and `router`, Copyright (c) 2024 RJ Walters). Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_NETLIST_FILE`, `NETLIST_READ_ERROR`, `UNKNOWN_SYMBOL`, `UNSUPPORTED_DEVICE`, `MISSING_COMPONENT_PAYLOAD`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SCH`.
+- `ltspice_netlist_to_kicad_sch` converts one validated LTspice netlist (`.net`) into one validated KiCad schematic (`.kicad_sch`). Every device resolves to a symbol from the KiCad symbol libraries under `convert_settings["kicad_path"]` (resistors, capacitors, and inductors map to the `Device` library; transistors, diodes, and sources to the `Simulation_SPICE` library symbols whose `Sim.Device`/`Sim.Pins` attributes match the netlist device class). When no library symbol matches, the device's LTspice `.asy` file is searched recursively under the configured `custom_search_paths`, `ltspice_wine_path`, and `ltspice_windows_path` roots (including nested layouts such as `lib/sym/<category>/LTC3895.asy`) and converted through the public `ltspice_asy_to_kicad_symbol` API. An `.asy` symbol whose `SpiceOrder` values are sparse (for example the 28-pin `LTC3895.asy` driving a 39-node `X` line) is accepted when every deck node not addressed by a `SpiceOrder` is an `NC*` filler or is connected only to that same `X` device, and the nodes are mapped by `SpiceOrder` rather than by pin position; set `kicad_sch_allow_spice_order_gaps` to `False` to require exact pin-count equality. When the symbol still cannot be found, the `UNKNOWN_SYMBOL` payload names every candidate `.asy` basename, every resolved search root, the concrete paths attempted, a suggested `custom_search_paths` directory for the closest stem match, and a reminder that LTspice symbols commonly live under `lib/sym/<category>/`. For `X` subcircuit devices that still resolve to nothing, a validated `.kicad_sym` library file is dynamically generated on the fly: ports are classified by their connected net names (ground and supply nets become `power_in` pins on the bottom and top, `*OUT*` nets become `output` pins on the right, everything else becomes `input` pins on the left), the body is an op-amp-style triangle, and a `REF` circle block with a `REF` text label is added when a `REF`-named port exists. Independent voltage sources remain explicit two-pin simulation symbols, waveform sources prefer their matching `VPULSE`/`VSIN`/other waveform symbol, and the global ground net receives a `GND` power symbol. Component bodies are placed by the default human-style signal-flow layout (or the configured force-directed/evolutionary/hybrid engine when `kicad_placement_strategy` is set), then every ordinary net is physically routed pin-to-pin by a Numba-compiled grid A* router. Hard ownership prevents foreign-net overlap; verified straight-through soft crossings and isolated per-net physical trunk fallbacks handle congested layouts without replacing the full schematic with disconnected labels or global fallback trunks. A final collision-aware text pass positions visible references and values away from symbol bodies, routed wires, page edges, and previously placed text. Authored semantic net labels remain electrically attached for round-trip node identity, while auto-numbered internal nets and ground rely on their physical copper. Embedded symbol pin-name/number annotations are also hidden to prevent text over compact graphics. The generated schematic embeds every resolved symbol definition in its `lib_symbols` section, so `kicad_sch_to_ltspice_netlist` can convert it back without extra files and `ltspice_netlist_structure_cmp` reports structural equivalence with the original netlist. The placement and routing cores are self-contained adaptations of the MIT-licensed `kicad-tools` project (`optim` and `router`, Copyright (c) 2024 RJ Walters). Placement and routing failures (`WIRING_GENERATION_ERROR`) are retried by a bounded deterministic ladder: the first attempt keeps the caller's placement strategy, later attempts switch to the hybrid engine with a deterministically bumped `kicad_placement_seed` and grow the paper along the A4 → A3 → A2 ladder, and the exhausted failure names the offending power symbol, its attachment pin, and coordinates alongside the attempt count; set `kicad_sch_wiring_retries` (default `2`, `0` disables retries) to bound the ladder. Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_NETLIST_FILE`, `NETLIST_READ_ERROR`, `UNKNOWN_SYMBOL`, `UNSUPPORTED_DEVICE`, `MISSING_COMPONENT_PAYLOAD`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SCH`.
 
 ### LTspice ASY to KiCad Symbol Conversion
 
@@ -130,7 +140,7 @@ Conversion rules:
 - **Coordinates** — 16 LTspice units map to 1.27 mm with the Y axis flipped, and the finished symbol is centered on the 1.27 mm grid.
 - **Validation** — the written file is checked with `is_valid_kicad_symbol_file()` before `OK` is returned.
 
-Optional `convert_settings` keys: `kicad_symbol_version` (YYYYMMDD, default today's date), `kicad_symbol_generator` (default `"electronics_design"`), `kicad_symbol_default_footprint` (default `""`), `kicad_symbol_default_datasheet` (default `"~"`), and `kicad_symbol_pin_length` (default `2.54`).
+Optional `convert_settings` keys: `kicad_symbol_version` (YYYYMMDD, default today's date), `kicad_symbol_generator` (default `"electronics_design"`), `kicad_symbol_default_footprint` (default `""`), `kicad_symbol_default_datasheet` (default `"~"`), `kicad_symbol_pin_length` (default `2.54`), and `kicad_symbol_cache` (default `True`; reuse a process-level cache of validated generated symbol text keyed by the input path, its mtime/size, and the settings above).
 
 Error codes include `INVALID_CONVERT_SETTINGS`, `INVALID_ASY_FILE`, `ASY_PARSE_ERROR`, `INVALID_OUTPUT_PATH`, `WRITE_ERROR`, and `INVALID_GENERATED_KICAD_SYMBOL`.
 
@@ -290,6 +300,8 @@ convert_settings = {
     "kicad_sch_generator": "electronics_design",
     "kicad_sch_grid": 1.27,
     "kicad_sch_allow_spice_order_gaps": True,  # Accept sparse .asy SpiceOrder coverage with unconnected filler nodes.
+    "kicad_sch_wiring_retries": 2,  # Bounded deterministic placement/routing retries after the first attempt (0 disables).
+    "kicad_symbol_cache": True,  # Reuse process-level cached .asy -> .kicad_sym conversions.
     "kicad_placement_strategy": "flow",  # flow, physics, evolutionary, or hybrid
     "kicad_placement_iterations": 250,
     "kicad_evolutionary_population": 10,
@@ -358,6 +370,9 @@ from electronics_design import auto_route_wires
 from electronics_design import find_wire_group_index
 from electronics_design import get_ltspice_asc_symbol_info
 from electronics_design import get_ltspice_asy_pins
+from electronics_design import get_ltspice_asy_pin_count
+from electronics_design import get_ltspice_asy_spice_orders
+from electronics_design import get_ltspice_netlist_device_pins
 from electronics_design import get_ltspice_asy_size
 from electronics_design import get_wire_pos
 from electronics_design import gui_debug
@@ -452,6 +467,9 @@ netlist_to_sch_ok, _, _ = ltspice_netlist_to_kicad_sch("example.net", "example.k
 asy_ok, _ = is_valid_ltspice_asy("example.asy")
 bounds = get_ltspice_asy_size("example.asy")
 pins = get_ltspice_asy_pins("example.asy")
+spice_orders = get_ltspice_asy_spice_orders("example.asy")
+asy_pin_count = get_ltspice_asy_pin_count("example.asy")
+device_pins = get_ltspice_netlist_device_pins("example.net", convert_settings)
 
 # Plotting
 ltspice_netlist_plot_networkx("example.net", "graph.png")
@@ -518,6 +536,7 @@ src/electronics_design/
     ltspice_autoplace_symbol_pose.py
     ltspice_library.py
     ltspice_net.py
+    ltspice_netlist_introspection.py
     ltspice_netlist_plot_networkx.py
     ltspice_netlist_to_symbol_initial.py
     ltspice_netlist_to_kicad_sch.py

@@ -2,9 +2,11 @@
 
 from __future__ import annotations  # Keep annotation handling consistent across the project.
 
+import importlib  # Access the module internals for the process-level cache tests.
 from pathlib import Path  # Use pathlib for clear path handling.
 import tempfile  # Use a temporary directory so tests never modify checked-in symbol files.
 import unittest  # Use the standard library test framework.
+from unittest import mock  # Patch the symbol text builder to count cache misses.
 
 from electronics_design import is_valid_kicad_symbol_file  # Import the KiCad symbol library whole-file validator.
 from electronics_design import ltspice_asy_to_kicad_symbol  # Import the ASY to KiCad symbol conversion API.
@@ -12,6 +14,8 @@ from electronics_design import ltspice_asy_to_kicad_symbol  # Import the ASY to 
 _ROOT_DIRECTORY = Path(__file__).resolve().parents[2]  # Resolve the project root from the current test file.
 _ASY_DIRECTORY = _ROOT_DIRECTORY / "kicad_convert" / "asy"  # Point at the copied LTspice symbol files.
 _KICAD_SYMBOL_DIRECTORY = _ROOT_DIRECTORY / "kicad_convert" / "kicad_symbol"  # Point at the checked-in KiCad symbol files.
+
+_MODULE = importlib.import_module("electronics_design.ltspice_asy_to_kicad_symbol")  # Access the module internals, since the package re-exports the public function under the same name.
 
 _CONVERT_SETTINGS = {  # Pin the settings so generated files are reproducible.
     "kicad_symbol_version": "20251024",  # Use a fixed eight-digit KiCad format version.
@@ -84,6 +88,59 @@ class TestLtspiceAsyToKicadSymbol(unittest.TestCase):  # Group the ASY-to-KiCad-
             _CONVERT_SETTINGS,  # Pass the shared settings mapping.
         )  # Finish the conversion call.
         self.assertEqual(result, (False, "INVALID_OUTPUT_PATH", 0), msg="Non-path outputs must fail with the output path error code.")  # Require the output path error tuple.
+
+    def test_repeated_conversion_reuses_cached_symbol_text(self) -> None:  # Verify repeated conversions reuse the validated symbol text.
+        _MODULE._SYMBOL_TEXT_CACHE.clear()  # Start from a cold cache so the first call must build.
+        source_path = _ASY_DIRECTORY / "AD797.asy"  # Use one stable fixture symbol.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for both outputs.
+            first_output = Path(temporary_directory) / "first.kicad_sym"  # Derive the first output path.
+            second_output = Path(temporary_directory) / "second.kicad_sym"  # Derive the second output path.
+            with mock.patch.object(_MODULE, "_build_kicad_symbol_text", wraps=_MODULE._build_kicad_symbol_text) as builder:  # Count real builds.
+                first_result = ltspice_asy_to_kicad_symbol(str(source_path), str(first_output), _CONVERT_SETTINGS)  # Run the first conversion.
+                second_result = ltspice_asy_to_kicad_symbol(str(source_path), str(second_output), _CONVERT_SETTINGS)  # Run the second conversion.
+            self.assertEqual(first_result, (True, "OK", 0), msg="The first conversion must build and succeed.")  # Require the first build.
+            self.assertEqual(second_result, (True, "OK", 0), msg="The cached conversion must succeed.")  # Require the cached conversion.
+            self.assertEqual(builder.call_count, 1, msg="The second conversion must reuse the cached symbol text.")  # Require a single build.
+            self.assertEqual(first_output.read_text(encoding="utf-8"), second_output.read_text(encoding="utf-8"), msg="Both outputs must carry the same symbol text.")  # Require identical outputs.
+
+    def test_disabled_cache_rebuilds_every_conversion(self) -> None:  # Verify the cache opt-out rebuilds each time.
+        _MODULE._SYMBOL_TEXT_CACHE.clear()  # Start from a cold cache.
+        source_path = _ASY_DIRECTORY / "AD797.asy"  # Use one stable fixture symbol.
+        settings = dict(_CONVERT_SETTINGS, kicad_symbol_cache=False)  # Disable the process-level cache.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for both outputs.
+            first_output = Path(temporary_directory) / "first.kicad_sym"  # Derive the first output path.
+            second_output = Path(temporary_directory) / "second.kicad_sym"  # Derive the second output path.
+            with mock.patch.object(_MODULE, "_build_kicad_symbol_text", wraps=_MODULE._build_kicad_symbol_text) as builder:  # Count real builds.
+                self.assertEqual(ltspice_asy_to_kicad_symbol(str(source_path), str(first_output), settings), (True, "OK", 0), msg="The first disabled-cache conversion must succeed.")  # Require the first build.
+                self.assertEqual(ltspice_asy_to_kicad_symbol(str(source_path), str(second_output), settings), (True, "OK", 0), msg="The second disabled-cache conversion must succeed.")  # Require the second build.
+            self.assertEqual(builder.call_count, 2, msg="Disabled caching must rebuild the symbol text every time.")  # Require two builds.
+
+    def test_cache_invalidates_when_symbol_file_changes(self) -> None:  # Verify changed symbol content bypasses the cache.
+        _MODULE._SYMBOL_TEXT_CACHE.clear()  # Start from a cold cache.
+        source_path = _ASY_DIRECTORY / "AD797.asy"  # Use one stable fixture symbol.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the copied symbol and outputs.
+            copied_path = Path(temporary_directory) / "AD797.asy"  # Derive the copied symbol path.
+            copied_path.write_bytes(source_path.read_bytes())  # Copy the fixture symbol into the scratch directory.
+            output_path = Path(temporary_directory) / "output.kicad_sym"  # Derive the output path.
+            with mock.patch.object(_MODULE, "_build_kicad_symbol_text", wraps=_MODULE._build_kicad_symbol_text) as builder:  # Count real builds.
+                first_result = ltspice_asy_to_kicad_symbol(str(copied_path), str(output_path), _CONVERT_SETTINGS)  # Convert the copied symbol.
+                cached_result = ltspice_asy_to_kicad_symbol(str(copied_path), str(output_path), _CONVERT_SETTINGS)  # Convert it again for the cache hit.
+                copied_path.write_text(copied_path.read_text(encoding="utf-8") + "TEXT 0 0 Left 2 cache fixture\n", encoding="utf-8")  # Append a valid record so the size (and key) changes.
+                changed_result = ltspice_asy_to_kicad_symbol(str(copied_path), str(output_path), _CONVERT_SETTINGS)  # Convert the changed symbol.
+            self.assertEqual(first_result, (True, "OK", 0), msg="The initial conversion must succeed.")  # Require the first build.
+            self.assertEqual(cached_result, (True, "OK", 0), msg="The cached conversion must succeed.")  # Require the cache hit.
+            self.assertEqual(changed_result, (True, "OK", 0), msg="The changed symbol must reconvert successfully.")  # Require the rebuilt conversion.
+            self.assertEqual(builder.call_count, 2, msg="Changed symbol content must invalidate the cached text.")  # Require a rebuild after the change.
+
+    def test_invalid_cache_setting_returns_invalid_convert_settings(self) -> None:  # Verify the cache toggle validation contract.
+        source_path = next(_ASY_DIRECTORY.glob("*.asy"))  # Read one valid source file for the call.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the call.
+            result = ltspice_asy_to_kicad_symbol(  # Call the conversion API with a malformed cache toggle.
+                str(source_path),  # Pass the valid source path.
+                str(Path(temporary_directory) / "ignored.kicad_sym"),  # Pass a writable output path.
+                dict(_CONVERT_SETTINGS, kicad_symbol_cache="yes"),  # Pass a non-boolean cache toggle.
+            )  # Finish the conversion call.
+            self.assertEqual(result, (False, "INVALID_CONVERT_SETTINGS", 0), msg="Non-boolean cache toggles must fail with the settings error code.")  # Require the settings error tuple.
 
 
 if __name__ == "__main__":  # Allow running the module directly for debugging.

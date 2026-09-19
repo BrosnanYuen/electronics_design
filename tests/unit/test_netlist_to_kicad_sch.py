@@ -7,6 +7,7 @@ import os  # Read the optional KiCad path environment override.
 from pathlib import Path  # Use pathlib for clear path handling.
 import tempfile  # Use a temporary directory for round-trip netlist outputs.
 import unittest  # Use the standard library test framework.
+from unittest import mock  # Patch the wiring stage to exercise the retry ladder deterministically.
 
 from electronics_design import is_valid_kicad_sch_file  # Import the KiCad schematic whole-file validator.
 from electronics_design import is_valid_ltspice_netlist_file  # Import the LTspice netlist whole-file validator.
@@ -438,6 +439,59 @@ class TestNetlistToKicadSch(unittest.TestCase):  # Group the netlist-to-KiCad-sc
             x_nodes = x_node_tokens[:-1]  # Drop the trailing subcircuit name.
             self.assertTrue(x_nodes[2].upper().startswith("NC"), msg="The uncovered SpiceOrder position must become an NC filler.")  # Require the filler.
             self.assertEqual({x_nodes[0], x_nodes[1], x_nodes[3]}, resistor_nodes, msg="Real nets must land on their SpiceOrder positions.")  # Require positionally correct connectivity.
+
+    def test_wiring_retry_ladder_is_bounded_and_deterministic(self) -> None:  # Verify the attempt ladder order, seeds, and paper growth.
+        attempts = _SCH_MODULE._wiring_attempt_ladder({"kicad_placement_seed": 3}, 10, 2)  # Build the default two-retry ladder.
+        self.assertEqual([attempt["strategy"] for attempt in attempts], [None, "hybrid", "hybrid"], msg="The first attempt must keep the caller's strategy and retries must use the hybrid engine.")  # Require the strategy ladder.
+        self.assertEqual([attempt["seed"] for attempt in attempts], [3, 4, 5], msg="Retry seeds must bump deterministically from the caller's seed.")  # Require the seed ladder.
+        self.assertEqual([attempt["page"] for attempt in attempts], [None, "A3", "A2"], msg="Retries must grow A4 to A3 to A2.")  # Require the paper ladder.
+        explicit = _SCH_MODULE._wiring_attempt_ladder({"kicad_sch_page_width": 297.0}, 10, 2)  # Keep the caller's explicit page.
+        self.assertEqual([attempt["page"] for attempt in explicit], [None, None, None], msg="Explicit page sizes must never be overridden.")  # Require fixed-paper retries.
+        self.assertEqual([attempt["seed"] for attempt in explicit], [0, 1, 2], msg="Fixed-paper retries must still bump the seed.")  # Require the seed ladder.
+        self.assertEqual(len(_SCH_MODULE._wiring_attempt_ladder({}, 10, 0)), 1, msg="A zero retry budget must keep the single historical attempt.")  # Require the disabled retry path.
+
+    def test_wiring_retries_reset_records_and_fall_back_to_hybrid(self) -> None:  # Verify retries restore record state and switch engines.
+        records = [{"x": 1.0, "y": 2.0, "angle": 90.0, "routing_bounds": (0, 0, 0, 0), "pin_positions": {1: (0.0, 0.0)}, "property_layout": {}}]  # Seed transient routing state.
+        success_body = ([], [], [], [], {}, [])  # Use an empty assembled schematic body for the retry success.
+        with mock.patch.object(_SCH_MODULE, "_route_and_build", side_effect=[(False, None, "WIRING_GENERATION_ERROR: boom", 0), (True, success_body, "", 0)]) as routed:  # Fail once, then succeed.
+            result = _SCH_MODULE._route_and_build_with_retries("uuid", records, {"kicad_placement_seed": 0})  # Run the retry ladder.
+        self.assertTrue(result[0], msg="The retry ladder must return the first successful attempt.")  # Require success.
+        self.assertEqual(routed.call_count, 2, msg="The ladder must stop at the first success.")  # Require two attempts.
+        self.assertIsNone(routed.call_args_list[0].kwargs["forced_strategy"], msg="The first attempt must keep the caller's placement strategy.")  # Require the base strategy.
+        self.assertEqual(routed.call_args_list[1].kwargs["forced_strategy"], "hybrid", msg="The retry must use the hybrid engine.")  # Require the fallback engine.
+        self.assertEqual((records[0]["x"], records[0]["y"], records[0]["angle"]), (1.0, 2.0, 90.0), msg="Retries must restore the pre-placement record state.")  # Require the placement reset.
+        for transient_key in ("routing_bounds", "pin_positions", "property_layout"):  # Walk every transient routing key.
+            self.assertNotIn(transient_key, records[0], msg=f"Retries must clear the transient {transient_key} state.")  # Require the transient cleanup.
+
+    def test_wiring_retries_stop_on_non_retryable_failure(self) -> None:  # Verify non-wiring failures never retry.
+        records = [{"x": 0.0, "y": 0.0, "angle": 0.0}]  # Use a minimal record.
+        with mock.patch.object(_SCH_MODULE, "_route_and_build", return_value=(False, None, "UNKNOWN_SYMBOL: nope", 5)) as routed:  # Always return a resolution failure.
+            result = _SCH_MODULE._route_and_build_with_retries("uuid", records, {})  # Run the retry ladder.
+        self.assertEqual(result, (False, None, "UNKNOWN_SYMBOL: nope", 5), msg="Non-wiring failures must pass through unchanged.")  # Require the original failure.
+        self.assertEqual(routed.call_count, 1, msg="Non-wiring failures must not consume the retry budget.")  # Require a single attempt.
+
+    def test_wiring_retries_enrich_exhausted_failure(self) -> None:  # Verify the exhausted ladder reports the attempt count.
+        records = [{"x": 0.0, "y": 0.0, "angle": 0.0}]  # Use a minimal record.
+        with mock.patch.object(_SCH_MODULE, "_route_and_build", side_effect=lambda *args, **kwargs: (False, None, "WIRING_GENERATION_ERROR: boom", 0)):  # Always fail.
+            result = _SCH_MODULE._route_and_build_with_retries("uuid", records, {"kicad_sch_wiring_retries": 2})  # Run the full ladder.
+        self.assertFalse(result[0], msg="The exhausted ladder must report failure.")  # Require failure.
+        self.assertIn("all 3 deterministic placement/routing attempts failed", result[2], msg="The final error must name the bounded attempt count.")  # Require the attempt report.
+
+    def test_retry_and_cache_settings_are_validated(self) -> None:  # Verify the new retry and cache settings reject malformed values.
+        netlist_path = _ROOT_DIRECTORY / "kicad_convert" / "netlist" / "NPN1.net"  # Reuse a known-good reference deck.
+        with tempfile.TemporaryDirectory() as temporary_directory:  # Create a scratch directory for the rejected outputs.
+            output_path = Path(temporary_directory) / "settings.kicad_sch"  # Derive the scratch output path.
+            for key, value in (("kicad_sch_wiring_retries", -1), ("kicad_sch_wiring_retries", 99), ("kicad_sch_wiring_retries", 1.5), ("kicad_symbol_cache", "yes")):  # Walk malformed settings.
+                with self.subTest(setting=key, value=value):  # Isolate failures per setting.
+                    result = ltspice_netlist_to_kicad_sch(str(netlist_path), str(output_path), dict(_CONVERT_SETTINGS, **{key: value}))  # Convert with the malformed setting.
+                    self.assertEqual(result, (False, "INVALID_CONVERT_SETTINGS", 0), msg=f"{key}={value!r} must fail with the settings error code.")  # Require the settings error tuple.
+
+    def test_power_overlap_description_reports_pin_and_coordinates(self) -> None:  # Verify the overlap diagnostic names the symbol, pin, and coordinates.
+        origin_description = _SCH_MODULE._power_overlap_description({"reference": "#PWR26", "x": 12.7, "y": -3.81})  # Describe a power record without an attachment point.
+        self.assertIn("'#PWR26'", origin_description, msg="The overlap diagnostic must name the power symbol.")  # Require the reference.
+        self.assertIn("(12.7, -3.81)", origin_description, msg="The overlap diagnostic must report the symbol coordinates.")  # Require the coordinates.
+        pin_description = _SCH_MODULE._power_overlap_description({"reference": "#PWR26", "x": 0.0, "y": 0.0, "pin_positions": {1: (25.4, 38.1)}})  # Describe a power record with a recorded attachment.
+        self.assertIn("pin at (25.4, 38.1)", pin_description, msg="The overlap diagnostic must prefer the attachment pin position.")  # Require the pin position.
 
 
 if __name__ == "__main__":  # Allow running the module directly for debugging.

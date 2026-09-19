@@ -121,6 +121,18 @@ def get_ltspice_asy_pins(filepath: str) -> List[List[Any]]:
     return [[pin_x, pin_y, pin_name, spice_order] for pin_x, pin_y, pin_name, spice_order in parse_result[1]]
 
 
+def get_ltspice_asy_spice_orders(filepath: str) -> List[int]:
+    """Return the ascending SpiceOrder values declared by one LTspice .asy file."""
+
+    return sorted(int(pin_row[3]) for pin_row in get_ltspice_asy_pins(filepath))
+
+
+def get_ltspice_asy_pin_count(filepath: str) -> int:
+    """Return the number of pins declared by one LTspice .asy file."""
+
+    return len(get_ltspice_asy_pins(filepath))
+
+
 def _read_text_file_lines(filepath: str) -> ReadLinesResult:
     coerced_path_result = _coerce_path(filepath)
     if not coerced_path_result[0]:
